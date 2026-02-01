@@ -41,9 +41,9 @@ class VectorStoreManager:
         Returns:
             List of chunked documents
         """
-        print(f"✂️ Chunking {len(documents)} documents...")
+        print(f"Chunking {len(documents)} documents...")
         chunks = self.text_splitter.split_documents(documents)
-        print(f"✅ Created {len(chunks)} chunks")
+        print(f"Created {len(chunks)} chunks")
         return chunks
 
     def create_vectorstore(self, chunks: List[Document]) -> any:
@@ -62,7 +62,7 @@ class VectorStoreManager:
         try:
             if self.use_pgvector:
                 # Add embeddings to chunks
-                print("🔐 Generating embeddings...")
+                print("Generating embeddings...")
                 chunks_with_embeddings = []
                 for chunk in chunks:
                     embedding = self.embeddings.embed_query(chunk.page_content)
@@ -70,12 +70,12 @@ class VectorStoreManager:
                     chunks_with_embeddings.append(chunk)
 
                 # Save to pgvector
-                print("💾 Saving to PostgreSQL pgvector...")
+                print("Saving to PostgreSQL pgvector...")
                 filename = chunks[0].metadata.get("filename", "unknown")
                 file_type = chunks[0].metadata.get("file_type", "unknown")
                 self.pgvector_manager.save_chunks(chunks_with_embeddings, filename, file_type)
                 
-                print("✅ Vector store created successfully in PostgreSQL")
+                print("Vector store created successfully in PostgreSQL")
                 return self.pgvector_manager
 
             else:
@@ -86,11 +86,11 @@ class VectorStoreManager:
                     collection_name="documents"
                 )
                 self.vectorstore = vectorstore
-                print("✅ Vector store created successfully with Chroma")
+                print("Vector store created successfully with Chroma")
                 return vectorstore
 
         except Exception as e:
-            print(f"❌ Error creating vector store: {str(e)}")
+            print(f"Error creating vector store: {str(e)}")
             raise
 
     def search_similar(self, vectorstore: any, query: str, k: int = 4) -> List[Document]:
@@ -117,7 +117,7 @@ class VectorStoreManager:
             
             return results
         except Exception as e:
-            print(f"❌ Error searching vector store: {str(e)}")
+            print(f"Error searching vector store: {str(e)}")
             return []
 
     def get_vectorstore_type(self) -> str:

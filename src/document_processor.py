@@ -46,7 +46,7 @@ class DocumentProcessor:
 
         try:
             for uploaded_file in uploaded_files:
-                print(f"📄 Processing {uploaded_file.name}...")
+                print(f"Procesando {uploaded_file.name}...")
 
                 # Save uploaded file to temporary location
                 temp_file_path = os.path.join(temp_dir, uploaded_file.name)
@@ -77,10 +77,10 @@ class DocumentProcessor:
                         'doc': result.document
                     })
 
-                    print(f"✅ Successfully processed {uploaded_file.name}")
+                    print(f"Successfully processed {uploaded_file.name}")
 
                 except Exception as e:
-                    print(f"❌ Error processing {uploaded_file.name}: {str(e)}")
+                    print(f"Error processing {uploaded_file.name}: {str(e)}")
                     continue
 
         finally:
@@ -92,5 +92,5 @@ class DocumentProcessor:
             except Exception as e:
                 print(f"⚠️ Warning: Could not clean up temp directory: {str(e)}")
 
-        print(f"✅ Processed {len(documents)} documents successfully")
+        print(f"Processed {len(documents)} documents successfully")
         return documents, docling_docs

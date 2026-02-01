@@ -4,21 +4,21 @@
 
 ### 1. `postgres/schema.sql` ✅
 **Cambio:** Reemplazo completo del esquema anterior
-- ❌ Eliminada tabla `docs` (genérica)
-- ✅ Agregada tabla `documents` para metadatos de documentos
-- ✅ Agregada tabla `chunks` con columnas para:
+- Eliminada tabla `docs` (genérica)
+- Agregada tabla `documents` para metadatos de documentos
+- Agregada tabla `chunks` con columnas para:
   - `chunk_text`: Contenido del fragmento
   - `embedding`: Vector de 1536 dimensiones (pgvector)
   - `metadata`: JSON flexible para información adicional
   - `chunk_index`: Orden dentro del documento
-- ✅ Agregados 3 índices para optimización de queries
+- Agregados 3 índices para optimización de queries
 
 ### 2. `src/vectorstore.py` ✅
 **Cambio:** Integración de pgvector sin romper compatibilidad
-- ✅ Constructor ahora acepta `use_pgvector=True|False`
-- ✅ Método `create_vectorstore()` genera embeddings y los guarda en pgvector
-- ✅ Método `search_similar()` funciona con pgvector o Chroma
-- ✅ Nuevo método `get_vectorstore_type()` para verificar el tipo de almacenamiento
+- Constructor ahora acepta `use_pgvector=True|False`
+- Método `create_vectorstore()` genera embeddings y los guarda en pgvector
+- Método `search_similar()` funciona con pgvector o Chroma
+- Nuevo método `get_vectorstore_type()` para verificar el tipo de almacenamiento
 
 ### 3. `requirements.txt` ✅
 **Cambio:** Agregadas nuevas dependencias
@@ -79,20 +79,20 @@ OPENAI_API_KEY=your_key_here
 ### ANTES:
 ```
 Documentos → Docling → Chunks → OpenAI Embeddings → Chroma (RAM) → Chat
-                                                    ❌ Sin persistencia
-                                                    ❌ Se pierde al reiniciar
+                                                    Sin persistencia
+                                                    Se pierde al reiniciar
 ```
 
 ### DESPUÉS:
 ```
 Documentos → Docling → Chunks → OpenAI Embeddings → PostgreSQL pgvector → Chat
-                                                     ✅ Persistencia
-                                                     ✅ Recuperable
-                                                     ✅ Escalable
-                                                     ✅ Búsqueda rápida
+                                                     Persistencia
+                                                     Recuperable
+                                                     Escalable
+                                                     Búsqueda rápida
 ```
 
-## 📊 Base de Datos - Estructura
+## Base de Datos - Estructura
 
 ```
 PostgreSQL 17 (pgvector/pgvector:pg17)
@@ -125,12 +125,12 @@ PostgreSQL 17 (pgvector/pgvector:pg17)
 
 | Aspecto | Antes | Después |
 |--------|-------|---------|
-| **Persistencia** | ❌ En memoria | ✅ PostgreSQL |
-| **Escalabilidad** | ⚠️ Limitada | ✅ Ilimitada |
-| **Recuperabilidad** | ❌ Se pierde al reiniciar | ✅ Permanente |
-| **Búsqueda** | ⚠️ Chroma básico | ✅ IVFFLAT optimizado |
-| **Metadata** | ⚠️ Limitada | ✅ JSON flexible |
-| **Multi-usuario** | ❌ No | ✅ Posible con filtros |
+| **Persistencia** | En memoria | PostgreSQL |
+| **Escalabilidad** | ⚠️ Limitada | Ilimitada |
+| **Recuperabilidad** | Se pierde al reiniciar | Permanente |
+| **Búsqueda** | ⚠️ Chroma básico | IVFFLAT optimizado |
+| **Metadata** | ⚠️ Limitada | JSON flexible |
+| **Multi-usuario** | No | Posible con filtros |
 
 ## 🚀 Próximas Mejoras Sugeridas
 
@@ -154,17 +154,17 @@ PostgreSQL 17 (pgvector/pgvector:pg17)
    - Control de acceso por documento
    - Auditoría de búsquedas
 
-## 📝 Checklist de Implementación
+## Checklist de Implementación
 
-- ✅ Crear tablas en PostgreSQL
-- ✅ Implementar PGVectorManager
-- ✅ Integrar embeddings con OpenAI
-- ✅ Modificar VectorStoreManager
-- ✅ Actualizar app.py
-- ✅ Agregar dependencias
-- ✅ Crear variables de entorno
-- ✅ Documentar cambios
-- ✅ Script de prueba
+- Crear tablas en PostgreSQL
+- Implementar PGVectorManager
+- Integrar embeddings con OpenAI
+- Modificar VectorStoreManager
+- Actualizar app.py
+- Agregar dependencias
+- Crear variables de entorno
+- Documentar cambios
+- Script de prueba
 - ⏳ Testing en producción
 
 ## 📞 Soporte

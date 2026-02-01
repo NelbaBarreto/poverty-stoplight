@@ -32,7 +32,7 @@ class PGVectorManager:
             )
             return conn
         except psycopg2.OperationalError as e:
-            print(f"❌ Error connecting to database: {str(e)}")
+            print(f"Error connecting to database: {str(e)}")
             raise
 
     def save_chunks(self, chunks: List[Document], filename: str, file_type: str) -> int:
@@ -61,7 +61,7 @@ class PGVectorManager:
                 (filename, file_type)
             )
             document_id = cursor.fetchone()[0]
-            print(f"📝 Created document record with ID: {document_id}")
+            print(f"Created document record with ID: {document_id}")
 
             # Step 2: Prepare chunk data
             chunk_data = []
@@ -94,13 +94,13 @@ class PGVectorManager:
                     template=None
                 )
                 conn.commit()
-                print(f"✅ Saved {len(chunk_data)} chunks for document '{filename}'")
+                print(f"Saved {len(chunk_data)} chunks for document '{filename}'")
 
             return document_id
 
         except Exception as e:
             conn.rollback()
-            print(f"❌ Error saving chunks: {str(e)}")
+            print(f"Error saving chunks: {str(e)}")
             raise
         finally:
             cursor.close()
@@ -185,7 +185,7 @@ class PGVectorManager:
             return documents
 
         except Exception as e:
-            print(f"❌ Error searching similar chunks: {str(e)}")
+            print(f"Error searching similar chunks: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -232,7 +232,7 @@ class PGVectorManager:
             return documents
 
         except Exception as e:
-            print(f"❌ Error retrieving chunks: {str(e)}")
+            print(f"Error retrieving chunks: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -257,11 +257,11 @@ class PGVectorManager:
                 (document_id,)
             )
             conn.commit()
-            print(f"✅ Deleted document {document_id} and its chunks")
+            print(f"Deleted document {document_id} and its chunks")
             return True
         except Exception as e:
             conn.rollback()
-            print(f"❌ Error deleting document: {str(e)}")
+            print(f"Error deleting document: {str(e)}")
             return False
         finally:
             cursor.close()
@@ -290,7 +290,7 @@ class PGVectorManager:
             )
             return cursor.fetchall()
         except Exception as e:
-            print(f"❌ Error retrieving documents: {str(e)}")
+            print(f"Error retrieving documents: {str(e)}")
             return []
         finally:
             cursor.close()

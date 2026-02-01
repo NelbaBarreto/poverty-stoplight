@@ -22,7 +22,7 @@ from src.structure_visualizer import DocumentStructureVisualizer
 
 # Page configuration
 st.set_page_config(
-    page_title="Document Intelligence Assistant", page_icon="📄", layout="wide"
+    page_title="Asistente de Documentos", page_icon="📄", layout="wide"
 )
 
 
@@ -47,7 +47,7 @@ def process_and_index(uploaded_files):
     try:
         # Step 1: Process documents with Docling
         with st.spinner(
-            f"📄 Processing {len(uploaded_files)} document(s) with Docling..."
+            f"Procesando {len(uploaded_files)} documento(s) con Docling..."
         ):
             processor = DocumentProcessor()
             documents, docling_docs = processor.process_uploaded_files(uploaded_files)
@@ -55,107 +55,107 @@ def process_and_index(uploaded_files):
 
         if not documents:
             st.error(
-                "No documents were processed. Please check the files and try again."
+                "No se procesaron documentos. Verifica los archivos e inténtalo de nuevo."
             )
             return
 
         # Step 2: Chunk and create vector store (with pgvector persistence)
-        with st.spinner("✂️ Chunking documents..."):
+        with st.spinner("✂️ Dividiendo documentos en fragmentos..."):
             vs_manager = VectorStoreManager(use_pgvector=True)
             chunks = vs_manager.chunk_documents(documents)
 
-        with st.spinner("🔢 Creating vector store and saving to pgvector-db..."):
+        with st.spinner("🔢 Creando vector store y guardando en pgvector-db..."):
             vectorstore = vs_manager.create_vectorstore(chunks)
             st.session_state.vectorstore = vectorstore
 
-        # Step 3: Create agent
-        with st.spinner("🤖 Creating agent..."):
+        # Step 3: Crear agente
+        with st.spinner("🤖 Creando agente..."):
             search_tool = create_search_tool(vectorstore)
             agent = create_documentation_agent([search_tool])
             st.session_state.agent = agent
 
         st.session_state.processing_status = "completed"
-        st.success("✅ Documents indexed in pgvector-db! You can now chat with them below.")
+        st.success("Documentos indexados en pgvector-db. Ya puedes chatear con ellos abajo.")
 
     except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
+        st.error(f"Error: {str(e)}")
         st.session_state.processing_status = "error"
 
 
 def render_sidebar():
     """Render the sidebar with setup controls."""
     with st.sidebar:
-        st.title("⚙️ Setup")
+        st.title("⚙️ Configuración")
 
         # File uploader
         uploaded_files = st.file_uploader(
-            "Upload Documents",
+            "Subir documentos",
             type=["pdf", "docx", "pptx", "html"],
             accept_multiple_files=True,
-            help="Upload PDF, Word (DOCX), PowerPoint (PPTX), or HTML files",
+            help="Sube archivos PDF, Word (DOCX), PowerPoint (PPTX) o HTML",
         )
 
         # Show uploaded files count
         if uploaded_files:
-            st.info(f"📊 {len(uploaded_files)} file(s) uploaded")
+            st.info(f"{len(uploaded_files)} archivo(s) subido(s)")
 
             # List uploaded files
-            with st.expander("📁 Uploaded Files"):
+            with st.expander("📁 Archivos subidos"):
                 for file in uploaded_files:
                     st.write(f"- {file.name} ({file.type})")
 
             # Process button
-            if st.button("🚀 Process & Index", use_container_width=True):
+            if st.button("🚀 Procesar e indexar", use_container_width=True):
                 st.session_state.uploaded_files = uploaded_files
                 process_and_index(uploaded_files)
 
         # Status indicator
         st.divider()
-        st.subheader("📊 Status")
+        st.subheader("Estado")
 
         if st.session_state.processing_status == "not_started":
-            st.info("Ready to start")
+            st.info("Listo para iniciar")
         elif st.session_state.processing_status == "completed":
-            st.success("✅ Ready to chat!")
+            st.success("Listo para chatear")
         elif st.session_state.processing_status == "error":
-            st.error("❌ Error occurred")
+            st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("💡 Tips"):
+        with st.expander("💡 Consejos"):
             st.markdown(
                 """
-            **Supported formats:**
-            - PDF documents
-            - Word documents (.docx)
-            - PowerPoint presentations (.pptx)
-            - HTML files
+            **Formatos compatibles:**
+            - Documentos PDF
+            - Documentos de Word (.docx)
+            - Presentaciones PowerPoint (.pptx)
+            - Archivos HTML
 
-            **Best practices:**
-            - Upload related documents together
-            - Start with a few documents for testing
-            - Documents are processed with OCR for scanned content
-            - Tables and structure are preserved
+            **Buenas prácticas:**
+            - Sube documentos relacionados juntos
+            - Comienza con pocos documentos para pruebas
+            - Los documentos se procesan con OCR para contenido escaneado
+            - Se preservan tablas y estructura
 
-            **For production:**
-            - Add persistent vector storage
-            - Implement batch processing
-            - Use GPU acceleration for faster processing
-            - Add authentication and access controls
+            **Para producción:**
+            - Agrega almacenamiento persistente de vectores
+            - Implementa procesamiento por lotes
+            - Usa aceleración por GPU para mayor rapidez
+            - Añade autenticación y controles de acceso
             """
             )
 
 
 def render_structure_viz():
     """Render document structure visualization."""
-    st.title("📊 Document Structure")
+    st.title("Estructura del documento")
 
     if not st.session_state.docling_docs:
-        st.info("👈 Please upload and process your documents first to see their structure!")
+        st.info("👈 Por favor sube y procesa tus documentos primero para ver su estructura.")
         return
 
     # Document selector
     doc_names = [doc['filename'] for doc in st.session_state.docling_docs]
-    selected_doc_name = st.selectbox("Select document to analyze:", doc_names)
+    selected_doc_name = st.selectbox("Selecciona el documento a analizar:", doc_names)
 
     # Get selected document
     selected_doc_data = next(
@@ -170,23 +170,23 @@ def render_structure_viz():
     visualizer = DocumentStructureVisualizer(selected_doc_data['doc'])
 
     # Display structure in tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📑 Summary", "🏗️ Hierarchy", "📊 Tables", "🖼️ Images"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📑 Resumen", "🏗️ Jerarquía", "Tablas", "🖼️ Imágenes"])
 
     with tab1:
-        st.subheader("Document Summary")
+        st.subheader("Resumen del documento")
         summary = visualizer.get_document_summary()
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Pages", summary['num_pages'])
+            st.metric("Páginas", summary['num_pages'])
         with col2:
-            st.metric("Tables", summary['num_tables'])
+            st.metric("Tablas", summary['num_tables'])
         with col3:
-            st.metric("Images", summary['num_pictures'])
+            st.metric("Imágenes", summary['num_pictures'])
         with col4:
-            st.metric("Text Items", summary['num_texts'])
+            st.metric("Elementos de texto", summary['num_texts'])
 
-        st.subheader("Content Types")
+        st.subheader("Tipos de contenido")
         text_types_df = pd.DataFrame([
             {'Type': k, 'Count': v}
             for k, v in sorted(summary['text_types'].items(), key=lambda x: -x[1])
@@ -194,7 +194,7 @@ def render_structure_viz():
         st.dataframe(text_types_df, use_container_width=True)
 
     with tab2:
-        st.subheader("Document Hierarchy")
+        st.subheader("Jerarquía del documento")
         hierarchy = visualizer.get_document_hierarchy()
 
         if hierarchy:
@@ -202,15 +202,15 @@ def render_structure_viz():
                 indent = "  " * (item['level'] - 1)
                 st.markdown(f"{indent}**{item['text']}** _(Page {item['page']})_")
         else:
-            st.info("No hierarchical structure detected")
+            st.info("No se detectó estructura jerárquica")
 
     with tab3:
-        st.subheader("Tables")
+        st.subheader("Tablas")
         tables_info = visualizer.get_tables_info()
 
         if tables_info:
             for table_data in tables_info:
-                st.markdown(f"### Table {table_data['table_number']} (Page {table_data['page']})")
+                st.markdown(f"### Tabla {table_data['table_number']} (Página {table_data['page']})")
 
                 if table_data['caption']:
                     st.caption(table_data['caption'])
@@ -218,19 +218,19 @@ def render_structure_viz():
                 if not table_data['is_empty']:
                     st.dataframe(table_data['dataframe'], use_container_width=True)
                 else:
-                    st.info("Table is empty")
+                    st.info("La tabla está vacía")
 
                 st.divider()
         else:
-            st.info("No tables found in this document")
+            st.info("No se encontraron tablas en este documento")
 
     with tab4:
-        st.subheader("Images")
+        st.subheader("Imágenes")
         pictures_info = visualizer.get_pictures_info()
 
         if pictures_info:
             for pic_data in pictures_info:
-                st.markdown(f"**Image {pic_data['picture_number']}** (Page {pic_data['page']})")
+                st.markdown(f"**Imagen {pic_data['picture_number']}** (Página {pic_data['page']})")
 
                 if pic_data['caption']:
                     st.caption(pic_data['caption'])
@@ -239,36 +239,36 @@ def render_structure_viz():
                 if pic_data['pil_image'] is not None:
                     st.image(pic_data['pil_image'], use_container_width=True)
                 else:
-                    st.info("Image data not available")
+                    st.info("Datos de la imagen no disponibles")
 
                 # Show bounding box info
                 if pic_data['bounding_box']:
                     bbox = pic_data['bounding_box']
-                    with st.expander("📐 Position Details"):
-                        st.text(f"Position: ({bbox['left']:.1f}, {bbox['top']:.1f}) - ({bbox['right']:.1f}, {bbox['bottom']:.1f})")
+                    with st.expander("📐 Detalles de posición"):
+                        st.text(f"Posición: ({bbox['left']:.1f}, {bbox['top']:.1f}) - ({bbox['right']:.1f}, {bbox['bottom']:.1f})")
 
                 st.divider()
         else:
-            st.info("No images found in this document")
+            st.info("No se encontraron imágenes en este documento")
 
 
 def render_chat():
     """Render the chat interface."""
     # Check if agent is ready
     if st.session_state.agent is None:
-        st.info("👈 Please upload and process your documents in the sidebar first!")
+        st.info("Por favor sube y procesa tus documentos en la barra lateral primero!")
         st.markdown(
             """
-        ### How to use:
-        1. Upload your documents in the sidebar (PDF, DOCX, PPTX, or HTML)
-        2. Click "Process & Index" and wait for processing
-        3. Start asking questions about your documents!
+        ### Cómo usar:
+        1. Sube tus documentos en la barra lateral (PDF, DOCX, PPTX o HTML)
+        2. Haz clic en "Procesar e indexar" y espera a que termine el procesamiento
+        3. ¡Comienza a hacer preguntas sobre tus documentos!
 
-        ### What you can do:
-        - Ask questions about document content
-        - Compare information across multiple documents
-        - Extract specific data or insights
-        - Summarize document sections
+        ### Qué puedes hacer:
+        - Hacer preguntas sobre el contenido de los documentos
+        - Comparar información entre varios documentos
+        - Extraer datos o insights específicos
+        - Resumir secciones de documentos
         """
         )
         return
@@ -280,7 +280,7 @@ def render_chat():
 
     # Chat input in bottom container (attempt to fix positioning in tabs)
     with bottom():
-        prompt = st.chat_input("Ask a question about your documents...")
+        prompt = st.chat_input("Haz una pregunta sobre tus documentos...")
 
     if prompt:
         # Add user message
@@ -301,7 +301,7 @@ def render_chat():
                 # Generator function for real-time streaming
                 def generate_response():
                     """Generator that yields tokens from LangGraph stream."""
-                    status_placeholder.markdown("🤔 **Thinking...**")
+                    status_placeholder.markdown("🤔 **Pensando...**")
                     first_content_token = True
                     tool_call_detected = False
                     final_answer_started = False
@@ -322,7 +322,7 @@ def render_chat():
                         ):
                             if not tool_call_detected:
                                 status_placeholder.markdown(
-                                    "🔍 **Searching documents...**"
+                                    "🔍 **Buscando en documentos...**"
                                 )
                                 tool_call_detected = True
                             continue  # Skip all tool messages
@@ -338,7 +338,7 @@ def render_chat():
                                 # Update status on first content token
                                 if first_content_token:
                                     status_placeholder.markdown(
-                                        "💬 **Generating answer...**"
+                                        "**Generando respuesta...**"
                                     )
                                     first_content_token = False
                                     final_answer_started = True
@@ -358,7 +358,7 @@ def render_chat():
                 import traceback
                 error_details = traceback.format_exc()
                 print(f"Chat error: {error_details}")  # Log to console
-                error_msg = f"❌ Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
                 status_placeholder.empty()
                 message_placeholder.markdown(error_msg)
                 full_response = error_msg
@@ -375,7 +375,7 @@ def main():
     render_sidebar()
 
     # Create tabs for different views
-    tab1, tab2 = st.tabs(["💬 Chat", "📊 Document Structure"])
+    tab1, tab2 = st.tabs(["Conversación", "Estructura del documento"])
 
     with tab1:
         render_chat()

@@ -23,10 +23,10 @@ def test_database_connection():
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-        print("✅ Database connection successful!")
+        print("Database connection successful!")
         return True
     except Exception as e:
-        print(f"❌ Database connection failed: {str(e)}")
+        print(f"Database connection failed: {str(e)}")
         return False
 
 def test_tables_exist():
@@ -62,10 +62,10 @@ def test_tables_exist():
         conn.close()
         
         if documents_exists and chunks_exists:
-            print("✅ Required tables exist!")
+            print("Required tables exist!")
             return True
         else:
-            print("❌ Missing tables. Run schema.sql first.")
+            print("Missing tables. Run schema.sql first.")
             if not documents_exists:
                 print("  - documents table missing")
             if not chunks_exists:
@@ -73,7 +73,7 @@ def test_tables_exist():
             return False
             
     except Exception as e:
-        print(f"❌ Error checking tables: {str(e)}")
+        print(f"Error checking tables: {str(e)}")
         return False
 
 def test_pgvector_extension():
@@ -93,14 +93,14 @@ def test_pgvector_extension():
         conn.close()
         
         if pgvector_exists:
-            print("✅ pgvector extension is enabled!")
+            print("pgvector extension is enabled!")
             return True
         else:
-            print("❌ pgvector extension not found. Install it in PostgreSQL.")
+            print("pgvector extension not found. Install it in PostgreSQL.")
             return False
             
     except Exception as e:
-        print(f"❌ Error checking pgvector: {str(e)}")
+        print(f"Error checking pgvector: {str(e)}")
         return False
 
 def test_openai_api():
@@ -113,14 +113,14 @@ def test_openai_api():
         # Test with a simple query
         test_embedding = embeddings.embed_query("test")
         if len(test_embedding) == 1536:
-            print(f"✅ OpenAI API working! Embedding dimension: {len(test_embedding)}")
+            print(f"OpenAI API working! Embedding dimension: {len(test_embedding)}")
             return True
         else:
-            print(f"❌ Unexpected embedding dimension: {len(test_embedding)}")
+            print(f"Unexpected embedding dimension: {len(test_embedding)}")
             return False
             
     except Exception as e:
-        print(f"❌ OpenAI API error: {str(e)}")
+        print(f"OpenAI API error: {str(e)}")
         print("   Make sure OPENAI_API_KEY is set in .env")
         return False
 
@@ -134,14 +134,14 @@ def test_vectorstore_manager():
         vectorstore_type = manager.get_vectorstore_type()
         
         if vectorstore_type == "pgvector":
-            print("✅ VectorStoreManager initialized with pgvector!")
+            print("VectorStoreManager initialized with pgvector!")
             return True
         else:
-            print(f"❌ Unexpected vectorstore type: {vectorstore_type}")
+            print(f"Unexpected vectorstore type: {vectorstore_type}")
             return False
             
     except Exception as e:
-        print(f"❌ VectorStoreManager error: {str(e)}")
+        print(f"VectorStoreManager error: {str(e)}")
         return False
 
 def main():
@@ -161,14 +161,14 @@ def main():
     
     # Print summary
     print("\n" + "=" * 60)
-    print("📊 TEST SUMMARY")
+    print("TEST SUMMARY")
     print("=" * 60)
     
     passed = sum(1 for _, result in results if result)
     total = len(results)
     
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"{test_name:.<40} {status}")
     
     print("=" * 60)
