@@ -59,12 +59,12 @@ def process_and_index(uploaded_files):
             )
             return
 
-        # Step 2: Chunk and create vector store
+        # Step 2: Chunk and create vector store (with pgvector persistence)
         with st.spinner("✂️ Chunking documents..."):
-            vs_manager = VectorStoreManager()
+            vs_manager = VectorStoreManager(use_pgvector=True)
             chunks = vs_manager.chunk_documents(documents)
 
-        with st.spinner("🔢 Creating vector store..."):
+        with st.spinner("🔢 Creating vector store and saving to pgvector-db..."):
             vectorstore = vs_manager.create_vectorstore(chunks)
             st.session_state.vectorstore = vectorstore
 
@@ -75,7 +75,7 @@ def process_and_index(uploaded_files):
             st.session_state.agent = agent
 
         st.session_state.processing_status = "completed"
-        st.success("✅ Documents indexed! You can now chat with them below.")
+        st.success("✅ Documents indexed in pgvector-db! You can now chat with them below.")
 
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")

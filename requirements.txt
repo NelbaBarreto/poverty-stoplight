@@ -12,3 +12,5 @@ tiktoken>=0.5.0
 pandas>=2.0.0
 langchain-text-splitters
 numpy<2  # Required for Docling compatibility with tensorflow/transformers
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
