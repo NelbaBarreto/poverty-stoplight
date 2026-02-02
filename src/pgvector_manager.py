@@ -169,21 +169,31 @@ class PGVectorManager:
 
             # Convert results to Document objects
             documents = []
+
             for row in results:
-                metadata = json.loads(row["metadata"]) if row["metadata"] else {}
-                doc = Document(
-                    page_content=row["chunk_text"],
-                    metadata={
-                        **metadata,
-                        "chunk_id": row["id"],
-                        "document_id": row["document_id"],
-                        "distance": float(row["distance"])
-                    }
-                )
-                documents.append(doc)
+                try:
+                    raw_meta = row.get("metadata")
+
+                    metadata = raw_meta.copy() if isinstance(raw_meta, dict) else {}
+
+                    doc = Document(
+                        page_content=row.get("chunk_text", ""),
+                        metadata={
+                            **metadata,
+                            "chunk_id": row.get("id"),
+                            "document_id": row.get("document_id"),
+                            "distance": float(row.get("distance", 0)),
+                        },
+                    )
+
+                    documents.append(doc)
+
+                except Exception as e:
+                    print("Error building Document:", e)
+                    print("Row:", row)
 
             return documents
-
+        
         except Exception as e:
             print(f"Error searching similar chunks: {str(e)}")
             return []
@@ -218,7 +228,18 @@ class PGVectorManager:
 
             documents = []
             for row in results:
-                metadata = json.loads(row["metadata"]) if row["metadata"] else {}
+                raw_meta = row["metadata"]
+                if not raw_meta:
+                    metadata = {}
+                elif isinstance(raw_meta, str):
+                    try:
+                        metadata = json.loads(raw_meta)
+                    except Exception:
+                        metadata = {}
+                elif isinstance(raw_meta, dict):
+                    metadata = raw_meta
+                else:
+                    metadata = {}
                 doc = Document(
                     page_content=row["chunk_text"],
                     metadata={

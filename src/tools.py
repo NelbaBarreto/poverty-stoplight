@@ -3,6 +3,7 @@ Agent tools for document search and retrieval.
 """
 from typing import Annotated
 from langchain.tools import tool
+from langchain_openai import OpenAIEmbeddings
 
 
 def create_search_tool(vectorstore):
@@ -28,15 +29,24 @@ def create_search_tool(vectorstore):
         """
 
         try:
-            # Perform similarity search
-            results = vectorstore.search_similar(query, k=8)
+            # Compute embedding for the query then perform similarity search
+            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+            query_embedding = embeddings.embed_query(query)
+            results = vectorstore.search_similar(query_embedding, k=8)
 
             if not results:
                 return "No relevant information found."
 
             context_parts = []
 
-            for i, (doc, score) in enumerate(results, 1):
+            for i, item in enumerate(results, 1):
+                # Support both (doc, score) tuples and Document objects returned by PGVectorManager
+                if isinstance(item, tuple) and len(item) == 2:
+                    doc, score = item
+                else:
+                    doc = item
+                    score = doc.metadata.get("distance") or doc.metadata.get("similarity") or 0
+
                 source = doc.metadata.get(
                     "filename",
                     doc.metadata.get("source", "Unknown source")
@@ -49,13 +59,13 @@ def create_search_tool(vectorstore):
                     continue
 
                 context_parts.append(
-                    f"[Source {i}: {source} | similarity: {round(score, 3)}]\n"
+                    f"[Source {i}: {source} | similarity: {round(float(score), 3)}]\n"
                     f"{content}"
                 )
 
             if not context_parts:
                 return "No relevant information found."
-
+            
             return "\n\n---\n\n".join(context_parts)
 
         except Exception as e:

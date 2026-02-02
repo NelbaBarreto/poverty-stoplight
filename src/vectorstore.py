@@ -12,7 +12,7 @@ from src.pgvector_manager import PGVectorManager
 class VectorStoreManager:
     """Manages document chunking, embedding, and vector storage."""
 
-    def __init__(self, use_pgvector: bool = True):
+    def __init__(self):
         """
         Initialize the vector store manager.
         
@@ -26,10 +26,8 @@ class VectorStoreManager:
             chunk_overlap=100,
             length_function=len,
         )
-        self.use_pgvector = use_pgvector
-        if use_pgvector:
-            self.pgvector_manager = PGVectorManager()
-        self.vectorstore = None  # For Chroma (fallback)
+        self.pgvector_manager = PGVectorManager()
+        self.vectorstore = None
 
     def chunk_documents(self, documents: List[Document]) -> List[Document]:
         """
@@ -41,9 +39,7 @@ class VectorStoreManager:
         Returns:
             List of chunked documents
         """
-        print(f"Chunking {len(documents)} documents...")
         chunks = self.text_splitter.split_documents(documents)
-        print(f"Created {len(chunks)} chunks")
         return chunks
 
     def create_vectorstore(self, chunks: List[Document]) -> any:
@@ -57,37 +53,25 @@ class VectorStoreManager:
         Returns:
             Vector store instance (Chroma or PGVectorManager)
         """
-        print(f"🔢 Creating vector store with {len(chunks)} chunks...")
+        print(f"Creating vector store with {len(chunks)} chunks...")
 
         try:
-            if self.use_pgvector:
-                # Add embeddings to chunks
-                print("Generating embeddings...")
-                chunks_with_embeddings = []
-                for chunk in chunks:
-                    embedding = self.embeddings.embed_query(chunk.page_content)
-                    chunk.metadata["embedding"] = embedding
-                    chunks_with_embeddings.append(chunk)
+            # Add embeddings to chunks
+            print("Generating embeddings...")
+            chunks_with_embeddings = []
+            for chunk in chunks:
+                embedding = self.embeddings.embed_query(chunk.page_content)
+                chunk.metadata["embedding"] = embedding
+                chunks_with_embeddings.append(chunk)
 
-                # Save to pgvector
-                print("Saving to PostgreSQL pgvector...")
-                filename = chunks[0].metadata.get("filename", "unknown")
-                file_type = chunks[0].metadata.get("file_type", "unknown")
-                self.pgvector_manager.save_chunks(chunks_with_embeddings, filename, file_type)
-                
-                print("Vector store created successfully in PostgreSQL")
-                return self.pgvector_manager
-
-            else:
-                # Use Chroma (in-memory)
-                vectorstore = Chroma.from_documents(
-                    documents=chunks,
-                    embedding=self.embeddings,
-                    collection_name="documents"
-                )
-                self.vectorstore = vectorstore
-                print("Vector store created successfully with Chroma")
-                return vectorstore
+            # Save to pgvector
+            print("Saving to PostgreSQL pgvector...")
+            filename = chunks[0].metadata.get("filename", "unknown")
+            file_type = chunks[0].metadata.get("file_type", "unknown")
+            self.pgvector_manager.save_chunks(chunks_with_embeddings, filename, file_type)
+            
+            print("Vector store created successfully in PostgreSQL")
+            return self.pgvector_manager
 
         except Exception as e:
             print(f"Error creating vector store: {str(e)}")
@@ -106,15 +90,9 @@ class VectorStoreManager:
             List of similar documents
         """
         try:
-            if self.use_pgvector and isinstance(vectorstore, PGVectorManager):
-                # Generate embedding for the query
-                query_embedding = self.embeddings.embed_query(query)
-                # Search in pgvector
-                results = vectorstore.search_similar(query_embedding, k=k)
-            else:
-                # Use Chroma
-                results = vectorstore.similarity_search(query, k=k)
-            
+            query_embedding = self.embeddings.embed_query(query)
+            # Search in pgvector
+            results = vectorstore.search_similar(query_embedding, k=k)            
             return results
         except Exception as e:
             print(f"Error searching vector store: {str(e)}")

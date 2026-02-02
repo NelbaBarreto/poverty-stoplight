@@ -61,16 +61,16 @@ def process_and_index(uploaded_files):
             return
 
         # Step 2: Chunk and create vector store (with pgvector persistence)
-        with st.spinner("✂️ Dividiendo documentos en fragmentos..."):
-            vs_manager = VectorStoreManager(use_pgvector=True)
+        with st.spinner("Dividiendo documentos en fragmentos..."):
+            vs_manager = VectorStoreManager()
             chunks = vs_manager.chunk_documents(documents)
 
-        with st.spinner("🔢 Creando vector store y guardando en pgvector-db..."):
+        with st.spinner("Creando vector store y guardando en pgvector-db..."):
             vectorstore = vs_manager.create_vectorstore(chunks)
             st.session_state.vectorstore = vectorstore
 
         # Step 2.5: Extract and save document structure for each document
-        with st.spinner("📊 Guardando estructura de documentos..."):
+        with st.spinner("Guardando estructura de documentos..."):
             pgvector_mgr = PGVectorManager()
             for docling_doc_data in docling_docs:
                 try:
@@ -88,9 +88,9 @@ def process_and_index(uploaded_files):
                     if doc_record:
                         # Save structure
                         pgvector_mgr.save_document_structure(doc_record['id'], structure)
-                        st.info(f"✅ Estructura guardada para: {docling_doc_data['filename']}")
+                        st.info(f"Estructura guardada para: {docling_doc_data['filename']}")
                 except Exception as e:
-                    st.warning(f"⚠️ No se pudo guardar estructura para {docling_doc_data['filename']}: {str(e)}")
+                    st.warning(f"No se pudo guardar estructura para {docling_doc_data['filename']}: {str(e)}")
 
         # Step 3: Crear agente
         with st.spinner("🤖 Creando agente..."):
@@ -124,7 +124,7 @@ def render_sidebar():
             st.info(f"{len(uploaded_files)} archivo(s) subido(s)")
 
             # List uploaded files
-            with st.expander("📁 Archivos subidos"):
+            with st.expander("Archivos subidos"):
                 for file in uploaded_files:
                     st.write(f"- {file.name} ({file.type})")
 
@@ -145,7 +145,7 @@ def render_sidebar():
             st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("💡 Consejos"):
+        with st.expander("Consejos"):
             st.markdown(
                 """
             **Formatos compatibles:**
@@ -199,7 +199,7 @@ def render_structure_viz():
         visualizer = DocumentStructureVisualizer(selected_doc_data['doc'])
 
         # Display structure in tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["📑 Resumen", "🏗️ Jerarquía", "Tablas", "🖼️ Imágenes"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Jerarquía", "Tablas", "Imágenes"])
 
         with tab1:
             st.subheader("Resumen del documento")
@@ -314,7 +314,7 @@ def render_structure_viz():
             return
 
         # Display structure in tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📑 Resumen", "🏗️ Jerarquía", "Tablas", "🖼️ Imágenes", "📄 Fragmentos"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Resumen", "Jerarquía", "Tablas", "Imágenes", "Fragmentos"])
 
         with tab1:
             st.subheader("Resumen del documento")
@@ -480,7 +480,7 @@ def render_chat():
                 # Generator function for real-time streaming
                 def generate_response():
                     """Generator that yields tokens from LangGraph stream."""
-                    status_placeholder.markdown("🤔 **Pensando...**")
+                    status_placeholder.markdown("**Pensando...**")
                     first_content_token = True
                     tool_call_detected = False
                     final_answer_started = False
@@ -496,7 +496,6 @@ def render_chat():
                             
                             # Check which node is streaming
                             langgraph_node = metadata.get("langgraph_node", "")
-                            #print(f"[DEBUG] Node: {langgraph_node}")
 
                             # Skip tool outputs entirely (they contain the search results, not answer tokens)
                             if (
@@ -504,24 +503,24 @@ def render_chat():
                                 or "tool" in langgraph_node.lower()
                             ):
                                 if not tool_call_detected:
-                                    print(f"[DEBUG] Herramienta detectada")
                                     status_placeholder.markdown(
-                                        "🔍 **Buscando en documentos...**"
+                                        "**Buscando en documentos...**"
                                     )
                                     tool_call_detected = True
                                 continue  # Skip all tool messages
 
                             # Only stream content from the "agent" node (the LLM's response)
-                            if "agent" in langgraph_node.lower() and hasattr(
+                            # if "agent" in langgraph_node.lower() and hasattr(
+                            #     msg, "content"
+                            # ):
+                            if hasattr(
                                 msg, "content"
                             ):
                                 content = msg.content
-                                print(f"[DEBUG] Contenido del agente: '{content}' (longitud: {len(str(content))})")
 
                                 # Only yield non-empty content tokens
                                 if content:
                                     token_count += 1
-                                    print(f"[DEBUG] Token #{token_count} enviado")
                                     
                                     # Update status on first content token
                                     if first_content_token:
@@ -530,25 +529,23 @@ def render_chat():
                                         )
                                         first_content_token = False
                                         final_answer_started = True
-                                        print(f"[DEBUG] Primer token detectado")
 
                                     # Yield the token only if we're in final answer mode
                                     if final_answer_started:
                                         yield content
 
-                        print(f"[DEBUG] Stream completado. Total tokens: {token_count}")
                         # Clear status when streaming is complete
                         status_placeholder.empty()
                         
                         if token_count == 0:
-                            print(f"[DEBUG] ⚠️ ADVERTENCIA: No se recibieron tokens del agente")
-                            yield "⚠️ *El agente no generó respuesta. Verifica los logs.*"
+                            print(f"*El agente no generó respuesta. Verifica los logs.*")
+                            yield "Lo siento, no pude generar una respuesta en este momento."
 
                     except Exception as e:
                         print(f"[DEBUG ERROR] Excepción en generate_response: {str(e)}")
                         import traceback
                         traceback.print_exc()
-                        yield f"❌ Error en stream: {str(e)}"
+                        yield f"Error en stream: {str(e)}"
 
                 # Use st.write_stream for automatic token-by-token display
                 with message_placeholder.container():
@@ -558,7 +555,7 @@ def render_chat():
                 import traceback
                 error_details = traceback.format_exc()
                 print(f"[DEBUG ERROR] Chat error completo:\n{error_details}")
-                error_msg = f"❌ Error: {str(e)}\n\n*Revisa la consola (terminal) para ver logs detallados.*"
+                error_msg = f"Error: {str(e)}\n\n*Revisa la consola (terminal) para ver logs detallados.*"
                 status_placeholder.empty()
                 message_placeholder.markdown(error_msg)
                 full_response = error_msg

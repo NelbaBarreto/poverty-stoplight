@@ -5,7 +5,6 @@ Docling integration for processing uploaded documents.
 import os
 import tempfile
 from typing import List, Any
-from pathlib import Path
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
