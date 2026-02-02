@@ -2,7 +2,7 @@
 Agent tools for document search and retrieval.
 """
 from typing import Annotated
-from langchain_core.tools import tool
+from langchain.tools import tool
 
 
 def create_search_tool(vectorstore):
@@ -17,35 +17,49 @@ def create_search_tool(vectorstore):
     """
 
     @tool
-    def search_documents(query: Annotated[str, "The search query or question about the documents"]) -> str:
+    def search_documents(
+        query: Annotated[str, "Search query to look up information inside the uploaded documents"]
+    ) -> str:
         """
         Search the uploaded documents for relevant information.
 
         Use this tool when you need to find specific information from the uploaded documents
         to answer user questions.
         """
+
         try:
             # Perform similarity search
-            results = vectorstore.similarity_search(query, k=8)
+            results = vectorstore.search_similar(query, k=8)
 
             if not results:
-                return "No relevant information found in the documents for this query."
+                return "No relevant information found."
 
-            # Format the results
             context_parts = []
-            for i, doc in enumerate(results, 1):
-                source = doc.metadata.get('filename', doc.metadata.get('source', 'Unknown source'))
-                file_type = doc.metadata.get('file_type', '')
-                content = doc.page_content.strip()
 
-                context_parts.append(
-                    f"[Source {i}: {source}]\n"
-                    f"Content: {content}\n"
+            for i, (doc, score) in enumerate(results, 1):
+                source = doc.metadata.get(
+                    "filename",
+                    doc.metadata.get("source", "Unknown source")
                 )
 
-            return "\n---\n".join(context_parts)
+                content = doc.page_content.strip()
+
+                # Evita chunks vacíos
+                if not content:
+                    continue
+
+                context_parts.append(
+                    f"[Source {i}: {source} | similarity: {round(score, 3)}]\n"
+                    f"{content}"
+                )
+
+            if not context_parts:
+                return "No relevant information found."
+
+            return "\n\n---\n\n".join(context_parts)
 
         except Exception as e:
-            return f"Error searching documents: {str(e)}"
+            print(f"Error during document search: {str(e)}")
+            return f"Search error: {str(e)}"
 
     return search_documents

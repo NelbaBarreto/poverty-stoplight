@@ -90,7 +90,7 @@ class DocumentProcessor:
 
                 shutil.rmtree(temp_dir)
             except Exception as e:
-                print(f"⚠️ Warning: Could not clean up temp directory: {str(e)}")
+                print(f"Warning: Could not clean up temp directory: {str(e)}")
 
         print(f"Processed {len(documents)} documents successfully")
         return documents, docling_docs

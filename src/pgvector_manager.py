@@ -295,3 +295,207 @@ class PGVectorManager:
         finally:
             cursor.close()
             conn.close()
+    def save_document_structure(self, document_id: int, structure: dict) -> bool:
+        """
+        Save complete document structure (summary, hierarchy, tables, pictures).
+
+        Args:
+            document_id: ID of the document
+            structure: Dictionary with 'summary', 'hierarchy', 'tables', 'pictures' keys
+
+        Returns:
+            True if successful, False otherwise
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Save summary
+            summary = structure.get('summary', {})
+            cursor.execute(
+                """
+                INSERT INTO document_summary (document_id, num_pages, num_texts, num_tables, num_pictures, text_types)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (document_id) DO UPDATE SET
+                    num_pages = EXCLUDED.num_pages,
+                    num_texts = EXCLUDED.num_texts,
+                    num_tables = EXCLUDED.num_tables,
+                    num_pictures = EXCLUDED.num_pictures,
+                    text_types = EXCLUDED.text_types
+                """,
+                (
+                    document_id,
+                    summary.get('num_pages', 0),
+                    summary.get('num_texts', 0),
+                    summary.get('num_tables', 0),
+                    summary.get('num_pictures', 0),
+                    json.dumps(summary.get('text_types', {}))
+                )
+            )
+            print(f"Saved document summary for document {document_id}")
+
+            # Save hierarchy
+            hierarchy = structure.get('hierarchy', [])
+            for item in hierarchy:
+                cursor.execute(
+                    """
+                    INSERT INTO document_hierarchy (document_id, type, text, page_no, level)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        document_id,
+                        item.get('type', ''),
+                        item.get('text', ''),
+                        item.get('page', None),
+                        item.get('level', 0)
+                    )
+                )
+            print(f"Saved {len(hierarchy)} hierarchy items for document {document_id}")
+
+            # Save tables metadata
+            tables = structure.get('tables', [])
+            for table in tables:
+                # Convert dataframe to JSON for storage
+                table_json = None
+                if 'dataframe' in table:
+                    try:
+                        table_json = table['dataframe'].to_json(orient='split')
+                    except:
+                        table_json = None
+
+                cursor.execute(
+                    """
+                    INSERT INTO document_tables (document_id, table_number, page_no, caption, table_data, shape)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        document_id,
+                        table.get('table_number', 0),
+                        table.get('page', None),
+                        table.get('caption', ''),
+                        table_json,
+                        str(table.get('shape', ''))
+                    )
+                )
+            print(f"Saved {len(tables)} tables for document {document_id}")
+
+            # Save pictures metadata
+            pictures = structure.get('pictures', [])
+            for pic in pictures:
+                cursor.execute(
+                    """
+                    INSERT INTO document_pictures (document_id, picture_number, page_no, caption, bounding_box)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        document_id,
+                        pic.get('picture_number', 0),
+                        pic.get('page', None),
+                        pic.get('caption', ''),
+                        json.dumps(pic.get('bounding_box', {})) if pic.get('bounding_box') else None
+                    )
+                )
+            print(f"Saved {len(pictures)} pictures for document {document_id}")
+
+            conn.commit()
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            print(f"Error saving document structure: {str(e)}")
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_document_structure(self, document_id: int) -> dict:
+        """
+        Retrieve complete document structure from database.
+
+        Args:
+            document_id: ID of the document
+
+        Returns:
+            Dictionary with structure data or empty dict if not found
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        try:
+            structure = {}
+
+            # Get summary
+            cursor.execute(
+                "SELECT * FROM document_summary WHERE document_id = %s",
+                (document_id,)
+            )
+            summary_row = cursor.fetchone()
+            if summary_row:
+                structure['summary'] = {
+                    'num_pages': summary_row['num_pages'],
+                    'num_texts': summary_row['num_texts'],
+                    'num_tables': summary_row['num_tables'],
+                    'num_pictures': summary_row['num_pictures'],
+                    'text_types': summary_row['text_types'] or {}
+                }
+
+            # Get hierarchy
+            cursor.execute(
+                "SELECT type, text, page_no, level FROM document_hierarchy WHERE document_id = %s ORDER BY id",
+                (document_id,)
+            )
+            hierarchy = []
+            for row in cursor.fetchall():
+                hierarchy.append({
+                    'type': row['type'],
+                    'text': row['text'],
+                    'page': row['page_no'],
+                    'level': row['level']
+                })
+            structure['hierarchy'] = hierarchy
+
+            # Get tables
+            cursor.execute(
+                "SELECT table_number, page_no, caption, table_data, shape FROM document_tables WHERE document_id = %s ORDER BY table_number",
+                (document_id,)
+            )
+            tables = []
+            for row in cursor.fetchall():
+                table_dict = {
+                    'table_number': row['table_number'],
+                    'page': row['page_no'],
+                    'caption': row['caption'],
+                    'shape': row['shape']
+                }
+                if row['table_data']:
+                    try:
+                        import pandas as pd
+                        table_dict['dataframe'] = pd.read_json(row['table_data'], orient='split')
+                    except:
+                        pass
+                tables.append(table_dict)
+            structure['tables'] = tables
+
+            # Get pictures
+            cursor.execute(
+                "SELECT picture_number, page_no, caption, bounding_box FROM document_pictures WHERE document_id = %s ORDER BY picture_number",
+                (document_id,)
+            )
+            pictures = []
+            for row in cursor.fetchall():
+                pictures.append({
+                    'picture_number': row['picture_number'],
+                    'page': row['page_no'],
+                    'caption': row['caption'],
+                    'bounding_box': row['bounding_box'] or {}
+                })
+            structure['pictures'] = pictures
+
+            return structure
+
+        except Exception as e:
+            print(f"Error retrieving document structure: {str(e)}")
+            return {}
+        finally:
+            cursor.close()
+            conn.close()

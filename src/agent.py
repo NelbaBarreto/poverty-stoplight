@@ -4,29 +4,34 @@ LangGraph agent configuration and setup.
 from typing import List
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 
+# SYSTEM_PROMPT = """You are a helpful document intelligence assistant. You have access to documents that have been uploaded and processed (PDFs, Word documents, presentations, HTML files, etc.).
 
-# System prompt for the document intelligence assistant
-SYSTEM_PROMPT = """You are a helpful document intelligence assistant. You have access to documents that have been uploaded and processed (PDFs, Word documents, presentations, HTML files, etc.).
+# GUIDELINES:
+# - Use the search_documents tool to find relevant information
+# - Be efficient: one well-crafted search is usually sufficient
+# - Only search again if the first results are clearly incomplete
+# - Provide clear, accurate answers based on the document contents
+# - Always cite your sources with filenames or document titles
+# - If information isn't found, say so clearly
+# - Be concise but thorough
 
-GUIDELINES:
-- Use the search_documents tool to find relevant information
-- Be efficient: one well-crafted search is usually sufficient
-- Only search again if the first results are clearly incomplete
-- Provide clear, accurate answers based on the document contents
-- Always cite your sources with filenames or document titles
-- If information isn't found, say so clearly
-- Be concise but thorough
+# When answering:
+# 1. Search the documents with a focused query
+# 2. Synthesize a clear answer from the results
+# 3. Include source citations (filenames)
+# 4. Only search again if absolutely necessary
+# """
 
-When answering:
-1. Search the documents with a focused query
-2. Synthesize a clear answer from the results
-3. Include source citations (filenames)
-4. Only search again if absolutely necessary
+SYSTEM_PROMPT = """
+You are a document assistant.
+
+You MUST use the search_documents tool before answering.
+Do not answer from your own knowledge.
+Always call the tool first.
 """
-
 
 def create_documentation_agent(tools: List[BaseTool], model_name: str = "gpt-4o-mini"):
     """
@@ -45,11 +50,10 @@ def create_documentation_agent(tools: List[BaseTool], model_name: str = "gpt-4o-
     # Create a memory saver for conversation history
     memory = MemorySaver()
 
-    # Create the ReAct agent
-    agent = create_react_agent(
-        llm,
+    agent = create_agent(
+        model=llm,
         tools=tools,
-        prompt=SYSTEM_PROMPT,
+        system_prompt=SYSTEM_PROMPT,
         checkpointer=memory
     )
 
