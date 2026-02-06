@@ -5,7 +5,6 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain_chroma import Chroma
 from src.pgvector_manager import PGVectorManager
 
 
@@ -68,6 +67,7 @@ class VectorStoreManager:
             print("Saving to PostgreSQL pgvector...")
             filename = chunks[0].metadata.get("filename", "unknown")
             file_type = chunks[0].metadata.get("file_type", "unknown")
+            print(filename, file_type)
             self.pgvector_manager.save_chunks(chunks_with_embeddings, filename, file_type)
             
             print("Vector store created successfully in PostgreSQL")

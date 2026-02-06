@@ -40,32 +40,41 @@ def create_search_tool(vectorstore):
             context_parts = []
 
             for i, item in enumerate(results, 1):
-                # Support both (doc, score) tuples and Document objects returned by PGVectorManager
+
+                # Manejar (doc, score) o solo doc
                 if isinstance(item, tuple) and len(item) == 2:
                     doc, score = item
                 else:
                     doc = item
-                    score = doc.metadata.get("distance") or doc.metadata.get("similarity") or 0
+                    score = (
+                        doc.metadata.get("distance")
+                        or doc.metadata.get("similarity")
+                        or 0
+                    )
 
-                source = doc.metadata.get(
+                metadata = doc.metadata or {}
+
+                source = metadata.get(
                     "filename",
-                    doc.metadata.get("source", "Unknown source")
+                    metadata.get("source", "Unknown source")
                 )
+
+                # página
+                page = metadata.get("page", "?")
 
                 content = doc.page_content.strip()
 
-                # Evita chunks vacíos
                 if not content:
                     continue
 
                 context_parts.append(
-                    f"[Source {i}: {source} | similarity: {round(float(score), 3)}]\n"
+                    f"📄 **{source} (pág. {page})** | sim: {round(float(score),3)}\n"
                     f"{content}"
                 )
 
             if not context_parts:
                 return "No relevant information found."
-            
+
             return "\n\n---\n\n".join(context_parts)
 
         except Exception as e:
