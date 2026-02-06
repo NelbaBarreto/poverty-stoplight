@@ -106,16 +106,16 @@ def process_and_index(uploaded_files):
 def render_sidebar():
     """Render the sidebar with setup controls."""
     with st.sidebar:
-        st.title("⚙️ Configuración")
+        st.title("Configuración")
 
         # Show saved documents from database
-        st.subheader("📚 Documentos guardados")
+        st.subheader("Documentos guardados")
         try:
             pgvector_mgr = PGVectorManager()
             all_docs = pgvector_mgr.get_all_documents()
             
             if all_docs:
-                st.success(f"✅ {len(all_docs)} documento(s) disponible(s)")
+                st.success(f"{len(all_docs)} documento(s) disponible(s)")
                 with st.expander("Ver documentos"):
                     for doc in all_docs:
                         st.write(f"📄 {doc['filename']}")
