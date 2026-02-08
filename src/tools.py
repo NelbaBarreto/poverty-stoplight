@@ -1,17 +1,17 @@
 """
 Agent tools for document search and retrieval.
 """
-from typing import Annotated
+from typing import Annotated, Optional
 from langchain.tools import tool
 from langchain_openai import OpenAIEmbeddings
+from src.pgvector_manager import PGVectorManager
 
-
-def create_search_tool(vectorstore):
+def create_search_tool(document_id: Optional[int] = None):
     """
-    Create a search tool that has access to the vector store.
+    Create a search tool that retrieves from PostgreSQL pgvector database.
 
     Args:
-        vectorstore: The Chroma vector store containing documents
+        document_id: Optional document ID to filter search results
 
     Returns:
         A tool function that can search the documents
@@ -29,10 +29,13 @@ def create_search_tool(vectorstore):
         """
 
         try:
-            # Compute embedding for the query then perform similarity search
+            # Compute embedding for the query
             embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
             query_embedding = embeddings.embed_query(query)
-            results = vectorstore.search_similar(query_embedding, k=8)
+            
+            # Search directly in PostgreSQL pgvector
+            pgvector_mgr = PGVectorManager()
+            results = pgvector_mgr.search_similar(query_embedding, k=8, document_id=document_id)
 
             if not results:
                 return "No relevant information found."
@@ -68,7 +71,7 @@ def create_search_tool(vectorstore):
                     continue
 
                 context_parts.append(
-                    f"📄 **{source} (pág. {page})** | sim: {round(float(score),3)}\n"
+                    f"**{source} (pág. {page})** | sim: {round(float(score),3)}\n"
                     f"{content}"
                 )
 
