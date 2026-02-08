@@ -23,16 +23,12 @@ from src.pgvector_manager import PGVectorManager
 
 # Page configuration
 st.set_page_config(
-    page_title="Asistente de Documentos", page_icon="📄", layout="wide"
+    page_title="Asistente de Documentos", page_icon="💡", layout="wide"
 )
 
 
 def initialize_session_state():
     """Initialize all session state variables."""
-    if "uploaded_files" not in st.session_state:
-        st.session_state.uploaded_files = []
-    if "vectorstore" not in st.session_state:
-        st.session_state.vectorstore = None
     if "agent" not in st.session_state:
         st.session_state.agent = None
     if "messages" not in st.session_state:
@@ -60,14 +56,15 @@ def process_and_index(uploaded_files):
             )
             return
 
-        # Step 2: Chunk and create vector store (with pgvector persistence)
+        # Step 2: Chunk and save to pgvector-db
         with st.spinner("Dividiendo documentos en fragmentos..."):
             vs_manager = VectorStoreManager()
             chunks = vs_manager.chunk_documents(documents)
 
-        with st.spinner("Creando vector store y guardando en pgvector-db..."):
-            vectorstore = vs_manager.create_vectorstore(chunks)
-            st.session_state.vectorstore = vectorstore
+        with st.spinner("Guardando chunks en pgvector-db..."):
+            # Esto guarda los chunks con embeddings en la BD
+            vs_manager.create_vectorstore(chunks)
+            st.success(f"{len(chunks)} chunks guardados en la base de datos")
 
         # Step 2.5: Extract and save document structure for each document
         with st.spinner("Guardando estructura de documentos..."):
@@ -93,8 +90,8 @@ def process_and_index(uploaded_files):
                     st.warning(f"No se pudo guardar estructura para {docling_doc_data['filename']}: {str(e)}")
 
         # Step 3: Crear agente
-        with st.spinner("🤖 Creando agente..."):
-            search_tool = create_search_tool(vectorstore)
+        with st.spinner("Creando agente..."):
+            search_tool = create_search_tool()  # Sin document_id, busca en todos
             agent = create_documentation_agent([search_tool])
             st.session_state.agent = agent
 
@@ -109,9 +106,28 @@ def process_and_index(uploaded_files):
 def render_sidebar():
     """Render the sidebar with setup controls."""
     with st.sidebar:
-        st.title("⚙️ Configuración")
+        st.title("Configuración")
 
-        # File uploader
+        # Show saved documents from database
+        st.subheader("Documentos guardados")
+        try:
+            pgvector_mgr = PGVectorManager()
+            all_docs = pgvector_mgr.get_all_documents()
+            
+            if all_docs:
+                st.success(f"{len(all_docs)} documento(s) disponible(s)")
+                with st.expander("Ver documentos"):
+                    for doc in all_docs:
+                        st.write(f"📄 {doc['filename']}")
+            else:
+                st.info("No hay documentos en la BD")
+        except Exception as e:
+            st.warning(f"Error al cargar documentos: {str(e)}")
+
+        st.divider()
+
+        # File uploader for new documents
+        st.subheader("Subir nuevos documentos")
         uploaded_files = st.file_uploader(
             "Subir documentos",
             type=["pdf", "docx", "pptx", "html"],
@@ -124,13 +140,12 @@ def render_sidebar():
             st.info(f"{len(uploaded_files)} archivo(s) subido(s)")
 
             # List uploaded files
-            with st.expander("Archivos subidos"):
+            with st.expander("Archivos a procesar"):
                 for file in uploaded_files:
                     st.write(f"- {file.name} ({file.type})")
 
             # Process button
-            if st.button("🚀 Procesar e indexar"):
-                st.session_state.uploaded_files = uploaded_files
+            if st.button("Procesar e indexar"):
                 process_and_index(uploaded_files)
 
         # Status indicator
@@ -148,23 +163,16 @@ def render_sidebar():
         with st.expander("Consejos"):
             st.markdown(
                 """
+            **Cómo usar:**
+            1. Sube documentos nuevos
+            2. Los datos se guardan en PostgreSQL (pgvector-db)
+            3. El chat busca en TODOS los documentos automáticamente
+
             **Formatos compatibles:**
             - Documentos PDF
             - Documentos de Word (.docx)
             - Presentaciones PowerPoint (.pptx)
             - Archivos HTML
-
-            **Buenas prácticas:**
-            - Sube documentos relacionados juntos
-            - Comienza con pocos documentos para pruebas
-            - Los documentos se procesan con OCR para contenido escaneado
-            - Se preservan tablas y estructura
-
-            **Para producción:**
-            - Agrega almacenamiento persistente de vectores
-            - Implementa procesamiento por lotes
-            - Usa aceleración por GPU para mayor rapidez
-            - Añade autenticación y controles de acceso
             """
             )
 
@@ -435,22 +443,46 @@ def render_chat():
     """Render the chat interface."""
     # Check if agent is ready
     if st.session_state.agent is None:
-        st.info("Por favor sube y procesa tus documentos en la barra lateral primero!")
-        st.markdown(
-            """
-        ### Cómo usar:
-        1. Sube tus documentos en la barra lateral (PDF, DOCX, PPTX o HTML)
-        2. Haz clic en "Procesar e indexar" y espera a que termine el procesamiento
-        3. ¡Comienza a hacer preguntas sobre tus documentos!
+        # Try to create agent if there are documents in BD
+        try:
+            pgvector_mgr = PGVectorManager()
+            all_docs = pgvector_mgr.get_all_documents()
+            
+            if all_docs:
+                # Crear agente automáticamente si hay documentos
+                search_tool = create_search_tool()  # Busca en TODOS los documentos
+                agent = create_documentation_agent([search_tool])
+                st.session_state.agent = agent
+            else:
+                st.info("Por favor sube y procesa tus documentos en la barra lateral primero!")
+                st.markdown(
+                    """
+                ### Cómo usar:
+                1. Sube tus documentos en la barra lateral (PDF, DOCX, PPTX o HTML)
+                2. Haz clic en "Procesar e indexar" y espera a que termine el procesamiento
+                3. ¡Comienza a hacer preguntas sobre tus documentos!
 
-        ### Qué puedes hacer:
-        - Hacer preguntas sobre el contenido de los documentos
-        - Comparar información entre varios documentos
-        - Extraer datos o insights específicos
-        - Resumir secciones de documentos
-        """
-        )
-        return
+                ### Qué puedes hacer:
+                - Hacer preguntas sobre el contenido de los documentos
+                - Comparar información entre varios documentos
+                - Extraer datos o insights específicos
+                - Resumir secciones de documentos
+                """
+                )
+                return
+        except Exception as e:
+            st.error(f"Error al verificar documentos: {str(e)}")
+            return
+
+    # Crear agente si no existe y hay documentos en BD
+    if st.session_state.agent is None:
+        try:
+            search_tool = create_search_tool()
+            agent = create_documentation_agent([search_tool])
+            st.session_state.agent = agent
+        except Exception as e:
+            st.error(f"Error al crear agente: {str(e)}")
+            return
 
     # Display chat messages
     for message in st.session_state.messages:
@@ -564,7 +596,6 @@ def render_chat():
         st.session_state.messages.append(
             {"role": "assistant", "content": full_response}
         )
-
 
 def main():
     """Main application function."""
