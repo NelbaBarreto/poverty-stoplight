@@ -127,7 +127,7 @@ def render_sidebar():
         st.divider()
 
         # File uploader for new documents
-        st.subheader("📤 Subir nuevos documentos")
+        st.subheader("Subir nuevos documentos")
         uploaded_files = st.file_uploader(
             "Subir documentos",
             type=["pdf", "docx", "pptx", "html"],
@@ -160,7 +160,7 @@ def render_sidebar():
             st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("💡 Consejos"):
+        with st.expander("Consejos"):
             st.markdown(
                 """
             **Cómo usar:**
