@@ -19,6 +19,8 @@ from src.tools import create_search_tool
 from src.agent import create_documentation_agent
 from src.structure_visualizer import DocumentStructureVisualizer
 from src.pgvector_manager import PGVectorManager
+from src.embeddings_manager import EmbeddingsManager
+from src.ragas_evaluator import RAGASEvaluator
 
 
 # Page configuration
@@ -37,11 +39,19 @@ def initialize_session_state():
         st.session_state.processing_status = "not_started"
     if "docling_docs" not in st.session_state:
         st.session_state.docling_docs = []
+    if "selected_embedding_model" not in st.session_state:
+        st.session_state.selected_embedding_model = "text-embedding-3-small"
 
 
-def process_and_index(uploaded_files):
+def process_and_index(uploaded_files, embedding_model=None):
     """Process uploaded documents and create vector store."""
     try:
+        # Use selected model or default
+        if embedding_model is None:
+            embedding_model = st.session_state.selected_embedding_model
+        
+        st.info(f"📊 Usando modelo de embeddings: **{embedding_model}**")
+        
         # Step 1: Process documents with Docling
         with st.spinner(
             f"Procesando {len(uploaded_files)} documento(s) con Docling..."
@@ -58,10 +68,10 @@ def process_and_index(uploaded_files):
 
         # Step 2: Chunk and save to pgvector-db
         with st.spinner("Dividiendo documentos en fragmentos..."):
-            vs_manager = VectorStoreManager()
+            vs_manager = VectorStoreManager(embedding_model=embedding_model)
             chunks = vs_manager.chunk_documents(documents)
 
-        with st.spinner("Guardando chunks en pgvector-db..."):
+        with st.spinner(f"Generando embeddings con {embedding_model}..."):
             # Esto guarda los chunks con embeddings en la BD
             vs_manager.create_vectorstore(chunks)
             st.success(f"{len(chunks)} chunks guardados en la base de datos")
@@ -91,7 +101,7 @@ def process_and_index(uploaded_files):
 
         # Step 3: Crear agente
         with st.spinner("Creando agente..."):
-            search_tool = create_search_tool()  # Sin document_id, busca en todos
+            search_tool = create_search_tool(embedding_model=embedding_model)  # Usar el modelo seleccionado
             agent = create_documentation_agent([search_tool])
             st.session_state.agent = agent
 
@@ -107,6 +117,42 @@ def render_sidebar():
     """Render the sidebar with setup controls."""
     with st.sidebar:
         st.title("Configuración")
+        
+        # Embedding model selector
+        st.subheader("🔬 Modelo de Embeddings")
+        
+        # Get all available models
+        all_models = EmbeddingsManager.list_all_models()
+        
+        # Create options for selectbox
+        model_options = {}
+        for model in all_models:
+            label = f"{model['name']} - {model['description']}"
+            model_options[label] = model['name']
+        
+        # Select embedding model
+        selected_label = st.selectbox(
+            "Selecciona el modelo:",
+            options=list(model_options.keys()),
+            index=0,
+            help="El modelo de embeddings determina cómo se representan los documentos"
+        )
+        
+        st.session_state.selected_embedding_model = model_options[selected_label]
+        
+        # Show model details
+        selected_model_info = next(
+            (m for m in all_models if m['name'] == st.session_state.selected_embedding_model),
+            None
+        )
+        if selected_model_info:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Proveedor", selected_model_info['provider'])
+            with col2:
+                st.metric("Dimensión", selected_model_info['dimension'])
+
+        st.divider()
 
         # Show saved documents from database
         st.subheader("Documentos guardados")
@@ -118,7 +164,18 @@ def render_sidebar():
                 st.success(f"{len(all_docs)} documento(s) disponible(s)")
                 with st.expander("Ver documentos"):
                     for doc in all_docs:
-                        st.write(f"📄 {doc['filename']}")
+                        # Get model info if available
+                        model_info = ""
+                        if doc.get('embedding_model_id'):
+                            models = pgvector_mgr.get_all_embedding_models()
+                            model = next(
+                                (m for m in models if m['id'] == doc['embedding_model_id']),
+                                None
+                            )
+                            if model:
+                                model_info = f" ({model['model_name']})"
+                        
+                        st.write(f"📄 {doc['filename']}{model_info}")
             else:
                 st.info("No hay documentos en la BD")
         except Exception as e:
@@ -164,15 +221,20 @@ def render_sidebar():
             st.markdown(
                 """
             **Cómo usar:**
-            1. Sube documentos nuevos
-            2. Los datos se guardan en PostgreSQL (pgvector-db)
-            3. El chat busca en TODOS los documentos automáticamente
+            1. Selecciona el modelo de embeddings
+            2. Sube documentos nuevos
+            3. Los datos se guardan en PostgreSQL (pgvector-db)
+            4. El chat busca en TODOS los documentos automáticamente
 
             **Formatos compatibles:**
             - Documentos PDF
             - Documentos de Word (.docx)
             - Presentaciones PowerPoint (.pptx)
             - Archivos HTML
+            
+            **Modelos de embeddings:**
+            - OpenAI: Modelos comerciales de alta calidad
+            - HuggingFace: Modelos open-source gratuitos vía Inference API
             """
             )
 
@@ -450,7 +512,9 @@ def render_chat():
             
             if all_docs:
                 # Crear agente automáticamente si hay documentos
-                search_tool = create_search_tool()  # Busca en TODOS los documentos
+                # Usar el modelo seleccionado o el primero disponible en BD
+                embedding_model = st.session_state.selected_embedding_model
+                search_tool = create_search_tool(embedding_model=embedding_model)
                 agent = create_documentation_agent([search_tool])
                 st.session_state.agent = agent
             else:
@@ -477,7 +541,8 @@ def render_chat():
     # Crear agente si no existe y hay documentos en BD
     if st.session_state.agent is None:
         try:
-            search_tool = create_search_tool()
+            embedding_model = st.session_state.selected_embedding_model
+            search_tool = create_search_tool(embedding_model=embedding_model)
             agent = create_documentation_agent([search_tool])
             st.session_state.agent = agent
         except Exception as e:
@@ -597,19 +662,240 @@ def render_chat():
             {"role": "assistant", "content": full_response}
         )
 
+def render_model_comparison():
+    """Render the model comparison interface using RAGAS."""
+    st.title("🔬 Comparación de Modelos de Embeddings")
+    
+    st.markdown("""
+    Esta herramienta permite comparar el rendimiento de diferentes modelos de embeddings 
+    usando métricas RAGAS (Retrieval-Augmented Generation Assessment).
+    """)
+    
+    # Get available models
+    all_models = EmbeddingsManager.list_all_models()
+    pgvector_mgr = PGVectorManager()
+    
+    # Get documents from database
+    try:
+        all_docs = pgvector_mgr.get_all_documents()
+    except Exception as e:
+        st.error(f"Error al cargar documentos: {str(e)}")
+        return
+    
+    if not all_docs:
+        st.warning("⚠️ No hay documentos en la base de datos. Sube y procesa documentos primero.")
+        return
+    
+    # Configuration section
+    st.subheader("⚙️ Configuración de Evaluación")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Select models to compare
+        st.write("**Selecciona modelos para comparar:**")
+        
+        selected_models = []
+        for model in all_models:
+            if st.checkbox(
+                f"{model['name']} ({model['provider']})",
+                key=f"model_{model['name']}"
+            ):
+                selected_models.append(model['name'])
+    
+    with col2:
+        # Select document (optional)
+        st.write("**Documento a evaluar (opcional):**")
+        doc_options = ["Todos los documentos"] + [f"{d['id']} - {d['filename']}" for d in all_docs]
+        selected_doc_option = st.selectbox(
+            "Documento:",
+            options=doc_options,
+            help="Puedes evaluar contra un documento específico o todos"
+        )
+        
+        document_id = None
+        if selected_doc_option != "Todos los documentos":
+            document_id = int(selected_doc_option.split(" - ")[0])
+        
+        # Number of test questions
+        num_questions = st.slider(
+            "Número de preguntas de prueba:",
+            min_value=3,
+            max_value=20,
+            value=5,
+            help="Más preguntas = evaluación más precisa pero más lenta"
+        )
+        
+        # Number of context chunks to retrieve
+        k_value = st.slider(
+            "Chunks a recuperar (k):",
+            min_value=2,
+            max_value=10,
+            value=4
+        )
+    
+    # Run evaluation button
+    st.divider()
+    
+    if st.button("🚀 Ejecutar Evaluación", type="primary", disabled=len(selected_models) == 0):
+        if len(selected_models) == 0:
+            st.error("Por favor selecciona al menos un modelo para evaluar")
+            return
+        
+        st.info(f"Evaluando {len(selected_models)} modelo(s) con {num_questions} preguntas...")
+        
+        # Create evaluator
+        try:
+            evaluator = RAGASEvaluator()
+            
+            # Run comparison
+            with st.spinner("Ejecutando evaluaciones... Esto puede tomar varios minutos."):
+                results = evaluator.compare_embedding_models(
+                    models=selected_models,
+                    document_id=document_id,
+                    test_cases=None,  # Will generate synthetic questions
+                    k=k_value
+                )
+            
+            # Display results
+            st.success("✅ Evaluación completada!")
+            
+            # Create comparison table
+            st.subheader("📊 Resultados de Comparación")
+            
+            comparison_data = []
+            for model_name, metrics in results.items():
+                if "error" not in metrics:
+                    comparison_data.append({
+                        "Modelo": model_name,
+                        "Faithfulness": f"{metrics.get('faithfulness', 0):.3f}",
+                        "Answer Relevancy": f"{metrics.get('answer_relevancy', 0):.3f}",
+                        "Context Precision": f"{metrics.get('context_precision', 0):.3f}",
+                        "Context Recall": f"{metrics.get('context_recall', 0):.3f}",
+                        "Tiempo Promedio (s)": f"{metrics.get('average_retrieval_time', 0):.3f}",
+                    })
+                else:
+                    st.error(f"Error en {model_name}: {metrics['error']}")
+            
+            if comparison_data:
+                df = pd.DataFrame(comparison_data)
+                st.dataframe(df, use_container_width=True)
+                
+                # Visualizations
+                st.subheader("📈 Visualizaciones")
+                
+                # Create metrics comparison chart
+                import plotly.graph_objects as go
+                
+                metrics_to_plot = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+                
+                fig = go.Figure()
+                
+                for metric in metrics_to_plot:
+                    values = []
+                    models = []
+                    for model_name, metrics in results.items():
+                        if "error" not in metrics and metric in metrics:
+                            values.append(metrics[metric])
+                            models.append(model_name.split("/")[-1][:20])  # Shorten name
+                    
+                    if values:
+                        fig.add_trace(go.Bar(
+                            name=metric.replace("_", " ").title(),
+                            x=models,
+                            y=values
+                        ))
+                
+                fig.update_layout(
+                    title="Comparación de Métricas RAGAS",
+                    xaxis_title="Modelo",
+                    yaxis_title="Score",
+                    barmode='group',
+                    yaxis=dict(range=[0, 1])
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Retrieval time comparison
+                fig2 = go.Figure()
+                
+                times = []
+                models = []
+                for model_name, metrics in results.items():
+                    if "error" not in metrics:
+                        times.append(metrics.get('average_retrieval_time', 0))
+                        models.append(model_name.split("/")[-1][:20])
+                
+                fig2.add_trace(go.Bar(
+                    x=models,
+                    y=times,
+                    marker_color='lightblue'
+                ))
+                
+                fig2.update_layout(
+                    title="Tiempo Promedio de Recuperación",
+                    xaxis_title="Modelo",
+                    yaxis_title="Tiempo (segundos)"
+                )
+                
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # Best model recommendation
+                try:
+                    best_model = evaluator.get_best_model(results, "answer_relevancy")
+                    st.success(f"🏆 **Modelo Recomendado (mejor Answer Relevancy):** {best_model}")
+                except Exception as e:
+                    st.warning(f"No se pudo determinar el mejor modelo: {str(e)}")
+        
+        except Exception as e:
+            st.error(f"Error durante la evaluación: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+    
+    # Show historical evaluations
+    st.divider()
+    st.subheader("📜 Evaluaciones Históricas")
+    
+    try:
+        evaluations = pgvector_mgr.get_ragas_evaluations()
+        
+        if evaluations:
+            eval_data = []
+            for ev in evaluations:
+                eval_data.append({
+                    "Fecha": ev.get('evaluation_date'),
+                    "Modelo": ev.get('model_name'),
+                    "Documento": ev.get('filename'),
+                    "Faithfulness": f"{ev.get('faithfulness', 0):.3f}" if ev.get('faithfulness') else "N/A",
+                    "Answer Relevancy": f"{ev.get('answer_relevancy', 0):.3f}" if ev.get('answer_relevancy') else "N/A",
+                    "Context Precision": f"{ev.get('context_precision', 0):.3f}" if ev.get('context_precision') else "N/A",
+                    "Context Recall": f"{ev.get('context_recall', 0):.3f}" if ev.get('context_recall') else "N/A",
+                })
+            
+            df_hist = pd.DataFrame(eval_data)
+            st.dataframe(df_hist, use_container_width=True)
+        else:
+            st.info("No hay evaluaciones históricas disponibles.")
+    
+    except Exception as e:
+        st.warning(f"No se pudieron cargar evaluaciones históricas: {str(e)}")
+
 def main():
     """Main application function."""
     initialize_session_state()
     render_sidebar()
 
     # Create tabs for different views
-    tab1, tab2 = st.tabs(["Conversación", "Estructura del documento"])
+    tab1, tab2, tab3 = st.tabs(["💬 Conversación", "📊 Estructura del documento", "🔬 Comparación de Modelos"])
 
     with tab1:
         render_chat()
 
     with tab2:
         render_structure_viz()
+    
+    with tab3:
+        render_model_comparison()
 
 
 if __name__ == "__main__":

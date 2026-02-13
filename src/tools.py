@@ -3,15 +3,16 @@ Agent tools for document search and retrieval.
 """
 from typing import Annotated, Optional
 from langchain.tools import tool
-from langchain_openai import OpenAIEmbeddings
 from src.pgvector_manager import PGVectorManager
+from src.embeddings_manager import EmbeddingsManager
 
-def create_search_tool(document_id: Optional[int] = None):
+def create_search_tool(document_id: Optional[int] = None, embedding_model: str = "text-embedding-3-small"):
     """
     Create a search tool that retrieves from PostgreSQL pgvector database.
 
     Args:
         document_id: Optional document ID to filter search results
+        embedding_model: Embedding model to use for search
 
     Returns:
         A tool function that can search the documents
@@ -29,13 +30,18 @@ def create_search_tool(document_id: Optional[int] = None):
         """
 
         try:
-            # Compute embedding for the query
-            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+            # Compute embedding for the query using the specified model
+            embeddings = EmbeddingsManager.create_embeddings(embedding_model)
             query_embedding = embeddings.embed_query(query)
             
             # Search directly in PostgreSQL pgvector
             pgvector_mgr = PGVectorManager()
-            results = pgvector_mgr.search_similar(query_embedding, k=8, document_id=document_id)
+            results = pgvector_mgr.search_similar(
+                query_embedding, 
+                k=8, 
+                document_id=document_id,
+                embedding_model=embedding_model
+            )
 
             if not results:
                 return "No relevant information found."

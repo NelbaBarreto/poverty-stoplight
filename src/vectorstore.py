@@ -4,22 +4,24 @@ Vector store management for document storage and retrieval.
 from typing import List
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from src.pgvector_manager import PGVectorManager
+from src.embeddings_manager import EmbeddingsManager
 
 
 class VectorStoreManager:
     """Manages document chunking, embedding, and vector storage."""
 
-    def __init__(self):
+    def __init__(self, embedding_model: str = "text-embedding-3-small"):
         """
         Initialize the vector store manager.
         
         Args:
-            use_pgvector: If True, use PostgreSQL pgvector for storage.
-                         If False, use in-memory Chroma.
+            embedding_model: Name of the embedding model to use
         """
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # Create embeddings provider
+        self.embedding_model = embedding_model
+        self.embeddings = EmbeddingsManager.create_embeddings(embedding_model)
+        
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=100,
@@ -52,7 +54,7 @@ class VectorStoreManager:
         Returns:
             Vector store instance (Chroma or PGVectorManager)
         """
-        print(f"Creating vector store with {len(chunks)} chunks...")
+        print(f"Creating vector store with {len(chunks)} chunks using model: {self.embedding_model}...")
 
         try:
             # Add embeddings to chunks
@@ -67,8 +69,13 @@ class VectorStoreManager:
             print("Saving to PostgreSQL pgvector...")
             filename = chunks[0].metadata.get("filename", "unknown")
             file_type = chunks[0].metadata.get("file_type", "unknown")
-            print(filename, file_type)
-            self.pgvector_manager.save_chunks(chunks_with_embeddings, filename, file_type)
+            print(f"Document: {filename}, Type: {file_type}, Model: {self.embedding_model}")
+            self.pgvector_manager.save_chunks(
+                chunks_with_embeddings, 
+                filename, 
+                file_type, 
+                self.embedding_model
+            )
             
             print("Vector store created successfully in PostgreSQL")
             return self.pgvector_manager
@@ -77,27 +84,41 @@ class VectorStoreManager:
             print(f"Error creating vector store: {str(e)}")
             raise
 
-    def search_similar(self, vectorstore: any, query: str, k: int = 4) -> List[Document]:
+    def search_similar(self, vectorstore: any, query: str, k: int = 4, embedding_model: str = None) -> List[Document]:
         """
         Perform semantic similarity search.
 
         Args:
-            vectorstore: The vector store (Chroma or PGVectorManager)
+            vectorstore: The vector store (PGVectorManager)
             query: Search query
             k: Number of results to return
+            embedding_model: Specific embedding model to use for search (optional)
 
         Returns:
             List of similar documents
         """
         try:
-            query_embedding = self.embeddings.embed_query(query)
-            # Search in pgvector
-            results = vectorstore.search_similar(query_embedding, k=k)            
+            # Use specified model or default to instance model
+            model_to_use = embedding_model or self.embedding_model
+            
+            # If searching with a different model, create temporary embeddings
+            if model_to_use != self.embedding_model:
+                temp_embeddings = EmbeddingsManager.create_embeddings(model_to_use)
+                query_embedding = temp_embeddings.embed_query(query)
+            else:
+                query_embedding = self.embeddings.embed_query(query)
+            
+            # Search in pgvector with model filter
+            results = vectorstore.search_similar(
+                query_embedding, 
+                k=k, 
+                embedding_model=model_to_use
+            )            
             return results
         except Exception as e:
             print(f"Error searching vector store: {str(e)}")
             return []
-
-    def get_vectorstore_type(self) -> str:
-        """Get the type of vector store being used."""
-        return "pgvector" if self.use_pgvector else "chroma"
+    
+    def get_embedding_model(self) -> str:
+        """Get the current embedding model name."""
+        return self.embedding_model
