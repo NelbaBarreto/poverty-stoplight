@@ -2,10 +2,10 @@
 Embeddings manager supporting multiple providers (OpenAI and HuggingFace).
 """
 import os
-from typing import List, Literal
+import requests
+from typing import List, Literal, Optional, Dict
 from abc import ABC, abstractmethod
 from langchain_openai import OpenAIEmbeddings
-from huggingface_hub import InferenceClient
 
 
 # Define available embedding models
@@ -16,62 +16,15 @@ EMBEDDING_MODELS = {
             "model_name": "text-embedding-3-small",
             "dimension": 1536,
             "description": "OpenAI - Más rápido y económico"
-        },
-        "text-embedding-3-large": {
-            "provider": "openai",
-            "model_name": "text-embedding-3-large",
-            "dimension": 3072,
-            "description": "OpenAI - Mayor precisión"
-        },
-        "text-embedding-ada-002": {
-            "provider": "openai",
-            "model_name": "text-embedding-ada-002",
-            "dimension": 1536,
-            "description": "OpenAI - Modelo clásico"
         }
     },
     "huggingface": {
-        "sentence-transformers/all-MiniLM-L6-v2": {
-            "provider": "huggingface",
-            "model_name": "sentence-transformers/all-MiniLM-L6-v2",
-            "dimension": 384,
-            "description": "HuggingFace - Rápido y ligero (384 dim)"
-        },
-        "sentence-transformers/all-mpnet-base-v2": {
-            "provider": "huggingface",
-            "model_name": "sentence-transformers/all-mpnet-base-v2",
-            "dimension": 768,
-            "description": "HuggingFace - Balance precisión/velocidad (768 dim)"
-        },
-        "BAAI/bge-small-en-v1.5": {
-            "provider": "huggingface",
-            "model_name": "BAAI/bge-small-en-v1.5",
-            "dimension": 384,
-            "description": "HuggingFace - BGE Small, optimizado (384 dim)"
-        },
-        "BAAI/bge-base-en-v1.5": {
-            "provider": "huggingface",
-            "model_name": "BAAI/bge-base-en-v1.5",
-            "dimension": 768,
-            "description": "HuggingFace - BGE Base, alta calidad (768 dim)"
-        },
-        "intfloat/multilingual-e5-small": {
-            "provider": "huggingface",
-            "model_name": "intfloat/multilingual-e5-small",
-            "dimension": 384,
-            "description": "HuggingFace - Multilingüe E5 Small (384 dim)"
-        },
-        "intfloat/multilingual-e5-base": {
-            "provider": "huggingface",
-            "model_name": "intfloat/multilingual-e5-base",
-            "dimension": 768,
-            "description": "HuggingFace - Multilingüe E5 Base (768 dim)"
-        },
         "Qwen/Qwen3-Embedding-0.6B": {
             "provider": "huggingface",
             "model_name": "Qwen/Qwen3-Embedding-0.6B",
             "dimension": 1024,
-            "description": "HuggingFace - Qwen3 Embedding 0.6B, modelo ligero (1024 dim)"
+            "description": "HuggingFace - Qwen3 Embedding 0.6B, modelo ligero (1024 dim)",
+            "endpoint_url": "https://ddz32oohf81bvew1.us-east-1.aws.endpoints.huggingface.cloud"
         }
     }
 }
@@ -128,23 +81,46 @@ class OpenAIEmbeddingsProvider(BaseEmbeddingsProvider):
 class HuggingFaceEmbeddingsProvider(BaseEmbeddingsProvider):
     """HuggingFace Inference API embeddings provider."""
     
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        """Initialize HuggingFace embeddings."""
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2", endpoint_url: str = None):
+        """Initialize HuggingFace embeddings.
+        
+        Args:
+            model_name: Name of the model
+            endpoint_url: Custom inference endpoint URL. If None, gets it from EMBEDDING_MODELS config
+        """
         self.model_name = model_name
+        
+        # Get endpoint URL from parameter or model config
+        if endpoint_url:
+            self.endpoint_url = endpoint_url
+        else:
+            # Get endpoint from model configuration
+            model_info = None
+            for provider_models in EMBEDDING_MODELS.values():
+                if model_name in provider_models:
+                    model_info = provider_models[model_name]
+                    break
+            
+            if model_info and "endpoint_url" in model_info:
+                self.endpoint_url = model_info["endpoint_url"]
+            else:
+                self.endpoint_url = None
         
         # Get HuggingFace API token
         hf_token = os.getenv("HUGGINGFACE_API_TOKEN")
         if not hf_token:
-            # Try alternative token name
             hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
             raise ValueError("HUGGINGFACE_API_TOKEN or HF_TOKEN not found in environment variables")
         
-        # Initialize HuggingFace InferenceClient with hf-inference provider
-        self.client = InferenceClient(
-            provider="hf-inference",
-            api_key=hf_token,
-        )
+        self.hf_token = hf_token
+        
+        # Use endpoint if configured
+        if self.endpoint_url:
+            print(f"Using HuggingFace Endpoint for {model_name}: {self.endpoint_url[:50]}...")
+        else:
+            print(f"No endpoint configured for {model_name}")
+        
         self.dimension = self._get_model_dimension()
     
     def _get_model_dimension(self) -> int:
@@ -156,40 +132,81 @@ class HuggingFaceEmbeddingsProvider(BaseEmbeddingsProvider):
     
     def embed_query(self, text: str) -> List[float]:
         """Embed a single query text."""
+        if not self.endpoint_url:
+            raise ValueError(f"No endpoint configured for model {self.model_name}")
+        
         try:
-            result = self.client.feature_extraction(
-                text,
-                model=self.model_name
+            headers = {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {self.hf_token}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "inputs": text,
+                "parameters": {}
+            }
+            response = requests.post(
+                self.endpoint_url,
+                headers=headers,
+                json=payload,
+                timeout=30
             )
-            # InferenceClient returns a numpy array or list, ensure it's a list
-            if hasattr(result, 'tolist'):
-                return result.tolist()
-            elif isinstance(result, list):
-                return result
+            response.raise_for_status()
+            embeddings = response.json()
+            
+            # Normalize response: ensure we return a 1-D array
+            # Some endpoints return [[...]] while others return [...]
+            if isinstance(embeddings, list):
+                if len(embeddings) > 0 and isinstance(embeddings[0], list):
+                    # It's a 2-D array [[...]], take the first element
+                    return embeddings[0]
+                else:
+                    # It's already a 1-D array [...]
+                    return embeddings
             else:
-                return list(result)
+                raise ValueError(f"Unexpected embedding format: {type(embeddings)}")
         except Exception as e:
-            print(f"Error embedding query with {self.model_name}: {str(e)}")
+            print(f"Error embedding query: {str(e)}")
             raise
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed a list of documents."""
+        if not self.endpoint_url:
+            raise ValueError(f"No endpoint configured for model {self.model_name}")
+        
         embeddings = []
         for text in texts:
             try:
-                result = self.client.feature_extraction(
-                    text,
-                    model=self.model_name
+                headers = {
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {self.hf_token}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "inputs": text,
+                    "parameters": {}
+                }
+                response = requests.post(
+                    self.endpoint_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30
                 )
-                # Convert to list if needed
-                if hasattr(result, 'tolist'):
-                    embeddings.append(result.tolist())
-                elif isinstance(result, list):
-                    embeddings.append(result)
+                response.raise_for_status()
+                embedding = response.json()
+                
+                # Normalize response: ensure each embedding is a 1-D array
+                if isinstance(embedding, list):
+                    array_len = len(embedding)
+                    if array_len > 0 and isinstance(embedding[0], list):
+                        print("Array lenght", array_len)
+                        embeddings.append(embedding[0])
+                    else:
+                        embeddings.append(embedding)
                 else:
-                    embeddings.append(list(result))
+                    raise ValueError(f"Unexpected embedding format: {type(embedding)}")
             except Exception as e:
-                print(f"Error embedding document with {self.model_name}: {str(e)}")
+                print(f"Error embedding document: {str(e)}")
                 raise
         return embeddings
     

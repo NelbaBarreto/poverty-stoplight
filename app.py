@@ -41,6 +41,10 @@ def initialize_session_state():
         st.session_state.docling_docs = []
     if "selected_embedding_model" not in st.session_state:
         st.session_state.selected_embedding_model = "text-embedding-3-small"
+    if "selected_llm_provider" not in st.session_state:
+        st.session_state.selected_llm_provider = "openai"
+    if "selected_llm_model" not in st.session_state:
+        st.session_state.selected_llm_model = "gpt-4o-mini"
 
 
 def process_and_index(uploaded_files, embedding_model=None):
@@ -102,7 +106,11 @@ def process_and_index(uploaded_files, embedding_model=None):
         # Step 3: Crear agente
         with st.spinner("Creando agente..."):
             search_tool = create_search_tool(embedding_model=embedding_model)  # Usar el modelo seleccionado
-            agent = create_documentation_agent([search_tool])
+            agent = create_documentation_agent(
+                [search_tool],
+                model_name=st.session_state.selected_llm_model,
+                provider=st.session_state.selected_llm_provider
+            )
             st.session_state.agent = agent
 
         st.session_state.processing_status = "completed"
@@ -151,6 +159,68 @@ def render_sidebar():
                 st.metric("Proveedor", selected_model_info['provider'])
             with col2:
                 st.metric("Dimensión", selected_model_info['dimension'])
+            
+            # Show endpoint info for HuggingFace models
+            if selected_model_info['provider'] == 'huggingface':
+                from src.embeddings_manager import EMBEDDING_MODELS
+                model_config = EMBEDDING_MODELS['huggingface'].get(selected_model_info['name'], {})
+                endpoint = model_config.get('endpoint_url')
+                if endpoint:
+                    st.success(f"🚀 Endpoint: {endpoint[:40]}...")
+                else:
+                    st.warning("⚠️ Sin endpoint configurado")
+
+        st.divider()
+        
+        # LLM model selector
+        st.subheader("🤖 Modelo LLM (Chat)")
+        
+        # Provider selector
+        llm_provider = st.radio(
+            "Proveedor:",
+            options=["openai", "huggingface"],
+            index=0 if st.session_state.selected_llm_provider == "openai" else 1,
+            horizontal=True,
+            help="Selecciona el proveedor del modelo de lenguaje para el chat"
+        )
+        st.session_state.selected_llm_provider = llm_provider
+        
+        # Model selector based on provider
+        if llm_provider == "openai":
+            llm_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+            selected_llm = st.selectbox(
+                "Modelo:",
+                options=llm_models,
+                index=llm_models.index(st.session_state.selected_llm_model) if st.session_state.selected_llm_model in llm_models else 1,
+                help="Modelo OpenAI para el chat"
+            )
+            st.session_state.selected_llm_model = selected_llm
+        else:  # huggingface
+            # Common LLM models
+            llm_models = [
+                "Qwen/Qwen2.5-72B-Instruct",
+                "meta-llama/Llama-3.1-8B-Instruct", 
+                "meta-llama/Llama-3.1-70B-Instruct",
+                "mistralai/Mistral-7B-Instruct-v0.3",
+                "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                "HuggingFaceH4/zephyr-7b-beta"
+            ]
+            
+            selected_llm = st.selectbox(
+                "Modelo:",
+                options=llm_models,
+                index=0,
+                help="Modelo HuggingFace para el chat"
+            )
+            st.session_state.selected_llm_model = selected_llm
+            
+            # Show endpoint info
+            from src.agent import get_hf_llm_endpoint_for_model
+            endpoint = get_hf_llm_endpoint_for_model(selected_llm)
+            if endpoint:
+                st.success(f"🚀 Endpoint: {endpoint[:40]}...")
+            else:
+                st.info("🌐 API pública")
 
         st.divider()
 
@@ -217,14 +287,15 @@ def render_sidebar():
             st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("Consejos"):
+        with st.expander("💡 Consejos y Configuración"):
             st.markdown(
                 """
             **Cómo usar:**
             1. Selecciona el modelo de embeddings
-            2. Sube documentos nuevos
-            3. Los datos se guardan en PostgreSQL (pgvector-db)
-            4. El chat busca en TODOS los documentos automáticamente
+            2. Selecciona el modelo LLM (chat)
+            3. Sube documentos nuevos
+            4. Los datos se guardan en PostgreSQL (pgvector-db)
+            5. El chat busca en TODOS los documentos automáticamente
 
             **Formatos compatibles:**
             - Documentos PDF
@@ -235,6 +306,24 @@ def render_sidebar():
             **Modelos de embeddings:**
             - OpenAI: Modelos comerciales de alta calidad
             - HuggingFace: Modelos open-source gratuitos vía Inference API
+            
+            **Múltiples Inference Endpoints:**
+            
+            Puedes configurar diferentes endpoints para cada modelo:
+            
+            1. **Endpoint genérico** (para todos los modelos):
+               ```
+               HF_EMBEDDING_ENDPOINT_URL=https://xxx.aws.endpoints.huggingface.cloud
+               HF_LLM_ENDPOINT_URL=https://yyy.aws.endpoints.huggingface.cloud
+               ```
+            
+            2. **Endpoint específico por modelo** (prioridad sobre el genérico):
+               ```
+               HF_EMBEDDING_ENDPOINT_SENTENCE_TRANSFORMERS_ALL_MINILM_L6_V2=https://...
+               HF_LLM_ENDPOINT_QWEN_QWEN2_5_72B_INSTRUCT=https://...
+               ```
+            
+            Ver **HUGGINGFACE_ENDPOINTS.md** para documentación completa.
             """
             )
 
@@ -515,7 +604,11 @@ def render_chat():
                 # Usar el modelo seleccionado o el primero disponible en BD
                 embedding_model = st.session_state.selected_embedding_model
                 search_tool = create_search_tool(embedding_model=embedding_model)
-                agent = create_documentation_agent([search_tool])
+                agent = create_documentation_agent(
+                    [search_tool],
+                    model_name=st.session_state.selected_llm_model,
+                    provider=st.session_state.selected_llm_provider
+                )
                 st.session_state.agent = agent
             else:
                 st.info("Por favor sube y procesa tus documentos en la barra lateral primero!")
@@ -543,7 +636,11 @@ def render_chat():
         try:
             embedding_model = st.session_state.selected_embedding_model
             search_tool = create_search_tool(embedding_model=embedding_model)
-            agent = create_documentation_agent([search_tool])
+            agent = create_documentation_agent(
+                [search_tool],
+                model_name=st.session_state.selected_llm_model,
+                provider=st.session_state.selected_llm_provider
+            )
             st.session_state.agent = agent
         except Exception as e:
             st.error(f"Error al crear agente: {str(e)}")

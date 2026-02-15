@@ -17,3 +17,4 @@ ragas
 huggingface-hub
 datasets
 plotly
+requests

@@ -235,18 +235,54 @@ Answer:"""
                 llm=self.llm,
             )
             
-            # Extract metrics
+            # Extract metrics - EvaluationResult object can be accessed like a dict or converted to pandas
+            # Try to convert to pandas DataFrame first, then to dict
+            try:
+                if hasattr(result, 'to_pandas'):
+                    result_df = result.to_pandas()
+                    # Get mean of each metric column
+                    metrics_dict = {
+                        "faithfulness": float(result_df['faithfulness'].mean()) if 'faithfulness' in result_df.columns else 0.0,
+                        "answer_relevancy": float(result_df['answer_relevancy'].mean()) if 'answer_relevancy' in result_df.columns else 0.0,
+                        "context_precision": float(result_df['context_precision'].mean()) if 'context_precision' in result_df.columns else 0.0,
+                        "context_recall": float(result_df['context_recall'].mean()) if 'context_recall' in result_df.columns else 0.0,
+                    }
+                elif hasattr(result, '__getitem__'):
+                    # Try indexing directly
+                    metrics_dict = {
+                        "faithfulness": float(result["faithfulness"]) if "faithfulness" in result else 0.0,
+                        "answer_relevancy": float(result["answer_relevancy"]) if "answer_relevancy" in result else 0.0,
+                        "context_precision": float(result["context_precision"]) if "context_precision" in result else 0.0,
+                        "context_recall": float(result["context_recall"]) if "context_recall" in result else 0.0,
+                    }
+                else:
+                    # Try accessing as attributes
+                    metrics_dict = {
+                        "faithfulness": float(getattr(result, "faithfulness", 0.0)),
+                        "answer_relevancy": float(getattr(result, "answer_relevancy", 0.0)),
+                        "context_precision": float(getattr(result, "context_precision", 0.0)),
+                        "context_recall": float(getattr(result, "context_recall", 0.0)),
+                    }
+            except Exception as e:
+                print(f"Warning: Error extracting metrics from result: {e}")
+                print(f"Result type: {type(result)}")
+                print(f"Result: {result}")
+                # Fallback to zeros
+                metrics_dict = {
+                    "faithfulness": 0.0,
+                    "answer_relevancy": 0.0,
+                    "context_precision": 0.0,
+                    "context_recall": 0.0,
+                }
+            
             metrics = {
-                "faithfulness": float(result.get("faithfulness", 0)),
-                "answer_relevancy": float(result.get("answer_relevancy", 0)),
-                "context_precision": float(result.get("context_precision", 0)),
-                "context_recall": float(result.get("context_recall", 0)),
+                **metrics_dict,
                 "context_relevancy": None,  # Not available in current RAGAS version
                 "test_questions_count": len(test_cases),
                 "average_retrieval_time": sum(retrieval_times) / len(retrieval_times),
                 "metadata": {
                     "k": k,
-                    "llm_model": self.llm.model_name,
+                    "llm_model": getattr(self.llm, 'model_name', getattr(self.llm, 'model', 'unknown')),
                     "embedding_model": embedding_model,
                 }
             }
