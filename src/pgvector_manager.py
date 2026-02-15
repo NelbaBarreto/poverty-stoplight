@@ -7,6 +7,7 @@ from langchain_core.documents import Document
 import psycopg2
 from psycopg2.extras import execute_values, RealDictCursor
 import json
+from src.embeddings_manager import EmbeddingsManager
 
 
 class PGVectorManager:
@@ -34,8 +35,60 @@ class PGVectorManager:
         except psycopg2.OperationalError as e:
             print(f"Error connecting to database: {str(e)}")
             raise
+    
+    def get_or_create_embedding_model(self, model_name: str) -> int:
+        """
+        Get or create an embedding model record in the database.
+        
+        Args:
+            model_name: Name of the embedding model
+            
+        Returns:
+            Model ID in the database
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Try to get existing model
+            cursor.execute(
+                "SELECT id FROM embedding_models WHERE model_name = %s",
+                (model_name,)
+            )
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]
+            
+            # Create new model record
+            model_info = EmbeddingsManager.get_model_info(model_name)
+            cursor.execute(
+                """
+                INSERT INTO embedding_models (model_name, provider, dimension, description)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    model_name,
+                    model_info["provider"],
+                    model_info["dimension"],
+                    model_info["description"]
+                )
+            )
+            model_id = cursor.fetchone()[0]
+            conn.commit()
+            print(f"Created embedding model record: {model_name} (ID: {model_id})")
+            return model_id
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error managing embedding model: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
-    def save_chunks(self, chunks: List[Document], filename: str, file_type: str) -> int:
+    def save_chunks(self, chunks: List[Document], filename: str, file_type: str, embedding_model: str = "text-embedding-3-small") -> int:
         """
         Save document chunks with embeddings to PostgreSQL.
 
@@ -43,6 +96,7 @@ class PGVectorManager:
             chunks: List of document chunks with embeddings
             filename: Name of the original document
             file_type: Type of the document (pdf, docx, etc.)
+            embedding_model: Name of the embedding model used
 
         Returns:
             Document ID in the database
@@ -51,14 +105,17 @@ class PGVectorManager:
         cursor = conn.cursor()
 
         try:
+            # Get or create embedding model record
+            embedding_model_id = self.get_or_create_embedding_model(embedding_model)
+            
             # Step 1: Insert document metadata
             cursor.execute(
                 """
-                INSERT INTO documents (filename, file_type)
-                VALUES (%s, %s)
+                INSERT INTO documents (filename, file_type, embedding_model_id)
+                VALUES (%s, %s, %s)
                 RETURNING id
                 """,
-                (filename, file_type)
+                (filename, file_type, embedding_model_id)
             )
             document_id = cursor.fetchone()[0]
             print(f"Created document record with ID: {document_id}")
@@ -73,6 +130,7 @@ class PGVectorManager:
                     document_id,
                     chunk.page_content,
                     embedding,
+                    embedding_model_id,
                     i,
                     json.dumps({
                         "filename": chunk.metadata.get("filename", filename),
@@ -86,7 +144,7 @@ class PGVectorManager:
                 execute_values(
                     cursor,
                     """
-                    INSERT INTO chunks (document_id, chunk_text, embedding, chunk_index, metadata)
+                    INSERT INTO chunks (document_id, chunk_text, embedding, embedding_model_id, chunk_index, metadata)
                     VALUES %s
                     ON CONFLICT DO NOTHING
                     """,
@@ -94,7 +152,7 @@ class PGVectorManager:
                     template=None
                 )
                 conn.commit()
-                print(f"Saved {len(chunk_data)} chunks for document '{filename}'")
+                print(f"Saved {len(chunk_data)} chunks for document '{filename}' using model '{embedding_model}'")
 
             return document_id
 
@@ -123,7 +181,7 @@ class PGVectorManager:
             document_ids.append(doc_id)
         return document_ids
 
-    def search_similar(self, embedding: List[float], k: int = 4, document_id: Optional[int] = None) -> List[Document]:
+    def search_similar(self, embedding: List[float], k: int = 4, document_id: Optional[int] = None, embedding_model: str = None) -> List[Document]:
         """
         Search for similar chunks using vector similarity.
 
@@ -131,6 +189,7 @@ class PGVectorManager:
             embedding: Query embedding vector
             k: Number of results to return
             document_id: Optional filter by document ID
+            embedding_model: Optional filter by embedding model name
 
         Returns:
             List of similar documents
@@ -144,19 +203,27 @@ class PGVectorManager:
 
             query = """
             SELECT 
-                id,
-                document_id,
-                chunk_text,
-                metadata,
-                embedding <-> %s::vector AS distance
-            FROM chunks
+                c.id,
+                c.document_id,
+                c.chunk_text,
+                c.metadata,
+                c.embedding <-> %s::vector AS distance,
+                em.model_name,
+                em.provider
+            FROM chunks c
+            LEFT JOIN embedding_models em ON c.embedding_model_id = em.id
+            WHERE 1=1
             """
             
             params = [embedding_str]
             
             if document_id:
-                query += " WHERE document_id = %s"
+                query += " AND c.document_id = %s"
                 params.append(document_id)
+            
+            if embedding_model:
+                query += " AND em.model_name = %s"
+                params.append(embedding_model)
             
             query += """
             ORDER BY distance
@@ -183,6 +250,8 @@ class PGVectorManager:
                             "chunk_id": row.get("id"),
                             "document_id": row.get("document_id"),
                             "distance": float(row.get("distance", 0)),
+                            "embedding_model": row.get("model_name"),
+                            "embedding_provider": row.get("provider"),
                         },
                     )
 
@@ -517,6 +586,137 @@ class PGVectorManager:
         except Exception as e:
             print(f"Error retrieving document structure: {str(e)}")
             return {}
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def get_all_embedding_models(self) -> List[dict]:
+        """
+        Get all embedding models stored in the database.
+        
+        Returns:
+            List of embedding model records
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        try:
+            cursor.execute(
+                """
+                SELECT id, model_name, provider, dimension, description, created_at
+                FROM embedding_models
+                ORDER BY created_at DESC
+                """
+            )
+            models = cursor.fetchall()
+            return [dict(m) for m in models]
+        except Exception as e:
+            print(f"Error getting embedding models: {str(e)}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def save_ragas_evaluation(self, embedding_model_id: int, document_id: int, 
+                             metrics: dict) -> int:
+        """
+        Save RAGAS evaluation metrics to the database.
+        
+        Args:
+            embedding_model_id: ID of the embedding model
+            document_id: ID of the document
+            metrics: Dictionary with RAGAS metrics
+            
+        Returns:
+            Evaluation ID
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                """
+                INSERT INTO ragas_evaluations (
+                    embedding_model_id, document_id,
+                    faithfulness, answer_relevancy, context_precision,
+                    context_recall, context_relevancy,
+                    test_questions_count, average_retrieval_time, metadata
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    embedding_model_id,
+                    document_id,
+                    metrics.get('faithfulness'),
+                    metrics.get('answer_relevancy'),
+                    metrics.get('context_precision'),
+                    metrics.get('context_recall'),
+                    metrics.get('context_relevancy'),
+                    metrics.get('test_questions_count'),
+                    metrics.get('average_retrieval_time'),
+                    json.dumps(metrics.get('metadata', {}))
+                )
+            )
+            evaluation_id = cursor.fetchone()[0]
+            conn.commit()
+            print(f"Saved RAGAS evaluation (ID: {evaluation_id})")
+            return evaluation_id
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error saving RAGAS evaluation: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def get_ragas_evaluations(self, embedding_model_id: int = None, 
+                              document_id: int = None) -> List[dict]:
+        """
+        Get RAGAS evaluation metrics.
+        
+        Args:
+            embedding_model_id: Optional filter by embedding model
+            document_id: Optional filter by document
+            
+        Returns:
+            List of evaluation records
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        try:
+            query = """
+            SELECT 
+                re.*,
+                em.model_name,
+                em.provider,
+                d.filename
+            FROM ragas_evaluations re
+            LEFT JOIN embedding_models em ON re.embedding_model_id = em.id
+            LEFT JOIN documents d ON re.document_id = d.id
+            WHERE 1=1
+            """
+            params = []
+            
+            if embedding_model_id:
+                query += " AND re.embedding_model_id = %s"
+                params.append(embedding_model_id)
+            
+            if document_id:
+                query += " AND re.document_id = %s"
+                params.append(document_id)
+            
+            query += " ORDER BY re.evaluation_date DESC"
+            
+            cursor.execute(query, params)
+            evaluations = cursor.fetchall()
+            return [dict(e) for e in evaluations]
+            
+        except Exception as e:
+            print(f"Error getting RAGAS evaluations: {str(e)}")
+            return []
         finally:
             cursor.close()
             conn.close()
