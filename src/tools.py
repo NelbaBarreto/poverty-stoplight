@@ -2,9 +2,12 @@
 Agent tools for document search and retrieval.
 """
 from typing import Annotated, Optional
+import requests
 from langchain.tools import tool
-from langchain_openai import OpenAIEmbeddings
 from src.pgvector_manager import PGVectorManager
+
+OLLAMA_URL = "http://localhost:11434/api/embeddings"
+EMBED_MODEL = "bge-m3"
 
 def create_search_tool(document_id: Optional[int] = None):
     """
@@ -29,9 +32,10 @@ def create_search_tool(document_id: Optional[int] = None):
         """
 
         try:
-            # Compute embedding for the query
-            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-            query_embedding = embeddings.embed_query(query)
+            # Compute embedding for the query using Ollama bge-m3
+            resp = requests.post(OLLAMA_URL, json={"model": EMBED_MODEL, "prompt": query})
+            resp.raise_for_status()
+            query_embedding = resp.json()["embedding"]
             
             # Search directly in PostgreSQL pgvector
             pgvector_mgr = PGVectorManager()

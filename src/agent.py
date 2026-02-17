@@ -3,7 +3,7 @@ LangGraph agent configuration and setup.
 """
 from typing import List
 from langchain_core.tools import BaseTool
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -44,19 +44,19 @@ Al responder:
 4. Solo vuelve a buscar si es absolutamente necesario
 """
 
-def create_documentation_agent(tools: List[BaseTool], model_name: str = "gpt-4o-mini"):
+def create_documentation_agent(tools: List[BaseTool], model_name: str = "gpt-oss:20b"):
     """
     Create a document intelligence assistant agent using LangGraph.
 
     Args:
         tools: List of tools the agent can use
-        model_name: Name of the OpenAI model to use
+        model_name: Name of the Ollama model to use
 
     Returns:
         A configured LangGraph agent
     """
-    # Initialize the language model
-    llm = ChatOpenAI(model=model_name, temperature=0)
+    # Initialize the language model via Ollama
+    llm = ChatOllama(model=model_name, temperature=0)
 
     # Create a memory saver for conversation history
     memory = MemorySaver()
