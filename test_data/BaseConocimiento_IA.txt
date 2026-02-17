@@ -1,0 +1,495 @@
+﻿Preguntas base para el Agente IA
+
+
+Este documento reúne un conjunto de preguntas y respuestas que servirán como base de conocimiento para el chatbot del Banco de Soluciones (“Luz”). Si bien el agente conversacional adaptará su lenguaje y estilo a cada usuario, las respuestas deberán apoyarse siempre en información verificada, prácticas reales y lineamientos oficiales de la Fundación Paraguaya y del Semáforo. La base no solo contempla contenidos vinculados a las Soluciones, sino también información general sobre los programas, servicios y la metodología de la Fundación Paraguaya.
+La idea es que esta base de conocimiento esté vinculada a fuentes oficiales, como las páginas web del Semáforo y Fundación Paraguaya y PSP,, para que a medida que se actualice la información en estos sitios, la información del Chatbot se actualice automáticamene.
+
+
+
+
+
+
+¿Qué es la Fundación Paraguaya?
+
+
+La Fundación Paraguaya es una organización sin fines de lucro fundada en 1985 por Martín Burt, con el propósito de brindar oportunidades de desarrollo a las familias a través del acceso a microfinanzas. En sus inicios, el foco estuvo puesto en facilitar crédito y servicios financieros a microemprendedores y emprendedoras, como una herramienta clave para fortalecer sus ingresos y autonomía económica.
+Con el tiempo, la Fundación amplió su enfoque al reconocer que el desarrollo sostenible requiere algo más que el aumento de ingresos. Así surgieron programas de educación emprendedora orientados a jóvenes, destinados a fortalecer habilidades, actitudes y capacidades para que puedan construir un proyecto de vida basado en su propio esfuerzo. En esta misma línea, la Fundación impulsó las Escuelas Autosostenibles de Cerrito y Belén, un modelo educativo innovador que forma emprendedores rurales, integrando educación, trabajo y generación de ingresos bajo el lema de aprender “haciendo, vendiendo y ganando”
+A partir del aprendizaje acumulado en estos programas, la Fundación desarrolló el Semáforo de Eliminación de Pobreza, una metodología que aborda la pobreza como un fenómeno multidimensional. El Semáforo permite a las familias autoevaluar su situación en distintas áreas de su vida, identificar prioridades y avanzar con soluciones concretas definidas por ellas mismas. 
+Estos programas trabajan en pos de la misma Misión: desarrollar e implementar soluciones prácticas, innovadoras y sostenibles que permitan activar el potencial emprendedor de las familias para eliminar la pobreza multidimensional y vivir con dignidad.
+
+
+
+
+
+
+
+
+
+
+¿Qué es el Semáforo?
+
+
+El Semáforo es una metodología de medicición multidimensional de la pobreza que permite diagnosticar de forma clara y comprensible la situación de una familia, identificar sus principales desafíos y construir un plan de acción para mejorar aquellos indicadores que se encuentran en rojo (pobreza extrema) o amarillo (pobreza), pero sin dejar de reconocer sus fortalezas (verdes). Su objetivo central es fortalecer la agencia de las personas, para que sean protagonistas de su propio proceso de cambio y, con el tiempo, también puedan impulsar transformaciones en su comunidad.
+Esta metodología nació en Paraguay a partir de un proceso participativo que incluyó entrevistas en profundidad con familias, mujeres de Comités de Microfinanzas y distintos grupos focales. Este trabajo permitió identificar cuáles son las áreas clave que deben considerarse para comprender de manera integral la situación de una persona o familia. Como resultado, se desarrolló una herramienta compuesta por 50 indicadores, organizados en seis dimensiones: Ingresos y Empleo; Salud y Medioambiente; Vivienda e Infraestructura; Educación y Cultura; Organización y Participación; e Interioridad y Motivación.
+Con el tiempo, el Semáforo fue adoptado y adaptado por organizaciones, empresas y gobiernos en distintos países, consolidándose como una herramienta práctica para orientar intervenciones, acompañar procesos de mejora y generar impacto social sostenible. A partir de esta experiencia, la metodología evolucionó y dio lugar a nuevas aplicaciones, como el Semáforo de Bienestar Laboral, orientado a evaluar el trabajo en equipo, el clima organizacional y otros aspectos del entorno laboral, y el Semáforo Educativo, enfocado en fortalecer las condiciones necesarias para un aprendizaje significativo. En todas sus variantes, el Semáforo mantiene el mismo principio: poner a las personas en el centro del cambio, promoviendo un enfoque de transformación de abajo hacia arriba, sin imponer soluciones, sino fortaleciendo la capacidad de decisión y activando el potencial de cada persona y comunidad.
+
+
+¿Puedo encontrar Soluciones incluso si no apliqué la encuesta del Semáforo?
+Sí. La encuesta del Semáforo es una gran aliada porque ayuda a identificar áreas de mejora y a descomponer desafíos complejos en indicadores concretos y manejables. Sin embargo, no es un requisito para buscar Soluciones. Si ya tenés claro qué tema querés trabajar, incluso sin haber tomado el Semáforo, podés escribirlo directamente en el chat (por ejemplo, acceso al agua potable) y el agente de IA te ayudará a encontrar Soluciones relacionadas.
+¿Qué es Empresas sin Pobreza?
+Empresas sin Pobreza es una iniciativa que invita a las organizaciones a aplicar el Semáforo de Eliminación de Pobreza con sus colaboradores. Parte del reconocimiento de que muchas de las privaciones que enfrentan las personas no se limitan al ámbito laboral y que, al comprender la situación integral de sus equipos, las empresas pueden acompañar procesos reales de mejora en la calidad de vida.
+A través del Semáforo de Eliminación de Pobreza, las empresas aliadas identifican fortalezas y desafíos de sus colaboradores en distintas dimensiones de la vida, priorizan indicadores y orientan a las personas hacia soluciones concretas. El enfoque busca generar un impacto positivo tanto en el bienestar de los colaboradores como en el compromiso, la estabilidad y el clima organizacional, posicionando a la empresa como un actor activo en la reducción de la pobreza multidimensional.
+
+
+¿Qué es el Semáforo de Bienestar Laboral?
+El Semáforo de Bienestar Laboral es una herramienta específicamente diseñada para evaluar el bienestar dentro del entorno de trabajo. Si bien comparte la lógica visual y participativa del Semáforo, se trata de un instrumento nuevo, enfocado en dinámicas laborales y organizacionales con indicadores organizados en las siguientes dimensiones: Habilidades Blandas, Clima y Cultura Laboral, Seguridad y Entorno Laboral, Salud mental e Interioridad y Equilibrio Vida-Trabajo.
+Este Semáforo permite analizar aspectos como el clima laboral, el trabajo en equipo, la comunicación, el liderazgo y otros factores que influyen en la experiencia cotidiana de los colaboradores. Su objetivo es ayudar a las organizaciones a identificar oportunidades de mejora internas y a construir ambientes de trabajo más saludables, empáticos y productivos, fortaleciendo la cohesión de los equipos y el desempeño colectivo.
+
+
+
+
+¿Qué es el Semáforo en Comunidades?
+El Semáforo en Comunidades es una modalidad del Semáforo de Eliminación de Pobreza aplicada al trabajo comunitario. En este caso, las empresas, organizaciones u otras instituciones utilizan la herramienta para acompañar a familias y personas que forman parte de las comunidades donde operan, más allá de sus propios colaboradores.
+Esta aplicación permite identificar las principales necesidades y fortalezas de la comunidad, priorizar áreas de intervención y articular acciones concretas junto a actores locales. El enfoque busca generar impacto social sostenible, fortaleciendo el vínculo entre las organizaciones y su entorno, y promoviendo procesos de desarrollo desde abajo hacia arriba, con la comunidad como protagonista de su propio cambio.
+
+
+¿Qué es el Banco de Soluciones?
+El Banco de Soluciones es una plataforma colaborativa que reúne herramientas, servicios y recursos prácticos para acompañar a las personas, familias y comunidades en la mejora de sus indicadores del Semáforo. Su objetivo es facilitar el acceso a soluciones concretas y verificadas que respondan a desafíos reales de la vida cotidiana, desde el ahorro y el empleo hasta la salud, la educación y la organización comunitaria.
+Las Soluciones del Banco están vinculadas a los indicadores del Semáforo, para que las personas puedan utilizar estas herramientas para mejorar su Mapa de Vida.
+
+
+¿Qué tipo de Soluciones puedo encontrar en el Banco?
+El Banco reúne una amplia variedad de Soluciones orientadas a mejorar distintos indicadores del Semáforo. En el banco de Soluciones hay tutoriales, servicios, capacitaciones, herramientas digitales y programas institucionales. Muchas de ellas están dirigidas a individuos, otras a toda la unidad familiar, y también existen soluciones grupales o a ser implementadas por una organización.
+¿Cómo me puede ayudar el Banco de Soluciones en mi día a día?
+El Banco de Soluciones puede ayudarte a encontrar ideas, recursos y herramientas para situaciones que te preocupan o que querés mejorar en tu vida cotidiana. A veces no se trata de tener la solución perfecta de inmediato, sino de encontrar una primera orientación que te inspire a pensar un plan y animarte a dar ese primer paso. Incluso una pequeña acción puede ser el inicio de un cambio más grande.
+¿Necesito estar vinculado a una organización para usar el Banco?
+No. Podés usar el Banco de Soluciones tanto si ya sos usuario del Semáforo (por ejemplo, si alguna vez tomaste la encuesta a través de una organización de la Red) como si no. Cualquier persona puede explorar Soluciones y recibir orientación a través del chatbot, sin necesidad de estar vinculada a una organización.
+¿El Banco de Soluciones es solo para personas en situación de pobreza?
+No. En el Semáforo partimos de la idea de que todas las personas tenemos aspectos de nuestra vida que podemos mejorar. Incluso alguien que se considera “bien” en términos económicos puede tener rojos o amarillos en otras áreas, o simplemente desafíos que quiere trabajar. El Banco de Soluciones está pensado para acompañar procesos de mejora en distintas realidades y momentos de la vida.
+¿Qué relación tiene el Banco de Soluciones con el Semáforo?
+El Banco de Soluciones está directamente vinculado a los indicadores del Semáforo y forma parte de la misión del programa de mejorar la calidad de vida de las personas. Mientras el Semáforo ayuda a identificar áreas de mejora, el Banco ofrece recursos concretos para empezar a trabajar sobre ellas.
+ 
+¿Puedo usar el Banco de Soluciones sin conocer los indicadores del Semáforo?
+Sí. Los indicadores del Semáforo ayudan a organizar y navegar el Banco de Soluciones, pero no es necesario conocerlos en detalle para usarlo. Si tenés en mente una situación o problemática que querés mejorar, podés escribirla directamente en el chat y, si existen Soluciones relacionadas, el chatbot te las mostrará. También podés explorar el Banco a través de la lista de indicadores si querés conocerlos.
+¿Qué es un indicador del Semáforo?
+Un indicador es una pregunta o ítem que forma parte de la encuesta del Semáforo y que mide un aspecto específico del bienestar o la calidad de vida. Por ejemplo, existen indicadores que evalúan si una persona o familia tiene acceso a agua potable, niveles de alfabetización, condiciones de vivienda o posibilidades de ahorro.
+ 
+¿Qué me recomendás hacer primero?
+Si alguna vez tomaste el Semáforo y tenés tu Mapa de Vida, una buena forma de empezar es buscar Soluciones relacionadas con los indicadores que priorizaste o con aquellos que están en rojo o amarillo.
+Si no tomaste el Semáforo, podés comenzar explorando temas que suelen preocuparte en tu día a día, como la seguridad, el ahorro, el empleo o la salud. El Banco está pensado para que puedas empezar desde donde estés.
+ 
+
+
+¿Las Soluciones son gratuitas? 
+Muchas Soluciones son gratuitas. Sin embargo, algunas pueden tener un costo asociado. Esta información se muestra en el detalle de cada Solución, para que la persona pueda decidir si es adecuada a su situación antes de aplicarla.
+¿Qué significa que una Solución sea exclusiva? 
+Una Solución exclusiva es aquella destinada únicamente a personas asociadas a la organización o empresa que la publicó. Por ejemplo, algunos beneficios internos que las empresas ofrecen a sus colaboradores se cargan en el Banco para facilitar el acceso, pero no están disponibles para el público general.
+
+
+¿Qué es el Mapa de Vida?
+El Mapa de Vida funciona como el “panel de control” del Semáforo. Muestra de forma visual los indicadores en verde, amarillo y rojo, junto con aquellos que la persona decidió priorizar. Además, invita a una reflexión clave a través de preguntas como: por qué estoy en este color (o ¿por qué no lo tengo?), qué haré para mejorar y cuánto tiempo me llevará. Este proceso ayuda a transformar un deseo de mejora en un plan de acción concreto, identificando obstáculos reales pero también pasos posibles y alcanzables.
+¿Qué significan los colores rojo, amarillo y verde?
+El Semáforo utiliza un sistema de colores simple e intuitivo para que la información sea fácil de comprender y usar. El rojo indica una situación crítica (pobreza extrema) que requiere atención prioritaria, el amarillo señala un aspecto a mejorar (pobreza) y el verde representa una situación adecuada o una fortaleza (no pobreza). Si bien los términos pueden adaptarse según el contexto o la organización (por ejemplo, hablar de “fortalezas” en lugar de “no pobreza”), la lógica se mantiene: el verde es el objetivo, y el rojo y amarillo marcan áreas sobre las que se puede trabajar.
+¿Por qué priorizar indicadores?
+Porque el Semáforo busca ser una herramienta práctica y accionable, no solo un diagnóstico. Priorizar indicadores permite convertir un desafío complejo en pasos manejables. En lugar de intentar mejorar todo al mismo tiempo, las personas pueden enfocarse en algunos indicadores clave elegidos por ellas mismas, avanzar paso a paso y ver resultados concretos que refuerzan la motivación y la sensación de progreso.
+¿Cuántos indicadores se pueden priorizar?
+Depende de cómo esté configurada la encuesta por la organización que implementa el Semáforo. Algunas definen un número mínimo de indicadores a priorizar, mientras que otras dejan esta decisión completamente en manos de la persona o familia. En términos generales, la recomendación del Semáforo es priorizar entre 3 y 5 indicadores, ya que ese número suele ser más manejable y permite enfocarse en acciones concretas sin generar sobrecarga. De todos modos, la cantidad ideal puede variar según la situación, el momento y las capacidades de cada familia, por lo que siempre se busca que la priorización sea realista y útil para su proceso de mejora.
+
+
+¿Por qué el Semáforo mide más que ingresos?
+Porque el bienestar no depende únicamente del dinero. Tener ingresos es importante, pero no garantiza por sí solo una buena calidad de vida. La pobreza es un fenómeno multidimensional que incluye aspectos como la salud, la educación, la vivienda, las relaciones sociales y la motivación personal. El Semáforo permite mirar la vida de manera integral, identificar qué áreas están funcionando bien y cuáles necesitan atención, y así diseñar acciones más completas y sostenibles para mejorar la situación de las personas y sus familias.
+ ¿Cuántos indicadores tiene el Semáforo?
+El Semáforo original cuenta con 50 indicadores. Sin embargo, con el tiempo la metodología se fue adaptando a distintos países, contextos y poblaciones. Por eso hoy no existe un único Semáforo, sino varias versiones ajustadas a cada realidad. Como criterio general, se recomienda que cada dimensión cuente al menos con 2 o 3 indicadores, para asegurar una medición equilibrada y útil para la acción.
+ ¿Cuáles son los 50 indicadores originales del Semáforo?
+Dimensión: Ingresos y Empleo
+1. Ingresos por encima de la línea de pobreza.
+2. Ahorros familiares estables.
+3. Acceso a crédito.
+4. Fuentes de ingresos diversificadas.
+5. Cédula de identidad vigente.
+Dimensión: Salud y Medioambiente
+6. Ambiente libre de contaminación
+7. Manejo adecuado de residuos
+8. Acceso a agua potable.
+9. Acceso a servicios de salud.
+10. Alimentación saludable.
+11. Higiene adecuada.
+12. Salud sexual y reproductiva.
+13. Salud dental.
+14. Salud visual.
+15. Vacunas al día.
+16. Seguro de salud.
+Dimensión: Vivienda e Infraestructura
+17. Vivienda segura
+18. Confort del Hogar
+19. Dormitorios separados
+20. Cocina ventilada y segura.
+21. Baño adecuado
+22. Heladera y otros activos
+23. Acceso a teléfono
+24. Vestimenta
+25. Seguridad de la persona
+26. Seguridad de los bienes
+27. Acceso a electricidad
+28. Medios de transporte regulares
+29. Caminos de acceso en buen estado
+
+
+Dimensión: Educación y Cultura
+30. Niños escolarizados
+31. Saber leer y escribir
+32. Útiles escolares adecuados
+33. Capacidad de presupuestar
+34. Capacidad de generar ingresos
+35. Acceso a información (TV o Internet).
+36. Entretenimiento y recreación
+37. Respeto por la diversidad
+38. Conocimiento de los Derechos Humanos
+39. Niñez libre de trabajo
+40. Participación de grupos
+41. Influencia en el sector público
+42. Resolución de conflictos
+43. Votar en elecciones
+Dimensión: Interioridad y Motivación
+44. Conciencia de las propias necesidades (Mapa de vida).
+45. Confianza en sí mismo
+46. Conciencia moral
+47. Capacidad emocional y afectiva.
+48. Ausencia de violencia familiar.
+49. Espíritu emprendedor
+50. Autonomía
+¿Qué dice el indicador de Ingresos por encima de la línea de pobreza?[a][b]
+Este indicador evalúa si la persona o la familia cuenta con ingresos mensuales suficientes para cubrir sus necesidades básicas. Se considera que los ingresos están por encima de la línea de pobreza cuando superan los Gs. 897.168 por persona en zonas urbanas o los Gs. 654.657 por persona en zonas rurales.
+¿Qué evalúa el indicador de Ahorros familiares estables?
+Este indicador observa si la familia realiza ahorros de manera regular dentro del sistema financiero formal, como bancos o cooperativas. Tener ahorros estables ayuda a enfrentar imprevistos y a planificar mejor el futuro.
+ 
+¿Qué significa el indicador de Acceso a crédito?
+Este indicador mide si la persona o la familia tiene la posibilidad de acceder a préstamos en entidades financieras formales cuando lo necesita, evitando recurrir a prestamistas informales que suelen tener intereses muy altos.
+ 
+¿Qué analiza el indicador de Fuentes de ingresos diversificadas?
+Este indicador se refiere a si la persona o la familia cuenta con más de una fuente de ingreso o con activos productivos, como animales o pequeños emprendimientos. Tener ingresos diversificados ayuda a reducir el impacto económico ante la pérdida de un empleo o una caída en los ingresos principales.
+ 
+¿Qué indica el indicador de Cédula de identidad vigente?
+Este indicador verifica que todos los miembros de la familia cuenten con su cédula de identidad oficial y actualizada. Tener documentos vigentes es clave para acceder a servicios, programas sociales, empleo formal y trámites legales.
+¿Qué dice el indicador de Ambiente libre de contaminación?
+ Evalúa si el entorno donde vive la persona o la familia se mantiene limpio, incluyendo el aire y los arroyos cercanos, o si existe una comunidad organizada que trabaja activamente en la gestión y el cuidado ambiental.
+¿Qué evalúa el indicador de Manejo adecuado de residuos?
+ Analiza si la familia maneja correctamente sus residuos, evitando la quema de basura, utilizando el servicio de recolección pública cuando está disponible, enterrando los residuos orgánicos lejos de fuentes de agua y reciclando los residuos inorgánicos.
+¿Qué indica el indicador de Acceso a agua potable?
+ Mide si el hogar dispone de agua apta para el consumo humano de forma directa y segura dentro de la vivienda.
+¿Qué significa el indicador de Acceso a servicios de salud?
+ Se refiere a la disponibilidad de centros o servicios de salud que sean accesibles tanto en términos de distancia como de costo para la persona o la familia.
+¿Qué analiza el indicador de Alimentación saludable?
+ Observa si todos los integrantes del hogar consumen al menos tres comidas diarias y mantienen una dieta equilibrada y nutritiva.
+¿Qué evalúa el indicador de Higiene adecuada?
+ Este indicador considera si todos los miembros del hogar mantienen de forma constante hábitos de aseo personal y limpieza adecuados.
+¿Qué dice el indicador de Salud sexual y reproductiva?
+ Evalúa si las personas realizan los controles reproductivos recomendados y, en el caso de embarazadas, si asisten de manera completa a los controles prenatales.
+¿Qué mide el indicador de Salud dental?
+ Señala si las personas no presentan problemas bucodentales o, en caso de tenerlos, si reciben atención odontológica adecuada.
+¿Qué indica el indicador de Salud visual?
+ Este indicador observa si las personas cuentan con una visión adecuada o, en caso de dificultades, si utilizan anteojos y acceden a consultas oftalmológicas para su corrección.
+¿Qué evalúa el indicador de Vacunas al día?
+Este indicador verifica que todos los miembros de la familia cuenten con el esquema de vacunación recomendado por el Ministerio de Salud vigente y completo, según su edad y condición. Tener las vacunas al día es clave para prevenir enfermedades graves, evitar complicaciones y proteger no solo a la persona, sino también a la comunidad.
+El esquema contempla las siguientes vacunas:
+* Recién nacidos:
+Vacuna BCG, que previene las formas graves de tuberculosis, y vacuna contra la Hepatitis B, que protege frente al virus de la hepatitis B.
+
+* A los 2 meses:
+Vacuna contra el rotavirus; vacuna hexavalente (difteria, tétanos, tos ferina, hepatitis B, poliomielitis inactivada y Haemophilus influenzae tipo B); y vacuna neumococo conjugada 13 valente, que previene neumonía, meningitis y otitis.
+
+* A los 4 meses:
+Segunda dosis de rotavirus, hexavalente y neumococo conjugada 13 valente.
+
+* A los 6 meses:
+Tercera dosis de la vacuna hexavalente e inicio de la vacuna contra la influenza estacional grave, que se aplica de forma anual.
+
+* A los 12 meses:
+Refuerzo de neumococo conjugada 13 valente; vacuna triple viral (SPR: sarampión, paperas y rubéola); vacuna contra la fiebre amarilla; y dosis anual de influenza estacional grave.
+
+* A los 15 meses:
+Vacuna contra la varicela; vacuna contra la hepatitis A; y primera dosis anual de influenza estacional grave.
+
+* A los 18 meses:
+Refuerzo de la vacuna hexavalente y de la vacuna triple viral (SPR), además de la dosis anual de influenza estacional grave.
+
+* A los 2 años:
+Vacuna contra la influenza estacional, con dosis anual.
+
+* A los 4 años:
+Vacuna IPV contra la poliomielitis y vacuna DPT (difteria, tos ferina y tétanos).
+
+* A los 5 años:
+Vacuna contra la varicela.
+
+* Adolescentes (niñas de 9 a 14 años):
+Vacuna contra el Virus del Papiloma Humano (VPH) y vacuna Tdpa (difteria, tétanos y tos ferina).
+
+* Adolescentes (niños de 10 a 14 años):
+Vacuna contra el Virus del Papiloma Humano (VPH) y vacuna Tdpa (difteria, tétanos y tos ferina).
+
+
+¿Qué significa el indicador de Seguros?
+ Analiza si la persona o la familia cuenta con un seguro médico y, al menos, un seguro adicional, como de vida, vivienda o contra robos.
+¿Qué evalúa el indicador de Vivienda segura?
+ Este indicador analiza si la vivienda cuenta con una estructura sólida que proteja adecuadamente a la familia frente al clima y otros riesgos. Considera la calidad de las paredes, puertas y ventanas, y que la casa ofrezca condiciones básicas de seguridad y resguardo.
+¿Qué evalúa el indicador de Confort del hogar?
+ Evalúa si el hogar dispone de muebles y elementos esenciales para la vida cotidiana, como mesas, sillas y cubiertos suficientes para todos los miembros de la familia, de modo que las actividades diarias puedan realizarse con comodidad.
+¿Qué evalúa el indicador de Dormitorios separados?
+ Este indicador observa si existe privacidad adecuada dentro del hogar, considerando la edad y los roles de las personas. Implica que no haya más de dos personas por dormitorio y que los adultos no compartan habitación con los hijos.
+¿Qué evalúa el indicador de Cocina ventilada y segura?
+ Analiza si la cocina utiliza fuentes de energía seguras, como gas o electricidad, colocadas en un lugar elevado y bien ventilado, evitando el uso de leña o carbón (con excepción de ocasiones particulares).
+¿Qué evalúa el indicador de Baño adecuado?
+ Este indicador considera si la familia cuenta con un baño privado dentro de la casa, que incluya inodoro, ducha y lavamanos, y no dependa de letrinas externas o que no comparta el baño con otras familias.
+¿Qué evalúa el indicador de Heladera y otros activos?
+ Evalúa si el hogar posee una heladera en funcionamiento y al menos otro electrodoméstico básico, como lavarropas, ventilador u otro similar, que facilite la organización y el bienestar familiar.
+¿Qué evalúa el indicador de Acceso a teléfono?
+ Este indicador mide si la familia tiene la posibilidad de comunicarse de forma constante mediante un teléfono fijo o celular, lo cual es clave para emergencias, trabajo y vínculos sociales.
+¿Qué evalúa el indicador de Vestimenta?
+ Analiza si la familia cuenta con los recursos necesarios para disponer de ropa limpia a diario y adecuada tanto para el frío como para el calor, según las condiciones climáticas.
+¿Qué evalúa el indicador de Seguridad de la persona?
+ Este indicador se refiere a la percepción y experiencia de seguridad personal, es decir, si las personas se sienten libres de peligros, asaltos o ataques físicos en su entorno cotidiano.
+¿Qué evalúa el indicador de Seguridad de los bienes?
+ Evalúa si la familia ha experimentado robo de sus bienes en el hogar. Por ejemplo, si activos de gran valor han sido robados en el pasado.
+¿Qué evalúa el indicador de Acceso a electricidad?
+ Este indicador verifica si la vivienda tiene acceso a la electricidad con una conexión legal y segura, sin recurrir a conexiones clandestinas, reduciendo así riesgos eléctricos y legales.
+¿Qué evalúa el indicador de Medios de transporte regulares?
+ Analiza si la familia tiene acceso a un medio de transporte propio o a transporte público confiable y frecuente, que permita realizar los traslados diarios necesarios.
+¿Qué evalúa el indicador de Caminos de acceso en buen estado?
+ Este indicador considera si las vías de acceso a la vivienda son transitables incluso en condiciones climáticas adversas, como lluvias, facilitando la movilidad y el acceso a servicios.
+¿Qué evalúa el indicador de Niños escolarizados?
+ Este indicador analiza si los niños, niñas y adolescentes asisten regularmente a clases y si los miembros del hogar completan la educación obligatoria correspondiente a su edad.
+¿Qué evalúa el indicador de Saber leer y escribir?
+ Evalúa si todas las personas mayores de 15 años saben leer y escribir, y comprenden adecuadamente los textos, lo que les permite desenvolverse con mayor autonomía en la vida cotidiana.
+¿Qué evalúa el indicador de Útiles escolares adecuados?
+ Este indicador observa si los estudiantes del hogar cuentan con los materiales necesarios para el aprendizaje, como cuadernos, libros y útiles básicos, en condiciones adecuadas.
+¿Qué evalúa el indicador de Capacidad de presupuestar?
+ Analiza la habilidad de la familia para planificar y organizar sus gastos de acuerdo con los ingresos disponibles, permitiendo un mejor manejo del dinero y la toma de decisiones financieras.
+¿Qué evalúa el indicador de Capacidad de generar ingresos?
+ Este indicador mide si las personas del hogar poseen habilidades, conocimientos técnicos u oficios que les permitan acceder a oportunidades laborales o generar ingresos de manera sostenible.
+¿Qué evalúa el indicador de Acceso a información?
+ Evalúa si la familia dispone de medios como televisión, radio o internet que le permitan mantenerse informada sobre lo que ocurre en su entorno y en la sociedad.
+¿Qué evalúa el indicador de Entretenimiento y recreación?
+ Este indicador considera si todos los miembros de la familia participan de actividades de ocio y recreación de forma regular.
+¿Qué evalúa el indicador de Respeto por la diversidad?
+ Analiza las actitudes de tolerancia, respeto y valoración hacia las diferencias culturales, sociales, religiosas o de pensamiento entre las personas.
+¿Qué evalúa el indicador de Conocimiento de los Derechos Humanos?
+ Este indicador observa si las personas comprenden y reconocen los derechos fundamentales de todas las personas, y la importancia de respetarlos en la vida diaria.
+¿Qué evalúa el indicador de Niñez libre de trabajo?
+ Evalúa si los niños y niñas se dedican a estudiar, jugar y desarrollarse, sin realizar trabajos que puedan afectar su salud, su educación o su bienestar integral.
+¿Qué evalúa el indicador de Participación en grupos?
+ Este indicador observa si la persona o la familia participan activamente en organizaciones como comisiones vecinales, iglesias, grupos de padres, asociaciones u otros espacios comunitarios.
+¿Qué evalúa el indicador de Influencia en el sector público?
+ Evalúa la capacidad de las personas para organizarse junto a su comunidad y presentar pedidos, reclamos o propuestas de manera efectiva ante las autoridades públicas.
+¿Qué evalúa el indicador de Resolución de conflictos?
+ Este indicador analiza si las diferencias dentro del hogar o con otras personas se resuelven a través del diálogo, el respeto y métodos pacíficos, evitando escalar el conflicto.
+¿Qué evalúa el indicador de Votar en elecciones?
+ Evalúa si las personas ejercen su derecho al voto y participan en los procesos electorales del país.
+¿Qué evalúa el indicador de Conciencia de necesidades (Mapa de Vida)?
+ Este indicador evalúa si la persona o la familia tienen claridad sobre sus necesidades y cuentan con metas definidas a corto y mediano plazo para mejorar su calidad de vida, reflejadas en su Mapa de Vida.
+¿Qué evalúa el indicador de Confianza en sí mismo?
+ Observa si la persona valora positivamente sus propias capacidades y se siente capaz de enfrentar desafíos.
+¿Qué evalúa el indicador de Conciencia moral?
+ Este indicador analiza si los miembros de la familia consideran cómo sus acciones afectan a otras personas y a la comunidad, por ejemplo respetar a los vecinos, cuidar el entorno y evitar conductas que puedan generar molestias o daños.
+¿Qué evalúa el indicador de Capacidad emocional y afectiva?
+ Evalúa la habilidad para reconocer, expresar y manejar las emociones de manera saludable, comprendiendo que las emociones intensas influyen en la conducta y que identificarlas a tiempo ayuda a evitar decisiones tomadas en el “calor del momento”.
+¿Qué evalúa el indicador de Ausencia de violencia familiar?
+ Este indicador mide si la convivencia familiar se da en un entorno de respeto mutuo, sin presencia de violencia física, verbal o psicológica entre sus integrantes.
+¿Qué evalúa el indicador de Espíritu emprendedor?
+ Observa si la familia muestra iniciativa, creatividad y disposición para buscar oportunidades de mejora, generar proyectos propios y superarse a nivel personal o económico.
+¿Qué evalúa el indicador de Autonomía?
+ Evalúa si la persona siente que puede tomar decisiones alineadas con sus valores y objetivos personales, y no solo para evitar conflictos o cumplir expectativas de otros.
+
+
+
+
+
+
+¿Cuáles son las dimensiones del Semáforo?
+El Semáforo original está organizado en seis dimensiones que reflejan distintos aspectos del bienestar de las familias:
+- Ingresos y Empleo: evalúa la capacidad económica del hogar, incluyendo ingresos suficientes, estabilidad laboral, ahorro y acceso a servicios financieros.
+- Salud y Medioambiente: analiza si la familia cuenta con condiciones y oportunidades para cuidar su salud, acceso a servicios de salud, agua segura y un entorno saludable.
+- Vivienda e Infraestructura: observa si el hogar es seguro, adecuado y cuenta con infraestructura básica como electricidad, saneamiento y transporte.
+- Educación y Cultura: considera la escolarización de niñas, niños y jóvenes, el nivel de alfabetización y el acceso a oportunidades de aprendizaje.
+- Organización y Participación: mide el nivel de participación comunitaria, redes de apoyo y capacidad de organización colectiva.
+- Interioridad y Motivación: aborda aspectos como la autoestima, la motivación, la confianza y la capacidad de proyectar un futuro mejor.
+
+
+Además, existen versiones del Semáforo que incorporan nuevas dimensiones, por ejemplo vinculadas al bienestar laboral o al ámbito educativo, según el contexto en el que se aplique.
+
+
+¿Cómo elijo la Solución más adecuada para mí?
+La Solución más adecuada depende de tu situación particular y de los obstáculos que enfrentes en cada indicador. No se trata solo de la ubicación geográfica, sino también del tipo de apoyo que necesitás. Por ejemplo, si el principal desafío es el desconocimiento, puede ser útil buscar capacitaciones o tutoriales. Si en cambio necesitás un recurso concreto, como atención médica u odontológica, conviene buscar servicios. En muchos casos, combinar varias Soluciones es lo más efectivo: para mejorar el ahorro, por ejemplo, puede servir tanto acceder a un producto financiero como aprender a presupuestar y reducir gastos. Explorar distintas opciones te ayuda a construir un camino más sólido hacia el cambio.
+
+
+¿Puedo aplicar más de una Solución al mismo tiempo?
+Sí. No hay un límite en la cantidad de Soluciones que podés aplicar. De hecho, muchas mejoras se logran combinando distintos recursos y acciones de forma complementaria. 
+
+
+¿Qué pasa si no encuentro Soluciones en mi zona?
+Es posible que en algunas regiones aún no existan organizaciones aliadas que hayan cargado Soluciones locales. En esos casos, podés explorar Soluciones globales que no dependen de un lugar físico, como tutoriales, capacitaciones en línea o recursos digitales. 
+¿Puedo adaptar una Solución a mi realidad?
+Sí. Las Soluciones del Banco están pensadas como guías y recursos flexibles. Cada persona puede adaptarlas según sus posibilidades, contexto y necesidades. Incluso pequeños ajustes pueden hacer que una Solución funcione mejor para vos. Registrar esas adaptaciones también es valioso, ya que puede ayudar a otras personas que estén en una situación similar.
+
+
+¿Luz puede recomendarme Soluciones según mi situación?
+Sí. Para ofrecer recomendaciones más precisas, Luz necesita algo de información sobre tu contexto, como tu ubicación o tus principales desafíos. 
+
+
+¿Luz puede buscar información en internet? 
+Para garantizar la calidad y veracidad de la información, Luz solo utiliza el repositorio interno del Banco de Soluciones y los contenidos verificados por el equipo del Semáforo. No busca ni incorpora Soluciones externas no registradas.
+¿Por qué en el lenguaje del Semáforo se habla de familias y no de individuos?
+Esto responde a una realidad cultural propia de nuestra idiosincrasia paraguaya. En Paraguay, la familia suele funcionar como una unidad económica y social: se trabaja en conjunto para salir adelante, se comparten ingresos, gastos, preocupaciones y proyectos. Si bien cada integrante de la familia es único y puede tener aspiraciones personales, muchas de las privaciones o dificultades no afectan solo a un individuo, sino a toda la unidad familiar. Por ejemplo, si no hay acceso a agua potable en el hogar, es muy probable que esta situación afecte a todas las personas que viven allí. De la misma manera, una mejora en un área suele beneficiar a todos.
+Al hablar de familias, el Semáforo no se limita a una definición estática. Reconoce que las familias pueden adoptar múltiples formas: pueden ser pequeñas o grandes, estar conformadas por uno o ambos padres, incluir abuelos, tíos u otros parientes, o combinar distintos arreglos de convivencia. En este sentido, se entiende como familia a quienes comparten la vida cotidiana y los recursos del hogar, a quienes “comen de la misma olla”.
+Al mismo tiempo, se reconoce que esta lógica no es universal. Por ello, el Semáforo es una metodología flexible que puede adaptarse a otros contextos culturales y aplicarse también a nivel individual cuando la familia no resulta una unidad de análisis adecuada.
+¿Cuáles son las soluciones más efectivas en relación al indicador ……….. ?
+[La respuesta depende de la información disponible en el sistema. Cuando hay suficientes datos, el agente puede apoyarse en resultados de encuestas y seguimientos para orientar la recomendación.]
+Según los datos de X encuestas y seguimientos, la Solución que muestra una mayor cantidad de mejoras (verdes) en este indicador es la Solución X. De todos modos, es importante tener en cuenta que cada situación es distinta, por lo que es recomendable explorar también otras Soluciones disponibles para este indicador y evaluar cuál se ajusta mejor a tu contexto y posibilidades.
+[En los casos en los que no hay datos* suficientes para identificar una Solución como la más efectiva, el agente lo aclarará explícitamente].
+No cuento con información suficiente para afirmar con certeza que una Solución sea más efectiva que las demás para este indicador. Sin embargo, puedo mostrarte todas las Soluciones relacionadas a este indicador para que puedas analizar cuál te resulta más viable o relevante para tu situación.
+
+
+*Eso se podría dar, por ejemplo, cuando muy pocas personas han priorizado un indicador y no hay suficientes intervenciones o Soluciones cargadas para un análisis estadístico.
+
+
+¿Qué hago si ninguna solución me funciona?
+Es posible que una Solución, por sí sola, no sea suficiente para tu situación. En ese caso, podés combinar ideas de distintas Soluciones y armar un camino propio, viendo cada una como un paso dentro de una estrategia más amplia. También puede ser útil mirar otros indicadores relacionados: a veces la respuesta no está en un solo indicador, sino en trabajar varios a la vez.
+Si aun así no encontrás una Solución que te resulte útil, eso no significa que tu problema no tenga salida, sino que todavía no hay una idea registrada en el Banco que se ajuste a tu caso. Recordá que el Banco de Soluciones es una fuente de inspiración construida con aportes de varios sectores, pero no agota todas las posibilidades.
+En esos casos, vale la pena mirar a tu alrededor: tu comunidad, tu familia, tus vecinos o amistades pueden ser una gran fuente de ideas y apoyo. Muchas veces, las mejores Soluciones surgen del intercambio y la experiencia compartida, solo hace falta animarse a preguntar y escuchar.
+Y si sos cliente de la Fundación Paraguaya, también podés contactar con tu asesor o asesora y juntos pueden hacer una lluvia de ideas sobre la situación.
+
+
+
+
+Base de Conocimiento para fases posteriores
+
+
+Puedo cambiar los colores de mis indicadores? Fase futura] 
+Sí. Para los miembros de la Red, esto puede suceder de dos maneras: durante una encuesta de seguimiento organizada por la institución implementadora (generalmente a los 6 o 12 meses), o directamente desde la sección “Mi Semáforo”, si la organización habilita esa opción. Las personas sin acceso con login también pueden volver a tomar el Semáforo desde la sección “Toma tu Semáforo”, descargar un nuevo Mapa de Vida y comparar sus avances con el anterior.
+Cuando una persona pasa del rojo o amarillo a un verde, llamamos a esto un “logro”. En Fundación Paraguaya también se conoce esto como “verdeamiento”
+¿Mis cambios modifican el diagnóstico original? Fase futura] 
+No. En el caso de los usuarios de la Red, el diagnóstico inicial o línea de base queda registrado en la plataforma y no se altera. Las actualizaciones de color o los registros de progreso se guardan como avances posteriores, manteniendo intacta la información original para fines de seguimiento y análisis.
+¿Qué es el Banco de Soluciones? Fase futura] - Modificado de fase 1
+El Banco de Soluciones es una plataforma colaborativa que reúne herramientas, servicios y recursos prácticos para acompañar a las personas, familias y comunidades en la mejora de sus indicadores del Semáforo. Su objetivo es facilitar el acceso a soluciones concretas y verificadas que respondan a desafíos reales de la vida cotidiana, desde el ahorro y el empleo hasta la salud, la educación y la organización comunitaria.
+El Banco integra soluciones desarrolladas por la Fundación Paraguaya y por organizaciones aliadas, pero también abre espacio a aportes de terceros (instituciones, comunidades y personas) que desean compartir conocimientos, experiencias y recursos que hayan demostrado generar impacto. De esta forma, se construye como un repositorio vivo, en constante crecimiento, que combina saber técnico, aprendizajes comunitarios y buenas prácticas.
+Más que una biblioteca de recursos, el Banco de Soluciones es una herramienta pensada para la gente y construida con la gente que permite explorar soluciones según la realidad de cada persona, fortaleciendo su capacidad de tomar decisiones y avanzar en su propio proceso de mejora. Así, el Banco se convierte en un puente entre el diagnóstico del Semáforo y la acción concreta, promoviendo cambios sostenibles desde abajo hacia arriba.
+¿Quién es Luz y qué puede hacer? [c][d][e] [Fase futura]
+Luz es el agente conversacional con inteligencia artificial del Banco de Soluciones. Funciona a partir de un LLM, entrenado específicamente en la metodología del Semáforo y en los contenidos de la Fundación Paraguaya, para brindar apoyo contextual y confiable a los distintos tipos de usuarios de la plataforma.
+Su rol principal es acompañar a las personas durante la navegación y el uso del Banco de Soluciones. Puede explicar de manera clara los indicadores del Semáforo, ayudar a interpretar colores y prioridades, y orientar hacia las Soluciones más adecuadas según las necesidades de cada persona, su ubicación y su nivel de acceso. También brinda información general sobre la Fundación Paraguaya, sus programas y servicios, y sobre cómo funciona el Semáforo en sus distintas aplicaciones.
+Además de informar, Luz cumple un rol de acompañamiento. Puede apoyar procesos de reflexión sobre obstáculos, sugerir acciones posibles para mejorar un indicador y ayudar a convertir un diagnóstico en un plan de acción concreto, como también en procesos de mejora del Banco como la redacción y carga de nuevas Soluciones. En el caso de usuarios vinculados a la Red del Semáforo, como mentores, coordinadores o miembros del equipo técnico, Luz también puede asistir en procesos más complejos como el registro de intervenciones, y la planificación de actividades de acompañamiento.
+El alcance de las respuestas y acciones de Luz se adapta siempre al perfil y permisos del usuario. Si bien su lenguaje es flexible y se ajusta al nivel de comprensión de cada persona, su información se basa exclusivamente en contenidos validados del Semáforo, del Banco de Soluciones y de la Fundación Paraguaya, respetando las reglas de acceso y los límites definidos para cada rol.
+*Si estas serán respuestas brindadas por Luz, esta podría ser en primera persona
+¿Necesito crear una cuenta para usar el Banco de Soluciones?  [Fase futura]
+ No. El Banco de Soluciones puede explorarse sin crear una cuenta. Las personas que cuentan con usuario son aquellas que ya forman parte de la Red del Semáforo (por ejemplo, clientes, colaboradores o beneficiarios de organizaciones aliadas). Sin embargo, cualquier persona puede navegar el Banco y conocer Soluciones generales sin necesidad de registrarse.
+¿Qué diferencia hay entre usar el Banco con login y sin login?  [Fase futura]
+ El acceso con login habilita funciones adicionales. Los usuarios registrados pueden guardar Soluciones, marcar cuáles aplicaron, acceder a su sección “Mi Semáforo” y ver Soluciones exclusivas asociadas a la organización o empresa de la que forman parte. Por ejemplo, los clientes de Microfinanzas de la Fundación Paraguaya pueden ver su Semáforo y beneficios específicos al iniciar sesión. Usar el Banco sin login no impide ver Soluciones abiertas y de acceso público.
+¿Qué tipo de Soluciones puedo encontrar en el Banco? Fase futura] - Modificado de fase 1
+El Banco reúne una amplia variedad de Soluciones orientadas a mejorar distintos indicadores del Semáforo. Para facilitar la búsqueda, las Soluciones se organizan mediante filtros como: tutoriales, servicios, apoyo financiero, capacitaciones, herramientas digitales, recursos comunitarios y programas institucionales. También pueden categorizarse según si están dirigidas a personas, familias u organizaciones; si son gratuitas, de bajo costo o con costo; si son de corta o larga duración; y según ubicación geográfica o alcance global.
+
+
+¿Por qué no puedo ver todos los detalles de algunas Soluciones?  [Fase futura]
+Generalmente, esto ocurre porque se trata de Soluciones exclusivas. En esos casos, solo las personas con el nivel de acceso correspondiente pueden ver el contenido completo y los pasos para aplicarlas.
+¿Puedo guardar Soluciones para verlas más tarde?  [Fase futura]
+Las personas con login pueden guardar Soluciones dentro de su perfil para consultarlas posteriormente. Quienes navegan sin cuenta pueden descargar la información disponible en formato PDF.
+¿Qué significa marcar una Solución como “aplicada”?  [Fase futura]
+Marcar una Solución como aplicada indica que la persona la puso en práctica total o parcialmente. Esto permite llevar un registro del progreso realizado, vincular las acciones a los indicadores trabajados y reconocer qué recursos resultaron útiles, tanto para seguimiento personal como para futuras decisiones o nuevas aplicaciones de la Solución.
+¿Por qué es útil registrar las actividades que realizo o las Soluciones que aplico? [Fase futura]
+Porque registrar lo que vas haciendo transforma los esfuerzos cotidianos en aprendizajes visibles, tanto para vos como para la organización que acompaña tu proceso. A nivel institucional, estos registros permiten entender mejor qué Soluciones se usan más y cuáles generan mejores resultadoss. Esta información ayuda a tomar mejores decisiones, enfocar recursos donde realmente hacen la diferencia y diseñar apoyos cada vez más ajustados a las necesidades reales de la comunidad.
+A nivel individual, el registro cumple un rol igual de importante. Muchas veces los avances ocurren de a poco y pueden pasar desapercibidos, pero al ver tus actividades y acciones reflejadas, el progreso se vuelve tangible. Esto refuerza la motivación, permite valorar el esfuerzo invertido y reconocer los logros alcanzados, incluso aquellos que parecen pequeños. Además, ayuda a recordar qué estrategias funcionaron mejor, qué Soluciones te sirvieron más y qué caminos vale la pena seguir profundizando. Con el tiempo, este recorrido documentado se convierte en una fuente de confianza y motivación para seguir avanzando hacia tus objetivos.
+¿Qué es la sección “Mi Semáforo”?  [Fase futura]
+Es un espacio personal para usuarios que forman parte de la Red del Semáforo y cuentan con credenciales de acceso. Desde allí pueden visualizar su Mapa de Vida, registrar actividades y avances, y acceder a Soluciones relevantes según sus resultados. También permite ver Soluciones guardadas, Soluciones marcadas como aplicadas y, cuando corresponde, Soluciones exclusivas de la organización a la que están vinculados.
+¿Quién puede sugerir una Solución? [Fase futura]
+Cualquier persona puede sugerir una Solución. Los criterios y el proceso varían según si quien la propone forma parte de una organización o si es una persona que, sin representar a una institución, quiere compartir un recurso o iniciativa que conoce y considera útil para otras personas.
+¿Cómo puedo sugerir una Solución al Banco?  [Fase futura]
+Si formás parte de una organización, podés seleccionar la opción “Mi organización puede ayudar” o “Ya soy parte de la Solución” si tu organización ya está registrada. Si no pertenecés a una ONG o institución, podés elegir “Conozco un recurso útil” y compartir la información desde tu experiencia personal o comunitaria.
+ ¿Todas las Soluciones sugeridas se publican?  [Fase futura]
+No necesariamente. Todas las Soluciones sugeridas pasan por un proceso de revisión por parte del equipo del Semáforo para asegurar su calidad y pertinencia. Una vez aprobadas, se publican en el Banco. En el caso de organizaciones socias de la Red, las Soluciones que suben son visibles de forma inmediata para los miembros de su propia organización, y luego pueden ser evaluadas para su publicación más amplia.
+Las Soluciones que no serán aprobadas son aquellas que poseen demasiados errores, no son aplicables (el recurso ya no está disponible, por ejemplo) o que son servicios difíciles de acceder para personas en situación de pobreza, como servicios de costo elevado (no se acepta publicidad de servicios privados generales)
+¿Puedo editar una Solución que ya subí?  [Fase futura]
+Los usuarios con cuenta registrada pueden editar directamente las Soluciones que cargaron. Las personas que no tienen usuario pueden reportar errores o sugerir cambios desde el detalle de la Solución, para que luego el equipo del Semáforo realice las modificaciones correspondientes.
+¿Cuándo puedo pedir ayuda a Luz?  [Fase futura]
+Luz está disponible en todo momento. Podés llamarla haciendo clic en su ícono y consultarle cualquier duda relacionada con el Banco de Soluciones, el Semáforo o los próximos pasos a seguir. Así que sentite libre de explorar otras pestañas del Banco de Soluciones, el ícono de Luz estará disponible. También aparece por defecto para ciertas funciones como la revisión final de una propuesta de Solución.
+¿Luz puede recomendarme Soluciones según mi situación?  [Fase futura] - Modificado de fase 1
+Sí. Para ofrecer recomendaciones más precisas, Luz necesita algo de información sobre tu contexto, como tu ubicación o tus principales desafíos. Completar el Semáforo ayuda mucho en este proceso. Si ya sos un usuario registrado con login, Luz cuenta con información básica de tu perfil para orientar mejor sus sugerencias.
+¿Luz puede ayudarme a registrar una actividad?  [Fase futura]
+Sí. Podés pedirle ejemplos o ayuda para describir una actividad o avance, y así completar el registro de forma clara y ordenada.
+¿Luz puede ayudarme a redactar una Solución?  [Fase futura]
+Sí. Luz está entrenada en buenas prácticas para la carga de Soluciones y puede ayudar a redactar títulos, descripciones y pasos de manera clara, simple y útil para otras personas. También hace una revisión de la Solución propuesta para ver si no se está repitiendo algún recurso existente.
+¿Cómo me ayuda el Banco de Soluciones en mi rol de mentor?  [Fase futura]
+El Banco de Soluciones facilita el trabajo de mentoría al centralizar recursos útiles que pueden compartirse con las familias. Al mismo tiempo, promueve la autonomía de las personas, que pueden explorar y aplicar Soluciones por su cuenta, así liberando la carga operatia de cada mentor. Además, el acompañamiento de Luz apoya tareas habituales como la carga de intervenciones, la interpretación de resultados y la planificación de actividades.
+¿Cómo ayuda Luz con la carga de Intervenciones?  [Fase futura]
+Luz puede apoyar la carga de intervenciones de distintas maneras, adaptándose a la forma de trabajo de cada mentor o mentora. Una opción es el acompañamiento paso a paso: el mentor puede ir consultando a Luz cómo completar cada campo, y ella va guiando con recomendaciones claras sobre qué tipo de información incluir, además de hacer preguntas que ayuden a precisar la intervención. Por ejemplo, si el mentor pregunta qué título asignar, Luz puede pedir una breve descripción de la actividad realizada y, a partir de eso, proponer un título que sintetice la acción. Luz utilizará las recomendaciones metodológicas de las guías (por ejemplo extensión máxima de 15 palabras, utilizar términos claros, mencionar el recurso en el título, etc.). Ese título siempre se valida con el mentor antes de completar el campo correspondiente.
+La otra opción es que el mentor complete todos los campos de manera autónoma y luego solicite a Luz una revisión final. En ese caso, Luz revisa la intervención en su conjunto y hace sugerencias puntuales cuando detecta oportunidades de mejora. Por ejemplo, puede señalar que un título es demasiado largo y proponer una versión más clara, detectar si una información corresponde más en la sección de “notas” que en la sección de  “detalles de la actividad” y sugerir el cambio, o advertir una inconsistencia entre el tipo de intervención seleccionada (individual o grupal) y lo descrito en el texto.
+En todos los casos, las sugerencias de Luz son opcionales: el mentor decide si las acepta o no. Además, Luz está diseñada para intervenir solo cuando es pertinente, evitando la sobrecorrección o comentarios innecesarios.
+¿Cómo me ayuda Luz en la planificación de intervenciones?  [Fase futura]
+Luz puede analizar la información de las familias acompañadas por el mentor o mentora, considerando su ubicación, indicadores en rojo y amarillo y prioridades definidas. Con estos datos, puede sugerir intervenciones grupales o individuales, recomendar Soluciones relevantes y proponer combinaciones de acciones ajustadas a las necesidades de la comunidad, facilitando una planificación más estratégica y efectiva.
+
+
+
+¿Dónde puedo dejar comentarios/puntaje sobre mi experiencia aplicando una solución?  [Fase futura]
+
+
+En el detalle de cada Solución, al final de la página, vas a poder calificar tu experiencia con una puntuación de 1 a 5 estrellas.También habrá un espacio para reportar errores o sugerir mejoras, que serán revisados por el equipo del Semáforo.
+Tu aporte es muy valioso: las puntuaciones y comentarios ayudan a que otros usuarios identifiquen más fácilmente las Soluciones que resultaron más útiles o efectivas, y permiten mejorar continuamente el Banco de Soluciones.
+
+
+
+
+
+
+
+
+Consideraciones finales
+
+
+Privacidad y Datos
+Puede ser útil establecer una distinción entre la información que el agente puede brindar según el nivel de acceso del usuario, de forma similar a lo que ocurre con las Soluciones (por ejemplo, cuando no se muestran las exclusivas). Existen contenidos de carácter general que el agente puede compartir sin restricciones, como la información publicada en artículos o en la página web, así como datos generales sobre la Fundación Paraguaya, sus programas, la Teoría de Cambio o los países en los que opera el Semáforo.
+En cambio, otros contenidos pueden estar disponibles solo para usuarios registrados, como socios y aliados. Así, información más técnica o especializada, por ejemplo, la forma en que se diseñan e implementan intervenciones colectivas con el Semáforo o ciertos detalles metodológicos, puede estar disponible solo a los socios y aliados. De esta manera, se cuida que el acompañamiento más profundo y específico se ofrezca dentro de los espacios de colaboración y trabajo conjunto con las organizaciones que forman parte de la Red, manteniendo coherencia con los procesos de formación y apoyo que ya existen y respetando los servicios ofrecidos por los oficiales de programa del Semáforo.
+Esto también contribuye a la protección de datos sensibles. Por ejemplo, el agente no debería brindar información agregada sobre resultados de empresas u organizaciones, como la cantidad o el promedio de indicadores en rojo o amarillo, incluso si estos datos estuvieran anonimizados, ya que es probable que las empresas no estén a favor de que se conozca la situación de vulnerabilidad de sus colaboradores, incluso promediando. Ante consultas de este tipo por parte de usuarios externos o del público general, el agente podría responder indicando que se trata de información de carácter privado y sugiriendo contactar con el equipo de investigación si lo que buscan es utilizar esos datos con fines de investigación. Los usuarios del equipo del Semáforo, sí podrían tener acceso a esta información.
+
+
+Actualización dinámica de la información
+
+
+Si bien gran parte de la información sobre los programas de la Fundación Paraguaya es estable, existen políticas, campañas y criterios que se pueden ir actualizando. Por eso, sería valioso que Luz pueda alimentarse de fuentes internas actualizadas, como la Intranet, para reconocer cuál es la versión vigente de una política y brindar siempre la información más actual. Idealmente, el agente debería ser capaz de interpretar indicaciones como “esta política reemplaza a la anterior” y ajustar sus respuestas en consecuencia.
+
+
+Por ejemplo, ante consultas sobre tarifas de Microfinanzas o requisitos para acceder a un crédito, Luz podría identificar la política más reciente y explicar los criterios vigentes, aclarando al mismo tiempo que, si bien existen lineamientos generales, algunas situaciones particulares se evalúan caso a caso (como el número de integrantes de un Comité). En esos casos, el agente puede orientar al usuario a contactar a un asesor o asesora, brindando el canal de contacto correspondiente para una atención personalizada. Algo similar con campañas u con otros programas, cuando el Agente detecta la intención del usuario lo dirige al canal que lo puede vincular más adecuadamente a un servicio.
+
+
+Disclaimers adecuados
+
+
+También es importante que Luz recuerde de forma clara y amigable sus propias limitaciones. El agente debe explicitar que no reemplaza el acompañamiento de una persona ni la asesoría profesional, y que, para ciertos temas, la información más adecuada se obtiene conversando directamente con un asesor o visitando los canales oficiales.
+
+
+Esto cobra especial relevancia en situaciones sensibles, como las vinculadas a la salud mental. Si un usuario menciona dificultades en este ámbito, Luz puede sugerir Soluciones o recursos disponibles, pero siempre acompañando esa respuesta con un mensaje de cuidado, por ejemplo:
+
+
+“Puedo compartir algunos recursos que podrían ayudarte, pero es importante que sepas que no reemplazo el apoyo de una persona. Si estás atravesando una situación difícil, te recomiendo conversar con un profesional o con alguien de confianza que pueda acompañarte de manera cercana. Buscar ayuda es un paso valiente y muy importante.”
+
+
+Mecanismo de reporte de errores en las respuestas del agente y protección de la información base
+Si bien el agente debe ser flexible frente al input de los usuarios (por ejemplo, para reconocer nombres, comprender necesidades específicas o adaptarse al contexto que cada persona comparte), es importante que exista un resguardo sobre la información que comunica y sobre cómo se gestionan posibles correcciones.
+De manera similar al sistema de reporte de errores de las Soluciones, los usuarios deben contar con un mecanismo sencillo para señalar imprecisiones en las respuestas del agente. Por ejemplo, si una persona consulta a Luz sobre Microfinanzas y luego, al comunicarse con una asesora, advierte que la información recibida estaba desactualizada, puede reportar ese error. Dicho reporte será notificado al equipo correspondiente para su revisión y corrección. Cuando un usuario se comunique con el agente IA sobre un error, el agente debe comunicar este funcionamiento de forma clara y amigable, por ejemplo:
+“Si encontraste un error en la información, puedes reportarlo aquí. El equipo de la Fundación Paraguaya se encargará de revisarlo y actualizarlo si corresponde.”
+El miembro del equipo que reciba esta notificación, puede derivar la consulta al programa correspondiente para corroborar el error y crear el cambio 
+
+
+
+
+[a]Estos serían solo para Paraguay, verdad?
+[b]Sí! Carlos mencionó que para esta primera fase sería solo en español y para Paraguay
+[c]sobre Luz, la ande ya tiene y no queremos que confunda...hay que pensar en otro nombre
+
+
+@mpedrozo@fundacionparaguaya.org.py vos sos muy creativa para esto.
+_Assigned to mpedrozo@fundacionparaguaya.org.py_
+[d]Por tirar algunas ideas. Puede ser "Chispa", que también suena bien en  inglés (Spark).
+
+
+O si queremos seguir con nombres de personas puede ser también "Vera" (que suena un poco a verde y suena a brillo en guaraní), también es un nombre en inglés; o "Esperanza", que traducido al inglés (Hope) también es un nombre de persona, aunque en castellano suena un poco a personaje de telenovela. O "Ali", que suena a aliado/a, especialmente en inglés
+[e]Lanzo mas ideas:
+"Clara": se relaciona con claridad, orientación, guía
+"Alba": se relaciona con inicio, nuevos comienzos, primer paso
+"Ayni": que signfica cooperación y apoyo mutuo.
