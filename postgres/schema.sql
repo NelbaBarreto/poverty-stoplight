@@ -15,7 +15,7 @@ CREATE TABLE chunks (
     id SERIAL PRIMARY KEY,
     document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_text TEXT NOT NULL,
-    embedding vector(1536),
+    embedding vector(1024),
     chunk_index INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     metadata JSONB
