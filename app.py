@@ -49,7 +49,7 @@ def initialize_session_state():
         st.session_state.selected_llm_model = "gpt-4o-mini"
 
 
-def process_and_index(uploaded_files, embedding_models=None):
+def process_and_index(uploaded_files, embedding_models=None, replace_existing=None):
     """Process uploaded documents and create vector store."""
     try:
         # Use selected models or default
@@ -82,18 +82,79 @@ def process_and_index(uploaded_files, embedding_models=None):
             vs_manager = VectorStoreManager(embedding_model=embedding_models[0])
             chunks = vs_manager.chunk_documents(documents)
         
+        # Step 2.5: Check for existing chunks before generating embeddings
+        pgvector_mgr = PGVectorManager()
+        duplicates_found = []
+        
+        for uploaded_file in uploaded_files:
+            filename = uploaded_file.name
+            # Get or create document to get its ID
+            file_type = uploaded_file.type
+            document_id = pgvector_mgr.get_or_create_document(filename, file_type)
+            
+            for embedding_model in embedding_models:
+                # Get embedding model ID
+                embedding_model_id = pgvector_mgr.get_or_create_embedding_model(embedding_model)
+                
+                # Check if chunks already exist
+                existing = pgvector_mgr.check_existing_chunks(document_id, embedding_model_id)
+                
+                if existing['exists']:
+                    duplicates_found.append({
+                        'filename': filename,
+                        'model': embedding_model,
+                        'count': existing['count'],
+                        'document_id': document_id,
+                        'embedding_model_id': embedding_model_id
+                    })
+        
+        # If duplicates found and user hasn't decided yet, ask
+        if duplicates_found and replace_existing is None:
+            st.warning("Se encontraron chunks existentes para las siguientes combinaciones documento-modelo:")
+            
+            for dup in duplicates_found:
+                st.write(f"- **{dup['filename']}** con modelo **{dup['model']}** ({dup['count']} chunks)")
+            
+            st.info("¿Deseas reemplazar los chunks existentes?")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Sí, reemplazar", type="primary"):
+                    st.session_state.replace_decision = True
+                    st.rerun()
+            with col2:
+                if st.button("No, omitir duplicados"):
+                    st.session_state.replace_decision = False
+                    st.rerun()
+            
+            return  # Stop here and wait for user decision
+        
+        # Use the decision from session state if available
+        if replace_existing is None and 'replace_decision' in st.session_state:
+            replace_existing = st.session_state.replace_decision
+            # Clear the decision after using it
+            del st.session_state.replace_decision
+        
         # Step 3: Generate embeddings with each selected model
+        results_summary = []
         for embedding_model in embedding_models:
             with st.spinner(f"Generando embeddings con {embedding_model}..."):
                 # Create a new manager for this model
                 vs_manager = VectorStoreManager(embedding_model=embedding_model)
                 # Generate embeddings and save to database
-                vs_manager.create_vectorstore(chunks)
-                st.success(f"{len(chunks)} chunks guardados con modelo {embedding_model}")
+                result = vs_manager.create_vectorstore(chunks, replace_existing=replace_existing or False)
+                
+                if result['already_existed'] and not replace_existing:
+                    st.info(f"⏭Omitiendo {embedding_model}: ya existe ({result['existing_count']} chunks)")
+                elif result['chunks_saved'] > 0:
+                    st.success(f"{result['chunks_saved']} chunks guardados con modelo {embedding_model}")
+                    results_summary.append({
+                        'model': embedding_model,
+                        'chunks': result['chunks_saved']
+                    })
 
-        # Step 2.5: Extract and save document structure for each document
+        # Step 4: Extract and save document structure for each document
         with st.spinner("Guardando estructura de documentos..."):
-            pgvector_mgr = PGVectorManager()
             for docling_doc_data in docling_docs:
                 try:
                     # Extract structure
@@ -114,7 +175,7 @@ def process_and_index(uploaded_files, embedding_models=None):
                 except Exception as e:
                     st.warning(f"No se pudo guardar estructura para {docling_doc_data['filename']}: {str(e)}")
 
-        # Step 3: Crear agente
+        # Step 5: Crear agente
         with st.spinner("Creando agente..."):
             # Use the selected query model for the search tool
             query_model = st.session_state.selected_query_model
@@ -130,13 +191,19 @@ def process_and_index(uploaded_files, embedding_models=None):
                 provider=st.session_state.selected_llm_provider
             )
             st.session_state.agent = agent
-            st.info(f"Agente creado con modelo de consulta: {query_model}")
+            st.info(f"🔍 Agente creado con modelo de consulta: {query_model}")
 
         st.session_state.processing_status = "completed"
-        st.success("Documentos indexados en pgvector-db.")
+        
+        if results_summary:
+            st.success(f"Indexación completada: {len(results_summary)} modelo(s) procesado(s)")
+        else:
+            st.info("Indexación completada (no se guardaron nuevos chunks)")
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         st.session_state.processing_status = "error"
 
 
@@ -322,22 +389,25 @@ def render_sidebar():
                 st.success(f"{len(all_docs)} documento(s) disponible(s)")
                 with st.expander("Ver documentos"):
                     for doc in all_docs:
-                        # Get model info if available
-                        model_info = ""
-                        if doc.get('embedding_model_id'):
-                            models = pgvector_mgr.get_all_embedding_models()
-                            model = next(
-                                (m for m in models if m['id'] == doc['embedding_model_id']),
-                                None
-                            )
-                            if model:
-                                model_info = f" ({model['model_name']})"
+                        st.write(f"📄 **{doc['filename']}**")
                         
-                        st.write(f"📄 {doc['filename']}{model_info}")
+                        # Show embedding models for this document
+                        if doc.get('embedding_models'):
+                            st.write("   Modelos de embeddings:")
+                            for model_info in doc['embedding_models']:
+                                if model_info:  # Check if not None
+                                    st.write(f"   - {model_info['model_name']} ({model_info['provider']}) - {model_info['chunk_count']} chunks")
+                        else:
+                            st.write("Sin modelos de embeddings asociados")
+                        
+                        st.write(f"   Total chunks: {doc.get('chunk_count', 0)}")
+                        st.divider()
             else:
                 st.info("No hay documentos en la BD")
         except Exception as e:
             st.warning(f"Error al cargar documentos: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
         st.divider()
 
@@ -375,7 +445,7 @@ def render_sidebar():
             st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("💡 Consejos y Configuración"):
+        with st.expander("Consejos y Configuración"):
             st.markdown(
                 """
             **Cómo usar:**

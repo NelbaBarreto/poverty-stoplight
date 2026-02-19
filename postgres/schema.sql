@@ -12,13 +12,25 @@ CREATE TABLE embedding_models (
 );
 
 -- Create documents table to store document metadata
+-- Documents are stored only once, independent of embedding models
 CREATE TABLE documents (
     id SERIAL PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    file_type VARCHAR(50),
-    embedding_model_id INTEGER REFERENCES embedding_models(id),
+    filename VARCHAR(255) NOT NULL UNIQUE,  -- Unique constraint to prevent duplicates
+    file_type VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create document_embeddings table to track which models have been used with each document
+CREATE TABLE document_embeddings (
+    id SERIAL PRIMARY KEY,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    embedding_model_id INTEGER NOT NULL REFERENCES embedding_models(id),
+    chunk_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Ensure each document-model pair is unique
+    UNIQUE(document_id, embedding_model_id)
 );
 
 -- Create chunks table to store document chunks with embeddings
@@ -31,14 +43,19 @@ CREATE TABLE chunks (
     embedding_model_id INTEGER REFERENCES embedding_models(id),
     chunk_index INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    metadata JSONB
+    metadata JSONB,
+    -- Ensure each chunk for a document-model pair is unique
+    UNIQUE(document_id, embedding_model_id, chunk_index)
 );
 
 -- Create indexes for faster retrieval
 CREATE INDEX idx_chunks_document_id ON chunks(document_id);
 CREATE INDEX idx_chunks_embedding_model ON chunks(embedding_model_id);
+CREATE INDEX idx_chunks_doc_model ON chunks(document_id, embedding_model_id);  -- Composite index for filtering
 -- Note: ivfflat index will be created dynamically per model dimension
 CREATE INDEX idx_chunks_metadata ON chunks USING gin (metadata);
+CREATE INDEX idx_document_embeddings_doc_id ON document_embeddings(document_id);
+CREATE INDEX idx_document_embeddings_model_id ON document_embeddings(embedding_model_id);
 -- Create document_summary table to store document statistics
 CREATE TABLE document_summary (
     id SERIAL PRIMARY KEY,

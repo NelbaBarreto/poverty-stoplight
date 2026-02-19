@@ -43,16 +43,17 @@ class VectorStoreManager:
         chunks = self.text_splitter.split_documents(documents)
         return chunks
 
-    def create_vectorstore(self, chunks: List[Document]) -> any:
+    def create_vectorstore(self, chunks: List[Document], replace_existing: bool = False) -> dict:
         """
         Create a vector store from document chunks.
         Supports both PostgreSQL pgvector and in-memory Chroma.
 
         Args:
             chunks: List of document chunks
+            replace_existing: If True, replace existing chunks for this document-model combination
 
         Returns:
-            Vector store instance (Chroma or PGVectorManager)
+            Dictionary with save results including 'document_id', 'chunks_saved', 'already_existed'
         """
         print(f"Creating vector store with {len(chunks)} chunks using model: {self.embedding_model}...")
 
@@ -70,15 +71,20 @@ class VectorStoreManager:
             filename = chunks[0].metadata.get("filename", "unknown")
             file_type = chunks[0].metadata.get("file_type", "unknown")
             print(f"Document: {filename}, Type: {file_type}, Model: {self.embedding_model}")
-            self.pgvector_manager.save_chunks(
+            result = self.pgvector_manager.save_chunks(
                 chunks_with_embeddings, 
                 filename, 
                 file_type, 
-                self.embedding_model
+                self.embedding_model,
+                replace_existing=replace_existing
             )
             
-            print("Vector store created successfully in PostgreSQL")
-            return self.pgvector_manager
+            if result['already_existed']:
+                print(f"Chunks already exist for this document-model combination ({result['existing_count']} chunks)")
+            else:
+                print(f"Vector store created successfully in PostgreSQL ({result['chunks_saved']} chunks saved)")
+            
+            return result
 
         except Exception as e:
             print(f"Error creating vector store: {str(e)}")
