@@ -18,3 +18,5 @@ huggingface-hub
 datasets
 plotly
 requests
+beautifulsoup4
+markdownify

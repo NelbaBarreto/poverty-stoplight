@@ -87,8 +87,132 @@ class PGVectorManager:
         finally:
             cursor.close()
             conn.close()
+    
+    def get_or_create_document(self, filename: str, file_type: str) -> int:
+        """
+        Get or create a document record by filename.
+        Documents are stored only once, independent of embedding models.
+        
+        Args:
+            filename: Name of the document
+            file_type: Type of the document (pdf, docx, etc.)
+            
+        Returns:
+            Document ID in the database
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Try to get existing document
+            cursor.execute(
+                "SELECT id FROM documents WHERE filename = %s",
+                (filename,)
+            )
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]
+            
+            # Create new document record
+            cursor.execute(
+                """
+                INSERT INTO documents (filename, file_type)
+                VALUES (%s, %s)
+                RETURNING id
+                """,
+                (filename, file_type)
+            )
+            document_id = cursor.fetchone()[0]
+            conn.commit()
+            print(f"Created document record: {filename} (ID: {document_id})")
+            return document_id
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error managing document: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def check_existing_chunks(self, document_id: int, embedding_model_id: int) -> dict:
+        """
+        Check if chunks already exist for a document-model combination.
+        
+        Args:
+            document_id: ID of the document
+            embedding_model_id: ID of the embedding model
+            
+        Returns:
+            Dict with 'exists' (bool) and 'count' (int) keys
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM chunks 
+                WHERE document_id = %s AND embedding_model_id = %s
+                """,
+                (document_id, embedding_model_id)
+            )
+            count = cursor.fetchone()[0]
+            return {
+                'exists': count > 0,
+                'count': count
+            }
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def delete_chunks_for_document_model(self, document_id: int, embedding_model_id: int) -> int:
+        """
+        Delete all chunks for a specific document-model combination.
+        
+        Args:
+            document_id: ID of the document
+            embedding_model_id: ID of the embedding model
+            
+        Returns:
+            Number of chunks deleted
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                """
+                DELETE FROM chunks 
+                WHERE document_id = %s AND embedding_model_id = %s
+                """,
+                (document_id, embedding_model_id)
+            )
+            deleted_count = cursor.rowcount
+            
+            # Also update document_embeddings
+            cursor.execute(
+                """
+                DELETE FROM document_embeddings
+                WHERE document_id = %s AND embedding_model_id = %s
+                """,
+                (document_id, embedding_model_id)
+            )
+            
+            conn.commit()
+            print(f"Deleted {deleted_count} chunks for document {document_id} with model {embedding_model_id}")
+            return deleted_count
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error deleting chunks: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
-    def save_chunks(self, chunks: List[Document], filename: str, file_type: str, embedding_model: str = "text-embedding-3-small") -> int:
+    def save_chunks(self, chunks: List[Document], filename: str, file_type: str, embedding_model: str = "text-embedding-3-small", replace_existing: bool = False) -> dict:
         """
         Save document chunks with embeddings to PostgreSQL.
 
@@ -97,9 +221,10 @@ class PGVectorManager:
             filename: Name of the original document
             file_type: Type of the document (pdf, docx, etc.)
             embedding_model: Name of the embedding model used
+            replace_existing: If True, replace existing chunks for this document-model combination
 
         Returns:
-            Document ID in the database
+            Dict with 'document_id', 'chunks_saved', and 'already_existed' keys
         """
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -108,17 +233,26 @@ class PGVectorManager:
             # Get or create embedding model record
             embedding_model_id = self.get_or_create_embedding_model(embedding_model)
             
-            # Step 1: Insert document metadata
-            cursor.execute(
-                """
-                INSERT INTO documents (filename, file_type, embedding_model_id)
-                VALUES (%s, %s, %s)
-                RETURNING id
-                """,
-                (filename, file_type, embedding_model_id)
-            )
-            document_id = cursor.fetchone()[0]
-            print(f"Created document record with ID: {document_id}")
+            # Get or create document record (without duplication)
+            document_id = self.get_or_create_document(filename, file_type)
+            
+            # Check if chunks already exist
+            existing = self.check_existing_chunks(document_id, embedding_model_id)
+            
+            if existing['exists'] and not replace_existing:
+                print(f"Chunks already exist for document '{filename}' with model '{embedding_model}' ({existing['count']} chunks)")
+                return {
+                    'document_id': document_id,
+                    'chunks_saved': 0,
+                    'already_existed': True,
+                    'existing_count': existing['count'],
+                    'embedding_model_id': embedding_model_id
+                }
+            
+            # Delete existing chunks if replace_existing is True
+            if existing['exists'] and replace_existing:
+                self.delete_chunks_for_document_model(document_id, embedding_model_id)
+                print(f"Replacing {existing['count']} existing chunks")
 
             # Step 2: Prepare chunk data
             chunk_data = []
@@ -140,21 +274,40 @@ class PGVectorManager:
                 ))
 
             # Step 3: Insert chunks
+            chunks_saved = 0
             if chunk_data:
                 execute_values(
                     cursor,
                     """
                     INSERT INTO chunks (document_id, chunk_text, embedding, embedding_model_id, chunk_index, metadata)
                     VALUES %s
-                    ON CONFLICT DO NOTHING
+                    ON CONFLICT (document_id, embedding_model_id, chunk_index) DO NOTHING
                     """,
                     chunk_data,
                     template=None
                 )
+                chunks_saved = cursor.rowcount
+                
+                # Update document_embeddings table
+                cursor.execute(
+                    """
+                    INSERT INTO document_embeddings (document_id, embedding_model_id, chunk_count)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (document_id, embedding_model_id) 
+                    DO UPDATE SET chunk_count = %s, updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (document_id, embedding_model_id, len(chunk_data), len(chunk_data))
+                )
+                
                 conn.commit()
-                print(f"Saved {len(chunk_data)} chunks for document '{filename}' using model '{embedding_model}'")
+                print(f"Saved {chunks_saved} chunks for document '{filename}' using model '{embedding_model}'")
 
-            return document_id
+            return {
+                'document_id': document_id,
+                'chunks_saved': chunks_saved,
+                'already_existed': False,
+                'embedding_model_id': embedding_model_id
+            }
 
         except Exception as e:
             conn.rollback()
@@ -270,12 +423,13 @@ class PGVectorManager:
             cursor.close()
             conn.close()
 
-    def get_chunks_by_document(self, document_id: int) -> List[Document]:
+    def get_chunks_by_document(self, document_id: int, embedding_model_id: Optional[int] = None) -> List[Document]:
         """
-        Retrieve all chunks for a specific document.
+        Retrieve all chunks for a specific document, optionally filtered by embedding model.
 
         Args:
             document_id: ID of the document
+            embedding_model_id: Optional ID of the embedding model to filter by
 
         Returns:
             List of document chunks
@@ -284,15 +438,32 @@ class PGVectorManager:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         try:
-            cursor.execute(
-                """
-                SELECT id, document_id, chunk_text, metadata, chunk_index
-                FROM chunks
-                WHERE document_id = %s
-                ORDER BY chunk_index
-                """,
-                (document_id,)
-            )
+            if embedding_model_id is not None:
+                # Filter by embedding model
+                cursor.execute(
+                    """
+                    SELECT c.id, c.document_id, c.chunk_text, c.metadata, c.chunk_index, 
+                           c.embedding_model_id, em.model_name, em.provider
+                    FROM chunks c
+                    LEFT JOIN embedding_models em ON c.embedding_model_id = em.id
+                    WHERE c.document_id = %s AND c.embedding_model_id = %s
+                    ORDER BY c.chunk_index
+                    """,
+                    (document_id, embedding_model_id)
+                )
+            else:
+                # Get all chunks regardless of model
+                cursor.execute(
+                    """
+                    SELECT c.id, c.document_id, c.chunk_text, c.metadata, c.chunk_index,
+                           c.embedding_model_id, em.model_name, em.provider
+                    FROM chunks c
+                    LEFT JOIN embedding_models em ON c.embedding_model_id = em.id
+                    WHERE c.document_id = %s
+                    ORDER BY c.chunk_index
+                    """,
+                    (document_id,)
+                )
             results = cursor.fetchall()
 
             documents = []
@@ -314,7 +485,10 @@ class PGVectorManager:
                     metadata={
                         **metadata,
                         "chunk_id": row["id"],
-                        "chunk_index": row["chunk_index"]
+                        "chunk_index": row["chunk_index"],
+                        "embedding_model_id": row.get("embedding_model_id"),
+                        "model_name": row.get("model_name"),
+                        "provider": row.get("provider")
                     }
                 )
                 documents.append(doc)
@@ -359,10 +533,10 @@ class PGVectorManager:
 
     def get_all_documents(self) -> List[dict]:
         """
-        Get all stored documents.
+        Get all stored documents with their associated embedding models.
 
         Returns:
-            List of document metadata
+            List of document metadata with embedding model information
         """
         conn = self.get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -371,8 +545,16 @@ class PGVectorManager:
             cursor.execute(
                 """
                 SELECT d.id, d.filename, d.file_type, d.created_at,
-                       COUNT(c.id) as chunk_count
+                       COUNT(DISTINCT c.id) as chunk_count,
+                       json_agg(DISTINCT jsonb_build_object(
+                           'model_id', em.id,
+                           'model_name', em.model_name,
+                           'provider', em.provider,
+                           'chunk_count', de.chunk_count
+                       )) FILTER (WHERE em.id IS NOT NULL) as embedding_models
                 FROM documents d
+                LEFT JOIN document_embeddings de ON d.id = de.document_id
+                LEFT JOIN embedding_models em ON de.embedding_model_id = em.id
                 LEFT JOIN chunks c ON d.id = c.document_id
                 GROUP BY d.id, d.filename, d.file_type, d.created_at
                 ORDER BY d.created_at DESC

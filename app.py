@@ -39,22 +39,28 @@ def initialize_session_state():
         st.session_state.processing_status = "not_started"
     if "docling_docs" not in st.session_state:
         st.session_state.docling_docs = []
-    if "selected_embedding_model" not in st.session_state:
-        st.session_state.selected_embedding_model = "text-embedding-3-small"
+    if "selected_embedding_models" not in st.session_state:
+        st.session_state.selected_embedding_models = ["text-embedding-3-small"]
+    if "selected_query_model" not in st.session_state:
+        st.session_state.selected_query_model = "text-embedding-3-small"
     if "selected_llm_provider" not in st.session_state:
         st.session_state.selected_llm_provider = "openai"
     if "selected_llm_model" not in st.session_state:
         st.session_state.selected_llm_model = "gpt-4o-mini"
 
 
-def process_and_index(uploaded_files, embedding_model=None):
+def process_and_index(uploaded_files, embedding_models=None, replace_existing=None):
     """Process uploaded documents and create vector store."""
     try:
-        # Use selected model or default
-        if embedding_model is None:
-            embedding_model = st.session_state.selected_embedding_model
+        # Use selected models or default
+        if embedding_models is None:
+            embedding_models = st.session_state.selected_embedding_models
         
-        st.info(f"📊 Usando modelo de embeddings: **{embedding_model}**")
+        if not embedding_models:
+            st.error("No hay modelos de embeddings seleccionados")
+            return
+        
+        st.info(f"Usando {len(embedding_models)} modelo(s) de embeddings: **{', '.join(embedding_models)}**")
         
         # Step 1: Process documents with Docling
         with st.spinner(
@@ -70,19 +76,85 @@ def process_and_index(uploaded_files, embedding_model=None):
             )
             return
 
-        # Step 2: Chunk and save to pgvector-db
+        # Step 2: Chunk documents (only once)
         with st.spinner("Dividiendo documentos en fragmentos..."):
-            vs_manager = VectorStoreManager(embedding_model=embedding_model)
+            # Use first model just for chunking
+            vs_manager = VectorStoreManager(embedding_model=embedding_models[0])
             chunks = vs_manager.chunk_documents(documents)
+        
+        # Step 2.5: Check for existing chunks before generating embeddings
+        pgvector_mgr = PGVectorManager()
+        duplicates_found = []
+        
+        for uploaded_file in uploaded_files:
+            filename = uploaded_file.name
+            # Get or create document to get its ID
+            file_type = uploaded_file.type
+            document_id = pgvector_mgr.get_or_create_document(filename, file_type)
+            
+            for embedding_model in embedding_models:
+                # Get embedding model ID
+                embedding_model_id = pgvector_mgr.get_or_create_embedding_model(embedding_model)
+                
+                # Check if chunks already exist
+                existing = pgvector_mgr.check_existing_chunks(document_id, embedding_model_id)
+                
+                if existing['exists']:
+                    duplicates_found.append({
+                        'filename': filename,
+                        'model': embedding_model,
+                        'count': existing['count'],
+                        'document_id': document_id,
+                        'embedding_model_id': embedding_model_id
+                    })
+        
+        # If duplicates found and user hasn't decided yet, ask
+        if duplicates_found and replace_existing is None:
+            st.warning("Se encontraron chunks existentes para las siguientes combinaciones documento-modelo:")
+            
+            for dup in duplicates_found:
+                st.write(f"- **{dup['filename']}** con modelo **{dup['model']}** ({dup['count']} chunks)")
+            
+            st.info("¿Deseas reemplazar los chunks existentes?")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Sí, reemplazar", type="primary"):
+                    st.session_state.replace_decision = True
+                    st.rerun()
+            with col2:
+                if st.button("No, omitir duplicados"):
+                    st.session_state.replace_decision = False
+                    st.rerun()
+            
+            return  # Stop here and wait for user decision
+        
+        # Use the decision from session state if available
+        if replace_existing is None and 'replace_decision' in st.session_state:
+            replace_existing = st.session_state.replace_decision
+            # Clear the decision after using it
+            del st.session_state.replace_decision
+        
+        # Step 3: Generate embeddings with each selected model
+        results_summary = []
+        for embedding_model in embedding_models:
+            with st.spinner(f"Generando embeddings con {embedding_model}..."):
+                # Create a new manager for this model
+                vs_manager = VectorStoreManager(embedding_model=embedding_model)
+                # Generate embeddings and save to database
+                result = vs_manager.create_vectorstore(chunks, replace_existing=replace_existing or False)
+                
+                if result['already_existed'] and not replace_existing:
+                    st.info(f"⏭Omitiendo {embedding_model}: ya existe ({result['existing_count']} chunks)")
+                elif result['chunks_saved'] > 0:
+                    st.success(f"{result['chunks_saved']} chunks guardados con modelo {embedding_model}")
+                    results_summary.append({
+                        'model': embedding_model,
+                        'chunks': result['chunks_saved']
+                    })
 
-        with st.spinner(f"Generando embeddings con {embedding_model}..."):
-            # Esto guarda los chunks con embeddings en la BD
-            vs_manager.create_vectorstore(chunks)
-            st.success(f"{len(chunks)} chunks guardados en la base de datos")
-
-        # Step 2.5: Extract and save document structure for each document
+        # Step 4: Extract and save document structure for each document
         with st.spinner("Guardando estructura de documentos..."):
-            pgvector_mgr = PGVectorManager()
             for docling_doc_data in docling_docs:
                 try:
                     # Extract structure
@@ -103,21 +175,35 @@ def process_and_index(uploaded_files, embedding_model=None):
                 except Exception as e:
                     st.warning(f"No se pudo guardar estructura para {docling_doc_data['filename']}: {str(e)}")
 
-        # Step 3: Crear agente
+        # Step 5: Crear agente
         with st.spinner("Creando agente..."):
-            search_tool = create_search_tool(embedding_model=embedding_model)  # Usar el modelo seleccionado
+            # Use the selected query model for the search tool
+            query_model = st.session_state.selected_query_model
+            # Ensure query model is in the list of selected models
+            if query_model not in embedding_models:
+                query_model = embedding_models[0]
+                st.session_state.selected_query_model = query_model
+            
+            search_tool = create_search_tool(embedding_model=query_model)
             agent = create_documentation_agent(
                 [search_tool],
                 model_name=st.session_state.selected_llm_model,
                 provider=st.session_state.selected_llm_provider
             )
             st.session_state.agent = agent
+            st.info(f"🔍 Agente creado con modelo de consulta: {query_model}")
 
         st.session_state.processing_status = "completed"
-        st.success("Documentos indexados en pgvector-db. Ya puedes chatear con ellos abajo.")
+        
+        if results_summary:
+            st.success(f"Indexación completada: {len(results_summary)} modelo(s) procesado(s)")
+        else:
+            st.info("Indexación completada (no se guardaron nuevos chunks)")
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         st.session_state.processing_status = "error"
 
 
@@ -127,53 +213,122 @@ def render_sidebar():
         st.title("Configuración")
         
         # Embedding model selector
-        st.subheader("🔬 Modelo de Embeddings")
+        st.subheader("Modelos de Embeddings")
         
         # Get all available models
         all_models = EmbeddingsManager.list_all_models()
         
-        # Create options for selectbox
-        model_options = {}
+        st.write("Selecciona uno o más modelos:")
+        
+        # Initialize selected models in session state if needed
+        if "selected_embedding_models" not in st.session_state:
+            st.session_state.selected_embedding_models = ["text-embedding-3-small"]
+        
+        # Create checkboxes for each model
+        selected_models = []
         for model in all_models:
-            label = f"{model['name']} - {model['description']}"
-            model_options[label] = model['name']
-        
-        # Select embedding model
-        selected_label = st.selectbox(
-            "Selecciona el modelo:",
-            options=list(model_options.keys()),
-            index=0,
-            help="El modelo de embeddings determina cómo se representan los documentos"
-        )
-        
-        st.session_state.selected_embedding_model = model_options[selected_label]
-        
-        # Show model details
-        selected_model_info = next(
-            (m for m in all_models if m['name'] == st.session_state.selected_embedding_model),
-            None
-        )
-        if selected_model_info:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Proveedor", selected_model_info['provider'])
-            with col2:
-                st.metric("Dimensión", selected_model_info['dimension'])
+            # Check if model should be checked by default
+            is_checked = model['name'] in st.session_state.selected_embedding_models
             
-            # Show endpoint info for HuggingFace models
-            if selected_model_info['provider'] == 'huggingface':
-                from src.embeddings_manager import EMBEDDING_MODELS
-                model_config = EMBEDDING_MODELS['huggingface'].get(selected_model_info['name'], {})
-                endpoint = model_config.get('endpoint_url')
-                if endpoint:
-                    st.success(f"🚀 Endpoint: {endpoint[:40]}...")
-                else:
-                    st.warning("⚠️ Sin endpoint configurado")
+            if st.checkbox(
+                f"{model['name']}",
+                value=is_checked,
+                key=f"embed_model_{model['name']}",
+                help=f"{model['description']} - {model['provider']} ({model['dimension']} dim)"
+            ):
+                selected_models.append(model['name'])
+        
+        # Update session state
+        st.session_state.selected_embedding_models = selected_models
+        
+        # Show count of selected models
+        if selected_models:
+            st.success(f"{len(selected_models)} modelo(s) seleccionado(s)")
+            
+            # Show details of selected models in expander
+            with st.expander("Ver detalles de modelos seleccionados"):
+                for model_name in selected_models:
+                    model_info = next((m for m in all_models if m['name'] == model_name), None)
+                    if model_info:
+                        st.write(f"**{model_name}**")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"Proveedor: {model_info['provider']}")
+                        with col2:
+                            st.write(f"Dimensión: {model_info['dimension']}")
+                        
+                        # Show endpoint info for HuggingFace models
+                        if model_info['provider'] == 'huggingface':
+                            from src.embeddings_manager import EMBEDDING_MODELS
+                            model_config = EMBEDDING_MODELS['huggingface'].get(model_info['name'], {})
+                            endpoint = model_config.get('endpoint_url')
+                            if endpoint:
+                                st.write(f"Endpoint: {endpoint[:40]}...")
+                        st.divider()
+        else:
+            st.warning("Selecciona al menos un modelo")
+        
+        # Query model selector
+        st.subheader("Modelo para Consultas")
+        st.write("Selecciona el modelo a usar para búsquedas en el chat:")
+        
+        # Get models that have been indexed in the database
+        try:
+            pgvector_mgr = PGVectorManager()
+            indexed_models = pgvector_mgr.get_all_embedding_models()
+            indexed_model_names = [m['model_name'] for m in indexed_models]
+            
+            # Filter to only show models that are both selected and indexed
+            available_query_models = [m for m in selected_models if m in indexed_model_names]
+            
+            if not available_query_models:
+                # If no overlap, show all indexed models
+                available_query_models = indexed_model_names
+            
+            if available_query_models:
+                # Ensure selected_query_model is in the list
+                if st.session_state.selected_query_model not in available_query_models:
+                    st.session_state.selected_query_model = available_query_models[0]
+                
+                current_index = available_query_models.index(st.session_state.selected_query_model) if st.session_state.selected_query_model in available_query_models else 0
+                
+                selected_query_model = st.selectbox(
+                    "Modelo de búsqueda:",
+                    options=available_query_models,
+                    index=current_index,
+                    key="query_model_selector",
+                    help="Este modelo se usará para generar embeddings de tus consultas y buscar documentos relevantes"
+                )
+                
+                # Check if model changed and invalidate agent
+                if selected_query_model != st.session_state.selected_query_model:
+                    st.session_state.selected_query_model = selected_query_model
+                    # Reset agent to force recreation with new model
+                    st.session_state.agent = None
+                    st.info(f"Modelo de consulta cambiado a: {selected_query_model}")
+                
+                st.session_state.selected_query_model = selected_query_model
+                
+                # Show info about selected query model
+                query_model_info = next((m for m in all_models if m['name'] == selected_query_model), None)
+                if query_model_info:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Proveedor", query_model_info['provider'])
+                    with col2:
+                        st.metric("Dimensión", query_model_info['dimension'])
+            else:
+                st.warning("No hay modelos indexados. Procesa documentos primero.")
+        except Exception as e:
+            st.warning(f"No se pudieron cargar modelos indexados: {str(e)}")
+            # Fallback to first selected model
+            if selected_models:
+                st.session_state.selected_query_model = selected_models[0]
 
         st.divider()
         
         # LLM model selector
-        st.subheader("🤖 Modelo LLM (Chat)")
+        st.subheader("Modelo LLM (Chat)")
         
         # Provider selector
         llm_provider = st.radio(
@@ -218,9 +373,9 @@ def render_sidebar():
             from src.agent import get_hf_llm_endpoint_for_model
             endpoint = get_hf_llm_endpoint_for_model(selected_llm)
             if endpoint:
-                st.success(f"🚀 Endpoint: {endpoint[:40]}...")
+                st.success(f"Endpoint: {endpoint[:40]}...")
             else:
-                st.info("🌐 API pública")
+                st.info("API pública")
 
         st.divider()
 
@@ -234,22 +389,25 @@ def render_sidebar():
                 st.success(f"{len(all_docs)} documento(s) disponible(s)")
                 with st.expander("Ver documentos"):
                     for doc in all_docs:
-                        # Get model info if available
-                        model_info = ""
-                        if doc.get('embedding_model_id'):
-                            models = pgvector_mgr.get_all_embedding_models()
-                            model = next(
-                                (m for m in models if m['id'] == doc['embedding_model_id']),
-                                None
-                            )
-                            if model:
-                                model_info = f" ({model['model_name']})"
+                        st.write(f"📄 **{doc['filename']}**")
                         
-                        st.write(f"📄 {doc['filename']}{model_info}")
+                        # Show embedding models for this document
+                        if doc.get('embedding_models'):
+                            st.write("   Modelos de embeddings:")
+                            for model_info in doc['embedding_models']:
+                                if model_info:  # Check if not None
+                                    st.write(f"   - {model_info['model_name']} ({model_info['provider']}) - {model_info['chunk_count']} chunks")
+                        else:
+                            st.write("Sin modelos de embeddings asociados")
+                        
+                        st.write(f"   Total chunks: {doc.get('chunk_count', 0)}")
+                        st.divider()
             else:
                 st.info("No hay documentos en la BD")
         except Exception as e:
             st.warning(f"Error al cargar documentos: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
         st.divider()
 
@@ -287,15 +445,17 @@ def render_sidebar():
             st.error("Ocurrió un error")
 
         # Tips
-        with st.expander("💡 Consejos y Configuración"):
+        with st.expander("Consejos y Configuración"):
             st.markdown(
                 """
             **Cómo usar:**
-            1. Selecciona el modelo de embeddings
-            2. Selecciona el modelo LLM (chat)
-            3. Sube documentos nuevos
-            4. Los datos se guardan en PostgreSQL (pgvector-db)
-            5. El chat busca en TODOS los documentos automáticamente
+            1. Selecciona uno o más modelos de embeddings (con checkboxes)
+            2. Selecciona el modelo a usar para consultas en el chat
+            3. Selecciona el modelo LLM (chat)
+            4. Sube documentos nuevos
+            5. Se generarán embeddings con TODOS los modelos seleccionados
+            6. Los datos se guardan en PostgreSQL (pgvector-db)
+            7. El chat busca usando el modelo de consulta seleccionado
 
             **Formatos compatibles:**
             - Documentos PDF
@@ -306,6 +466,9 @@ def render_sidebar():
             **Modelos de embeddings:**
             - OpenAI: Modelos comerciales de alta calidad
             - HuggingFace: Modelos open-source gratuitos vía Inference API
+            - **Indexación:** Puedes seleccionar múltiples modelos para generar embeddings en paralelo
+            - **Consultas:** Selecciona el modelo específico para búsquedas en el chat
+            - **Flexibilidad:** Cambia el modelo de consulta en cualquier momento
             
             **Múltiples Inference Endpoints:**
             
@@ -552,9 +715,47 @@ def render_structure_viz():
 
         with tab5:
             st.subheader("Fragmentos de texto")
-            # Fetch chunks for document
+            
+            # Get available embedding models for this document
             try:
-                chunks = manager.get_chunks_by_document(doc_id)
+                all_embedding_models = manager.get_all_embedding_models()
+                
+                # Get models associated with this document
+                doc_models = []
+                if doc_meta.get('embedding_models'):
+                    for model_info in doc_meta['embedding_models']:
+                        if model_info:
+                            doc_models.append(model_info)
+                
+                if doc_models:
+                    # Create filter selector
+                    model_options = ["Todos los modelos"] + [f"{m['model_name']} ({m['chunk_count']} chunks)" for m in doc_models]
+                    selected_model_option = st.selectbox(
+                        "Filtrar por modelo de embeddings:",
+                        options=model_options,
+                        key=f"model_filter_{doc_id}"
+                    )
+                    
+                    # Extract model_id if a specific model is selected
+                    selected_embedding_model_id = None
+                    if selected_model_option != "Todos los modelos":
+                        # Extract model name from option
+                        model_name = selected_model_option.split(" (")[0]
+                        # Find matching model info
+                        matching_model = next((m for m in doc_models if m['model_name'] == model_name), None)
+                        if matching_model:
+                            selected_embedding_model_id = matching_model['embedding_model_id']
+                else:
+                    st.info("No hay modelos de embeddings asociados a este documento.")
+                    selected_embedding_model_id = None
+                
+            except Exception as e:
+                st.warning(f"Error al cargar modelos: {str(e)}")
+                selected_embedding_model_id = None
+            
+            # Fetch chunks for document (filtered by model if selected)
+            try:
+                chunks = manager.get_chunks_by_document(doc_id, embedding_model_id=selected_embedding_model_id)
             except Exception as e:
                 st.error(f"Error al obtener fragmentos: {str(e)}")
                 return
@@ -567,9 +768,12 @@ def render_structure_viz():
                 for c in chunks:
                     meta = c.metadata or {}
                     page = meta.get('page') if isinstance(meta, dict) else None
+                    model_name = meta.get('model_name', 'N/A')
+                    provider = meta.get('provider', 'N/A')
                     rows.append({
                         'chunk_id': meta.get('chunk_id', ''),
                         'chunk_index': meta.get('chunk_index', ''),
+                        'modelo': f"{model_name} ({provider})",
                         'page': page,
                         'preview': (c.page_content[:300] + '...') if len(c.page_content) > 300 else c.page_content
                     })
@@ -601,9 +805,9 @@ def render_chat():
             
             if all_docs:
                 # Crear agente automáticamente si hay documentos
-                # Usar el modelo seleccionado o el primero disponible en BD
-                embedding_model = st.session_state.selected_embedding_model
-                search_tool = create_search_tool(embedding_model=embedding_model)
+                # Usar el modelo de consulta seleccionado
+                query_model = st.session_state.selected_query_model
+                search_tool = create_search_tool(embedding_model=query_model)
                 agent = create_documentation_agent(
                     [search_tool],
                     model_name=st.session_state.selected_llm_model,
@@ -634,8 +838,8 @@ def render_chat():
     # Crear agente si no existe y hay documentos en BD
     if st.session_state.agent is None:
         try:
-            embedding_model = st.session_state.selected_embedding_model
-            search_tool = create_search_tool(embedding_model=embedding_model)
+            query_model = st.session_state.selected_query_model
+            search_tool = create_search_tool(embedding_model=query_model)
             agent = create_documentation_agent(
                 [search_tool],
                 model_name=st.session_state.selected_llm_model,

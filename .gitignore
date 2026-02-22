@@ -11,3 +11,5 @@ venv/
 
 # Chroma
 chroma_db/
+
+data/
