@@ -17,6 +17,7 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
     Returns:
         A tool function that can search the documents
     """
+    print(f"[DEBUG] create_search_tool llamado con embedding_model: {embedding_model}")
 
     @tool
     def search_documents(
@@ -30,6 +31,7 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
         """
 
         try:
+            print(f"[DEBUG] search_documents ejecutándose con embedding_model: {embedding_model}")
             # Compute embedding for the query using the specified model
             embeddings = EmbeddingsManager.create_embeddings(embedding_model)
             query_embedding = embeddings.embed_query(query)

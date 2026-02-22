@@ -25,6 +25,20 @@ EMBEDDING_MODELS = {
             "dimension": 1024,
             "description": "HuggingFace - Qwen3 Embedding 0.6B, modelo ligero (1024 dim)",
             "endpoint_url": "https://ddz32oohf81bvew1.us-east-1.aws.endpoints.huggingface.cloud"
+        },
+        "BAAI/bge-m3": {
+            "provider": "huggingface",
+            "model_name": "BAAI/bge-m3",
+            "dimension": 1024,
+            "description": "HuggingFace - BGE M3 LWY, modelo ligero (1024 dim)",
+            "endpoint_url": "https://g1vqumtf7p0plple.us-east-1.aws.endpoints.huggingface.cloud"
+        },
+        "sentence-transformers/all-mpnet-base-v2": {
+            "provider": "huggingface",
+            "model_name": "sentence-transformers/all-mpnet-base-v2",
+            "dimension": 768,
+            "description": "HuggingFace - All MPNet Base V2, modelo ligero (768 dim)",
+            "endpoint_url": "https://shrk7i1bsvrjsaxk.us-east-1.aws.endpoints.huggingface.cloud"
         }
     }
 }
@@ -88,6 +102,7 @@ class HuggingFaceEmbeddingsProvider(BaseEmbeddingsProvider):
             model_name: Name of the model
             endpoint_url: Custom inference endpoint URL. If None, gets it from EMBEDDING_MODELS config
         """
+        print(f"[DEBUG] HuggingFaceEmbeddingsProvider.__init__ llamado con model_name: {model_name}")
         self.model_name = model_name
         
         # Get endpoint URL from parameter or model config
@@ -132,6 +147,7 @@ class HuggingFaceEmbeddingsProvider(BaseEmbeddingsProvider):
     
     def embed_query(self, text: str) -> List[float]:
         """Embed a single query text."""
+        print(f"[DEBUG] HuggingFaceEmbeddingsProvider.embed_query - model: {self.model_name}, endpoint: {self.endpoint_url[:50] if self.endpoint_url else 'None'}...")
         if not self.endpoint_url:
             raise ValueError(f"No endpoint configured for model {self.model_name}")
         
@@ -246,10 +262,12 @@ class EmbeddingsManager:
         Returns:
             Embeddings provider instance
         """
+        print(f"[DEBUG] EmbeddingsManager.create_embeddings llamado con model_name: {model_name}, provider: {provider}")
         # Auto-detect provider if not specified
         if provider is None:
             model_info = EmbeddingsManager.get_model_info(model_name)
             provider = model_info["provider"]
+            print(f"[DEBUG] Provider auto-detectado: {provider}")
         
         # Create provider
         if provider == "openai":

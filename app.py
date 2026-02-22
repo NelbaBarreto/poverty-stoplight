@@ -290,8 +290,10 @@ def render_sidebar():
                 if st.session_state.selected_query_model not in available_query_models:
                     st.session_state.selected_query_model = available_query_models[0]
                 
-                current_index = available_query_models.index(st.session_state.selected_query_model) if st.session_state.selected_query_model in available_query_models else 0
+                # Save previous model BEFORE selectbox renders
+                previous_query_model = st.session_state.selected_query_model
                 
+                current_index = available_query_models.index(st.session_state.selected_query_model) if st.session_state.selected_query_model in available_query_models else 0
                 selected_query_model = st.selectbox(
                     "Modelo de búsqueda:",
                     options=available_query_models,
@@ -300,14 +302,26 @@ def render_sidebar():
                     help="Este modelo se usará para generar embeddings de tus consultas y buscar documentos relevantes"
                 )
                 
-                # Check if model changed and invalidate agent
-                if selected_query_model != st.session_state.selected_query_model:
+                # Check if model changed by comparing with previous value
+                if selected_query_model != previous_query_model:
                     st.session_state.selected_query_model = selected_query_model
-                    # Reset agent to force recreation with new model
-                    st.session_state.agent = None
-                    st.info(f"Modelo de consulta cambiado a: {selected_query_model}")
-                
-                st.session_state.selected_query_model = selected_query_model
+                    
+                    # Recreate agent immediately with new model
+                    try:
+                        search_tool = create_search_tool(embedding_model=selected_query_model)
+                        agent = create_documentation_agent(
+                            [search_tool],
+                            model_name=st.session_state.selected_llm_model,
+                            provider=st.session_state.selected_llm_provider
+                        )
+                        st.session_state.agent = agent
+                        st.success(f"✅ Agente recreado con modelo: **{selected_query_model}**")
+                    except Exception as e:
+                        st.error(f"Error al recrear agente: {str(e)}")
+                        st.session_state.agent = None
+                else:
+                    # Ensure session state stays in sync
+                    st.session_state.selected_query_model = selected_query_model
                 
                 # Show info about selected query model
                 query_model_info = next((m for m in all_models if m['name'] == selected_query_model), None)
@@ -338,10 +352,32 @@ def render_sidebar():
             horizontal=True,
             help="Selecciona el proveedor del modelo de lenguaje para el chat"
         )
-        st.session_state.selected_llm_provider = llm_provider
+        
+        # Check if provider changed
+        if llm_provider != st.session_state.selected_llm_provider:
+            st.session_state.selected_llm_provider = llm_provider
+            
+            # Recreate agent immediately with new provider
+            try:
+                query_model = st.session_state.selected_query_model
+                print(f"[DEBUG] Recreando agente inmediatamente con proveedor: {llm_provider}")
+                search_tool = create_search_tool(embedding_model=query_model)
+                agent = create_documentation_agent(
+                    [search_tool],
+                    model_name=st.session_state.selected_llm_model,
+                    provider=llm_provider
+                )
+                st.session_state.agent = agent
+                st.success(f"Agente recreado con proveedor: **{llm_provider}**")
+            except Exception as e:
+                st.error(f"Error al recrear agente: {str(e)}")
+                st.session_state.agent = None
         
         # Model selector based on provider
         if llm_provider == "openai":
+            # Save previous model BEFORE selectbox
+            previous_llm_model = st.session_state.selected_llm_model
+            
             llm_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
             selected_llm = st.selectbox(
                 "Modelo:",
@@ -349,8 +385,34 @@ def render_sidebar():
                 index=llm_models.index(st.session_state.selected_llm_model) if st.session_state.selected_llm_model in llm_models else 1,
                 help="Modelo OpenAI para el chat"
             )
-            st.session_state.selected_llm_model = selected_llm
+            
+            # Check if model changed by comparing with previous value
+            if selected_llm != previous_llm_model:
+                print(f"[DEBUG] Modelo LLM OpenAI cambiado: {previous_llm_model} -> {selected_llm}")
+                st.session_state.selected_llm_model = selected_llm
+                
+                # Recreate agent immediately with new model
+                try:
+                    query_model = st.session_state.selected_query_model
+                    print(f"[DEBUG] Recreando agente inmediatamente con LLM: {selected_llm}")
+                    search_tool = create_search_tool(embedding_model=query_model)
+                    agent = create_documentation_agent(
+                        [search_tool],
+                        model_name=selected_llm,
+                        provider=st.session_state.selected_llm_provider
+                    )
+                    st.session_state.agent = agent
+                    st.success(f"✅ Agente recreado con LLM: **{selected_llm}**")
+                except Exception as e:
+                    st.error(f"Error al recrear agente: {str(e)}")
+                    st.session_state.agent = None
+            else:
+                # Ensure session state stays in sync
+                st.session_state.selected_llm_model = selected_llm
         else:  # huggingface
+            # Save previous model BEFORE selectbox
+            previous_llm_model = st.session_state.selected_llm_model
+            
             # Common LLM models
             llm_models = [
                 "Qwen/Qwen2.5-72B-Instruct",
@@ -367,7 +429,30 @@ def render_sidebar():
                 index=0,
                 help="Modelo HuggingFace para el chat"
             )
-            st.session_state.selected_llm_model = selected_llm
+            
+            # Check if model changed by comparing with previous value
+            if selected_llm != previous_llm_model:
+                print(f"[DEBUG] Modelo LLM HF cambiado: {previous_llm_model} -> {selected_llm}")
+                st.session_state.selected_llm_model = selected_llm
+                
+                # Recreate agent immediately with new model
+                try:
+                    query_model = st.session_state.selected_query_model
+                    print(f"[DEBUG] Recreando agente inmediatamente con LLM HF: {selected_llm}")
+                    search_tool = create_search_tool(embedding_model=query_model)
+                    agent = create_documentation_agent(
+                        [search_tool],
+                        model_name=selected_llm,
+                        provider=st.session_state.selected_llm_provider
+                    )
+                    st.session_state.agent = agent
+                    st.success(f"Agente recreado con LLM: **{selected_llm}**")
+                except Exception as e:
+                    st.error(f"Error al recrear agente: {str(e)}")
+                    st.session_state.agent = None
+            else:
+                # Ensure session state stays in sync
+                st.session_state.selected_llm_model = selected_llm
             
             # Show endpoint info
             from src.agent import get_hf_llm_endpoint_for_model
@@ -839,6 +924,7 @@ def render_chat():
     if st.session_state.agent is None:
         try:
             query_model = st.session_state.selected_query_model
+            print(f"[DEBUG] Recreando agente con modelo de consulta: {query_model}")
             search_tool = create_search_tool(embedding_model=query_model)
             agent = create_documentation_agent(
                 [search_tool],
@@ -849,6 +935,15 @@ def render_chat():
         except Exception as e:
             st.error(f"Error al crear agente: {str(e)}")
             return
+
+    # Show current configuration
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info(f"**Modelo de consulta:** {st.session_state.selected_query_model}")
+    with col2:
+        st.info(f"**Modelo LLM:** {st.session_state.selected_llm_model}")
+    
+    print(f"[DEBUG] render_chat - selected_query_model en session_state: {st.session_state.selected_query_model}")
 
     # Display chat messages
     for message in st.session_state.messages:
@@ -984,7 +1079,7 @@ def render_model_comparison():
         return
     
     if not all_docs:
-        st.warning("⚠️ No hay documentos en la base de datos. Sube y procesa documentos primero.")
+        st.warning("No hay documentos en la base de datos. Sube y procesa documentos primero.")
         return
     
     # Configuration section
@@ -1059,7 +1154,7 @@ def render_model_comparison():
                 )
             
             # Display results
-            st.success("✅ Evaluación completada!")
+            st.success("Evaluación completada!")
             
             # Create comparison table
             st.subheader("📊 Resultados de Comparación")
@@ -1144,7 +1239,7 @@ def render_model_comparison():
                 # Best model recommendation
                 try:
                     best_model = evaluator.get_best_model(results, "answer_relevancy")
-                    st.success(f"🏆 **Modelo Recomendado (mejor Answer Relevancy):** {best_model}")
+                    st.success(f"**Modelo Recomendado (mejor Answer Relevancy):** {best_model}")
                 except Exception as e:
                     st.warning(f"No se pudo determinar el mejor modelo: {str(e)}")
         
