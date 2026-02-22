@@ -423,12 +423,13 @@ class PGVectorManager:
             cursor.close()
             conn.close()
 
-    def get_chunks_by_document(self, document_id: int) -> List[Document]:
+    def get_chunks_by_document(self, document_id: int, embedding_model_id: Optional[int] = None) -> List[Document]:
         """
-        Retrieve all chunks for a specific document.
+        Retrieve all chunks for a specific document, optionally filtered by embedding model.
 
         Args:
             document_id: ID of the document
+            embedding_model_id: Optional ID of the embedding model to filter by
 
         Returns:
             List of document chunks
@@ -437,15 +438,32 @@ class PGVectorManager:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         try:
-            cursor.execute(
-                """
-                SELECT id, document_id, chunk_text, metadata, chunk_index
-                FROM chunks
-                WHERE document_id = %s
-                ORDER BY chunk_index
-                """,
-                (document_id,)
-            )
+            if embedding_model_id is not None:
+                # Filter by embedding model
+                cursor.execute(
+                    """
+                    SELECT c.id, c.document_id, c.chunk_text, c.metadata, c.chunk_index, 
+                           c.embedding_model_id, em.model_name, em.provider
+                    FROM chunks c
+                    LEFT JOIN embedding_models em ON c.embedding_model_id = em.id
+                    WHERE c.document_id = %s AND c.embedding_model_id = %s
+                    ORDER BY c.chunk_index
+                    """,
+                    (document_id, embedding_model_id)
+                )
+            else:
+                # Get all chunks regardless of model
+                cursor.execute(
+                    """
+                    SELECT c.id, c.document_id, c.chunk_text, c.metadata, c.chunk_index,
+                           c.embedding_model_id, em.model_name, em.provider
+                    FROM chunks c
+                    LEFT JOIN embedding_models em ON c.embedding_model_id = em.id
+                    WHERE c.document_id = %s
+                    ORDER BY c.chunk_index
+                    """,
+                    (document_id,)
+                )
             results = cursor.fetchall()
 
             documents = []
@@ -467,7 +485,10 @@ class PGVectorManager:
                     metadata={
                         **metadata,
                         "chunk_id": row["id"],
-                        "chunk_index": row["chunk_index"]
+                        "chunk_index": row["chunk_index"],
+                        "embedding_model_id": row.get("embedding_model_id"),
+                        "model_name": row.get("model_name"),
+                        "provider": row.get("provider")
                     }
                 )
                 documents.append(doc)

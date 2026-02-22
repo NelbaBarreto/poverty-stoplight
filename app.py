@@ -715,9 +715,47 @@ def render_structure_viz():
 
         with tab5:
             st.subheader("Fragmentos de texto")
-            # Fetch chunks for document
+            
+            # Get available embedding models for this document
             try:
-                chunks = manager.get_chunks_by_document(doc_id)
+                all_embedding_models = manager.get_all_embedding_models()
+                
+                # Get models associated with this document
+                doc_models = []
+                if doc_meta.get('embedding_models'):
+                    for model_info in doc_meta['embedding_models']:
+                        if model_info:
+                            doc_models.append(model_info)
+                
+                if doc_models:
+                    # Create filter selector
+                    model_options = ["Todos los modelos"] + [f"{m['model_name']} ({m['chunk_count']} chunks)" for m in doc_models]
+                    selected_model_option = st.selectbox(
+                        "Filtrar por modelo de embeddings:",
+                        options=model_options,
+                        key=f"model_filter_{doc_id}"
+                    )
+                    
+                    # Extract model_id if a specific model is selected
+                    selected_embedding_model_id = None
+                    if selected_model_option != "Todos los modelos":
+                        # Extract model name from option
+                        model_name = selected_model_option.split(" (")[0]
+                        # Find matching model info
+                        matching_model = next((m for m in doc_models if m['model_name'] == model_name), None)
+                        if matching_model:
+                            selected_embedding_model_id = matching_model['embedding_model_id']
+                else:
+                    st.info("No hay modelos de embeddings asociados a este documento.")
+                    selected_embedding_model_id = None
+                
+            except Exception as e:
+                st.warning(f"Error al cargar modelos: {str(e)}")
+                selected_embedding_model_id = None
+            
+            # Fetch chunks for document (filtered by model if selected)
+            try:
+                chunks = manager.get_chunks_by_document(doc_id, embedding_model_id=selected_embedding_model_id)
             except Exception as e:
                 st.error(f"Error al obtener fragmentos: {str(e)}")
                 return
@@ -730,9 +768,12 @@ def render_structure_viz():
                 for c in chunks:
                     meta = c.metadata or {}
                     page = meta.get('page') if isinstance(meta, dict) else None
+                    model_name = meta.get('model_name', 'N/A')
+                    provider = meta.get('provider', 'N/A')
                     rows.append({
                         'chunk_id': meta.get('chunk_id', ''),
                         'chunk_index': meta.get('chunk_index', ''),
+                        'modelo': f"{model_name} ({provider})",
                         'page': page,
                         'preview': (c.page_content[:300] + '...') if len(c.page_content) > 300 else c.page_content
                     })
