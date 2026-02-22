@@ -25,6 +25,20 @@ EMBEDDING_MODELS = {
             "dimension": 1024,
             "description": "HuggingFace - Qwen3 Embedding 0.6B, modelo ligero (1024 dim)",
             "endpoint_url": "https://ddz32oohf81bvew1.us-east-1.aws.endpoints.huggingface.cloud"
+        },
+        "BAAI/bge-m3": {
+            "provider": "huggingface",
+            "model_name": "BAAI/bge-m3",
+            "dimension": 1024,
+            "description": "HuggingFace - BGE M3 LWY, modelo ligero (1024 dim)",
+            "endpoint_url": "https://g1vqumtf7p0plple.us-east-1.aws.endpoints.huggingface.cloud"
+        },
+        "sentence-transformers/all-mpnet-base-v2": {
+            "provider": "huggingface",
+            "model_name": "sentence-transformers/all-mpnet-base-v2",
+            "dimension": 768,
+            "description": "HuggingFace - All MPNet Base V2, modelo ligero (768 dim)",
+            "endpoint_url": "https://shrk7i1bsvrjsaxk.us-east-1.aws.endpoints.huggingface.cloud"
         }
     }
 }

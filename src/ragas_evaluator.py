@@ -280,6 +280,8 @@ Answer:"""
                 "context_relevancy": None,  # Not available in current RAGAS version
                 "test_questions_count": len(test_cases),
                 "average_retrieval_time": sum(retrieval_times) / len(retrieval_times),
+                "test_cases": test_cases,  # Include test cases in the result
+                "questions": questions,  # Include generated questions
                 "metadata": {
                     "k": k,
                     "llm_model": getattr(self.llm, 'model_name', getattr(self.llm, 'model', 'unknown')),
