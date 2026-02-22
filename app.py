@@ -40,9 +40,9 @@ def initialize_session_state():
     if "docling_docs" not in st.session_state:
         st.session_state.docling_docs = []
     if "selected_embedding_models" not in st.session_state:
-        st.session_state.selected_embedding_models = ["text-embedding-3-small"]
+        st.session_state.selected_embedding_models = ["BAAI/bge-m3"]
     if "selected_query_model" not in st.session_state:
-        st.session_state.selected_query_model = "text-embedding-3-small"
+        st.session_state.selected_query_model = "BAAI/bge-m3"
     if "selected_llm_provider" not in st.session_state:
         st.session_state.selected_llm_provider = "openai"
     if "selected_llm_model" not in st.session_state:
@@ -76,11 +76,25 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
             )
             return
 
-        # Step 2: Chunk documents (only once)
+        # Step 2: Group documents by filename and chunk each document separately
         with st.spinner("Dividiendo documentos en fragmentos..."):
             # Use first model just for chunking
             vs_manager = VectorStoreManager(embedding_model=embedding_models[0])
-            chunks = vs_manager.chunk_documents(documents)
+            
+            # Group documents by filename
+            docs_by_file = {}
+            for doc in documents:
+                filename = doc.metadata.get("filename", "unknown")
+                if filename not in docs_by_file:
+                    docs_by_file[filename] = []
+                docs_by_file[filename].append(doc)
+            
+            # Chunk each document separately
+            all_chunks_by_file = {}
+            for filename, file_docs in docs_by_file.items():
+                file_chunks = vs_manager.chunk_documents(file_docs)
+                all_chunks_by_file[filename] = file_chunks
+                st.info(f"📄 {filename}: {len(file_chunks)} fragmentos")
         
         # Step 2.5: Check for existing chunks before generating embeddings
         pgvector_mgr = PGVectorManager()
@@ -135,23 +149,28 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
             # Clear the decision after using it
             del st.session_state.replace_decision
         
-        # Step 3: Generate embeddings with each selected model
+        # Step 3: Generate embeddings with each selected model for each document
         results_summary = []
         for embedding_model in embedding_models:
-            with st.spinner(f"Generando embeddings con {embedding_model}..."):
-                # Create a new manager for this model
-                vs_manager = VectorStoreManager(embedding_model=embedding_model)
-                # Generate embeddings and save to database
-                result = vs_manager.create_vectorstore(chunks, replace_existing=replace_existing or False)
-                
-                if result['already_existed'] and not replace_existing:
-                    st.info(f"⏭Omitiendo {embedding_model}: ya existe ({result['existing_count']} chunks)")
-                elif result['chunks_saved'] > 0:
-                    st.success(f"{result['chunks_saved']} chunks guardados con modelo {embedding_model}")
-                    results_summary.append({
-                        'model': embedding_model,
-                        'chunks': result['chunks_saved']
-                    })
+            st.markdown(f"### Generando embeddings con **{embedding_model}**")
+            
+            # Process each document separately
+            for filename, file_chunks in all_chunks_by_file.items():
+                with st.spinner(f"Procesando {filename} con {embedding_model}..."):
+                    # Create a new manager for this model
+                    vs_manager = VectorStoreManager(embedding_model=embedding_model)
+                    # Generate embeddings and save to database
+                    result = vs_manager.create_vectorstore(file_chunks, replace_existing=replace_existing or False)
+                    
+                    if result['already_existed'] and not replace_existing:
+                        st.info(f"⏭ {filename}: Omitiendo (ya existe: {result['existing_count']} chunks)")
+                    elif result['chunks_saved'] > 0:
+                        st.success(f"✅ {filename}: {result['chunks_saved']} chunks guardados")
+                        results_summary.append({
+                            'model': embedding_model,
+                            'filename': filename,
+                            'chunks': result['chunks_saved']
+                        })
 
         # Step 4: Extract and save document structure for each document
         with st.spinner("Guardando estructura de documentos..."):
@@ -196,7 +215,18 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
         st.session_state.processing_status = "completed"
         
         if results_summary:
-            st.success(f"Indexación completada: {len(results_summary)} modelo(s) procesado(s)")
+            # Count unique models and files
+            unique_models = set(r['model'] for r in results_summary)
+            unique_files = set(r['filename'] for r in results_summary)
+            total_chunks = sum(r['chunks'] for r in results_summary)
+            
+            st.success(f"✅ Indexación completada: {len(unique_files)} documento(s) × {len(unique_models)} modelo(s) = {total_chunks} chunks guardados")
+            
+            # Show detailed summary
+            with st.expander("Ver detalles del procesamiento"):
+                import pandas as pd
+                df = pd.DataFrame(results_summary)
+                st.dataframe(df, use_container_width=True)
         else:
             st.info("Indexación completada (no se guardaron nuevos chunks)")
 
@@ -360,7 +390,6 @@ def render_sidebar():
             # Recreate agent immediately with new provider
             try:
                 query_model = st.session_state.selected_query_model
-                print(f"[DEBUG] Recreando agente inmediatamente con proveedor: {llm_provider}")
                 search_tool = create_search_tool(embedding_model=query_model)
                 agent = create_documentation_agent(
                     [search_tool],
@@ -388,13 +417,11 @@ def render_sidebar():
             
             # Check if model changed by comparing with previous value
             if selected_llm != previous_llm_model:
-                print(f"[DEBUG] Modelo LLM OpenAI cambiado: {previous_llm_model} -> {selected_llm}")
                 st.session_state.selected_llm_model = selected_llm
                 
                 # Recreate agent immediately with new model
                 try:
                     query_model = st.session_state.selected_query_model
-                    print(f"[DEBUG] Recreando agente inmediatamente con LLM: {selected_llm}")
                     search_tool = create_search_tool(embedding_model=query_model)
                     agent = create_documentation_agent(
                         [search_tool],
@@ -432,13 +459,11 @@ def render_sidebar():
             
             # Check if model changed by comparing with previous value
             if selected_llm != previous_llm_model:
-                print(f"[DEBUG] Modelo LLM HF cambiado: {previous_llm_model} -> {selected_llm}")
                 st.session_state.selected_llm_model = selected_llm
                 
                 # Recreate agent immediately with new model
                 try:
                     query_model = st.session_state.selected_query_model
-                    print(f"[DEBUG] Recreando agente inmediatamente con LLM HF: {selected_llm}")
                     search_tool = create_search_tool(embedding_model=query_model)
                     agent = create_documentation_agent(
                         [search_tool],
@@ -924,7 +949,6 @@ def render_chat():
     if st.session_state.agent is None:
         try:
             query_model = st.session_state.selected_query_model
-            print(f"[DEBUG] Recreando agente con modelo de consulta: {query_model}")
             search_tool = create_search_tool(embedding_model=query_model)
             agent = create_documentation_agent(
                 [search_tool],
@@ -942,13 +966,27 @@ def render_chat():
         st.info(f"**Modelo de consulta:** {st.session_state.selected_query_model}")
     with col2:
         st.info(f"**Modelo LLM:** {st.session_state.selected_llm_model}")
-    
-    print(f"[DEBUG] render_chat - selected_query_model en session_state: {st.session_state.selected_query_model}")
 
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            
+            # Show chunks if this is an assistant message with chunks
+            if message["role"] == "assistant" and "chunks" in message and message["chunks"]:
+                chunks = message["chunks"]
+                with st.expander(f"Fragmentos recuperados ({len(chunks)} chunks)", expanded=False):
+                    st.caption("Fragmentos usados para generar esta respuesta:")
+                    
+                    for chunk in chunks:
+                        st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Similitud: {chunk['similarity']}")
+                        st.caption(f"Modelo: {chunk['model_name']} | Chunk ID: {chunk.get('chunk_id', 'N/A')}")
+                        
+                        with st.container():
+                            st.text(chunk['content'][:500] + ('...' if len(chunk['content']) > 500 else ''))
+                        
+                        if len(chunks) > 1 and chunk['rank'] < len(chunks):
+                            st.divider()
 
     # Chat input in bottom container (attempt to fix positioning in tabs)
     with bottom():
@@ -1043,6 +1081,25 @@ def render_chat():
                 # Use st.write_stream for automatic token-by-token display
                 with message_placeholder.container():
                     full_response = st.write_stream(generate_response())
+                
+                # Show retrieved chunks after response
+                from src.tools import get_last_search_results
+                search_results = get_last_search_results()
+                
+                if search_results:
+                    with st.expander(f"📚 Fragmentos recuperados ({len(search_results)} chunks)", expanded=False):
+                        st.caption("Estos son los fragmentos de documentos que se usaron para generar la respuesta:")
+                        
+                        for chunk in search_results:
+                            st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Similitud: {chunk['similarity']}")
+                            st.caption(f"Modelo: {chunk['model_name']} | Chunk ID: {chunk.get('chunk_id', 'N/A')}")
+                            
+                            # Show content in a code block for better readability
+                            with st.container():
+                                st.text(chunk['content'][:500] + ('...' if len(chunk['content']) > 500 else ''))
+                            
+                            if len(search_results) > 1 and chunk['rank'] < len(search_results):
+                                st.divider()
 
             except Exception as e:
                 import traceback
@@ -1055,7 +1112,11 @@ def render_chat():
 
         # Add assistant response to history
         st.session_state.messages.append(
-            {"role": "assistant", "content": full_response}
+            {
+                "role": "assistant", 
+                "content": full_response,
+                "chunks": search_results if search_results else []
+            }
         )
 
 def render_model_comparison():
@@ -1176,6 +1237,35 @@ def render_model_comparison():
             if comparison_data:
                 df = pd.DataFrame(comparison_data)
                 st.dataframe(df, use_container_width=True)
+                
+                # Show generated questions
+                st.subheader("❓ Preguntas Generadas")
+                
+                # Get questions from first model result (all models use same questions)
+                questions_data = None
+                for model_name, metrics in results.items():
+                    if "error" not in metrics and "test_cases" in metrics:
+                        questions_data = metrics["test_cases"]
+                        break
+                
+                if questions_data:
+                    with st.expander(f"Ver {len(questions_data)} preguntas de evaluación", expanded=False):
+                        for i, test_case in enumerate(questions_data, 1):
+                            st.markdown(f"### Pregunta {i}")
+                            st.markdown(f"**❓ Pregunta:** {test_case['question']}")
+                            st.markdown(f"**✅ Respuesta esperada:** {test_case['ground_truth']}")
+                            
+                            # Show source snippet if available
+                            if 'source_document' in test_case:
+                                source_doc = test_case['source_document']
+                                if hasattr(source_doc, 'page_content'):
+                                    with st.expander("Ver fragmento fuente"):
+                                        st.text(source_doc.page_content[:500] + ('...' if len(source_doc.page_content) > 500 else ''))
+                            
+                            if i < len(questions_data):
+                                st.divider()
+                else:
+                    st.info("No hay preguntas generadas disponibles en los resultados.")
                 
                 # Visualizations
                 st.subheader("📈 Visualizaciones")

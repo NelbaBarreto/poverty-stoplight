@@ -1,10 +1,17 @@
 """
 Agent tools for document search and retrieval.
 """
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Dict, Any
 from langchain.tools import tool
 from src.pgvector_manager import PGVectorManager
 from src.embeddings_manager import EmbeddingsManager
+
+# Global variable to store last search results for UI display
+_last_search_results = []
+
+def get_last_search_results():
+    """Get the last search results for display."""
+    return _last_search_results
 
 def create_search_tool(document_id: Optional[int] = None, embedding_model: str = "text-embedding-3-small"):
     """
@@ -17,7 +24,6 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
     Returns:
         A tool function that can search the documents
     """
-    print(f"[DEBUG] create_search_tool llamado con embedding_model: {embedding_model}")
 
     @tool
     def search_documents(
@@ -31,7 +37,6 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
         """
 
         try:
-            print(f"[DEBUG] search_documents ejecutándose con embedding_model: {embedding_model}")
             # Compute embedding for the query using the specified model
             embeddings = EmbeddingsManager.create_embeddings(embedding_model)
             query_embedding = embeddings.embed_query(query)
@@ -49,6 +54,7 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
                 return "No relevant information found."
 
             context_parts = []
+            chunks_info = []  # Store structured info for UI display
 
             for i, item in enumerate(results, 1):
 
@@ -82,9 +88,24 @@ def create_search_tool(document_id: Optional[int] = None, embedding_model: str =
                     f"**{source} (pág. {page})** | sim: {round(float(score),3)}\n"
                     f"{content}"
                 )
+                
+                # Store structured info for UI
+                chunks_info.append({
+                    "rank": i,
+                    "source": source,
+                    "page": page,
+                    "similarity": round(float(score), 3),
+                    "content": content,
+                    "chunk_id": metadata.get("chunk_id"),
+                    "model_name": metadata.get("model_name", embedding_model)
+                })
 
             if not context_parts:
                 return "No relevant information found."
+            
+            # Store results globally for UI display
+            global _last_search_results
+            _last_search_results = chunks_info
 
             return "\n\n---\n\n".join(context_parts)
 
