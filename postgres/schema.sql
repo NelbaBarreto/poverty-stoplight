@@ -134,3 +134,29 @@ CREATE TABLE ragas_evaluations (
 CREATE INDEX idx_ragas_model ON ragas_evaluations(embedding_model_id);
 CREATE INDEX idx_ragas_document ON ragas_evaluations(document_id);
 CREATE INDEX idx_ragas_date ON ragas_evaluations(evaluation_date);
+
+-- Create ragas_test_questions table to persist evaluation questions
+CREATE TABLE ragas_test_questions (
+    id SERIAL PRIMARY KEY,
+    document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    ground_truth TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(document_id, question)
+);
+
+CREATE INDEX idx_ragas_test_questions_doc ON ragas_test_questions(document_id);
+CREATE INDEX idx_ragas_test_questions_created ON ragas_test_questions(created_at);
+
+-- Create ragas_test_question_embeddings table to persist embeddings per question-model
+CREATE TABLE ragas_test_question_embeddings (
+    id SERIAL PRIMARY KEY,
+    test_question_id INTEGER NOT NULL REFERENCES ragas_test_questions(id) ON DELETE CASCADE,
+    embedding_model_id INTEGER NOT NULL REFERENCES embedding_models(id) ON DELETE CASCADE,
+    embedding vector NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(test_question_id, embedding_model_id)
+);
+
+CREATE INDEX idx_ragas_test_q_embed_question ON ragas_test_question_embeddings(test_question_id);
+CREATE INDEX idx_ragas_test_q_embed_model ON ragas_test_question_embeddings(embedding_model_id);

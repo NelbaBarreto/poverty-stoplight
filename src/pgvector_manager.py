@@ -2,7 +2,7 @@
 PostgreSQL pgvector integration for storing and retrieving document chunks.
 """
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from langchain_core.documents import Document
 import psycopg2
 from psycopg2.extras import execute_values, RealDictCursor
@@ -35,6 +35,372 @@ class PGVectorManager:
         except psycopg2.OperationalError as e:
             print(f"Error connecting to database: {str(e)}")
             raise
+
+    def save_ragas_test_questions(self, test_cases: List[Any], document_id: int = None) -> int:
+        """
+        Persist RAGAS test questions to database.
+
+        Args:
+            test_cases: List of question strings or dicts containing 'question' and optional 'ground_truth'
+            document_id: Optional document ID scope (None means global/shared)
+
+        Returns:
+            Number of inserted rows
+        """
+        if not test_cases:
+            return 0
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            rows = []
+            for tc in test_cases:
+                if isinstance(tc, str):
+                    question = tc.strip()
+                    ground_truth = None
+                else:
+                    question = (tc.get("question") or "").strip()
+                    ground_truth = tc.get("ground_truth")
+
+                if not question:
+                    continue
+
+                rows.append((
+                    document_id,
+                    question,
+                    ground_truth
+                ))
+
+            if not rows:
+                return 0
+
+            execute_values(
+                cursor,
+                """
+                INSERT INTO ragas_test_questions (
+                    document_id, question, ground_truth
+                )
+                VALUES %s
+                ON CONFLICT (document_id, question)
+                DO UPDATE SET ground_truth = COALESCE(EXCLUDED.ground_truth, ragas_test_questions.ground_truth)
+                """,
+                rows,
+                template=None
+            )
+
+            inserted = cursor.rowcount
+            conn.commit()
+            return inserted
+
+        except Exception as e:
+            conn.rollback()
+            print(f"Error saving RAGAS test questions: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_ragas_test_questions(self, document_id: int = None, limit: int = 5) -> List[dict]:
+        """
+        Retrieve persisted RAGAS test questions from database.
+
+        Args:
+            document_id: Optional document ID scope. If provided, prioritize that document.
+            limit: Maximum number of questions to return
+
+        Returns:
+            List of dictionaries with question and ground_truth
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        print(f"Fetching RAGAS test questions")
+        try:
+            if document_id is not None:
+                cursor.execute(
+                    """
+                    SELECT id, question, ground_truth, created_at
+                    FROM ragas_test_questions
+                    WHERE document_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (document_id, limit)
+                )
+                rows = cursor.fetchall()
+
+                if rows and len(rows) >= limit:
+                    return [dict(r) for r in rows]
+
+                remaining = limit - len(rows)
+                if remaining > 0:
+                    cursor.execute(
+                        """
+                        SELECT id, question, ground_truth, created_at
+                        FROM ragas_test_questions
+                        WHERE document_id IS NULL
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (remaining,)
+                    )
+                    global_rows = cursor.fetchall()
+                    rows.extend(global_rows)
+
+                return [dict(r) for r in rows[:limit]]
+
+            cursor.execute(
+                """
+                SELECT id, question, ground_truth, created_at
+                FROM ragas_test_questions
+                WHERE document_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (limit,)
+            )
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
+        except Exception as e:
+            print(f"Error getting RAGAS test questions: {str(e)}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_ragas_test_question_embeddings(
+        self,
+        embedding_model: str,
+        questions: List[str],
+        document_id: int = None
+    ) -> Dict[str, List[float]]:
+        """
+        Get persisted question embeddings for a model and question set.
+
+        Args:
+            embedding_model: Embedding model name
+            questions: Questions to fetch embeddings for
+            document_id: Optional document scope
+
+        Returns:
+            Mapping question -> embedding vector
+        """
+        print(f"Fetching RAGAS test question embeddings for model '{embedding_model}' and {len(questions)} questions")
+        if not questions:
+            return {}
+
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        try:
+            cursor.execute(
+                """
+                SELECT q.question, qem.embedding
+                FROM ragas_test_question_embeddings qem
+                INNER JOIN ragas_test_questions q ON q.id = qem.test_question_id
+                INNER JOIN embedding_models em ON em.id = qem.embedding_model_id
+                WHERE em.model_name = %s
+                  AND q.document_id IS NOT DISTINCT FROM %s
+                  AND q.question = ANY(%s)
+                """,
+                (embedding_model, document_id, questions)
+            )
+
+            rows = cursor.fetchall()
+            result = {}
+            for row in rows:
+                embedding = row.get("embedding")
+                if isinstance(embedding, str):
+                    try:
+                        embedding = json.loads(embedding)
+                    except Exception:
+                        continue
+                result[row["question"]] = embedding
+            return result
+
+        except Exception as e:
+            print(f"Error getting RAGAS test question embeddings: {str(e)}")
+            return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def save_ragas_test_question_embeddings(
+        self,
+        embedding_model: str,
+        question_embeddings: Dict[str, List[float]],
+        document_id: int = None
+    ) -> int:
+        """
+        Persist question embeddings for a specific embedding model.
+
+        Args:
+            embedding_model: Embedding model name
+            question_embeddings: Mapping question -> embedding vector
+            document_id: Optional document scope
+
+        Returns:
+            Number of rows inserted/updated
+        """
+        if not question_embeddings:
+            return 0
+
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        try:
+            embedding_model_id = self.get_or_create_embedding_model(embedding_model)
+
+            questions = list(question_embeddings.keys())
+            cursor.execute(
+                """
+                SELECT id, question
+                FROM ragas_test_questions
+                WHERE document_id IS NOT DISTINCT FROM %s
+                  AND question = ANY(%s)
+                """,
+                (document_id, questions)
+            )
+            question_rows = cursor.fetchall()
+
+            if not question_rows:
+                return 0
+
+            rows_to_save = []
+            for row in question_rows:
+                question = row["question"]
+                embedding = question_embeddings.get(question)
+                if embedding is None:
+                    continue
+                rows_to_save.append(
+                    (row["id"], embedding_model_id, json.dumps(embedding))
+                )
+
+            if not rows_to_save:
+                return 0
+
+            execute_values(
+                cursor,
+                """
+                INSERT INTO ragas_test_question_embeddings (
+                    test_question_id, embedding_model_id, embedding
+                )
+                VALUES %s
+                ON CONFLICT (test_question_id, embedding_model_id)
+                DO UPDATE SET
+                    embedding = EXCLUDED.embedding,
+                    created_at = CURRENT_TIMESTAMP
+                """,
+                rows_to_save,
+                template=None
+            )
+
+            affected = cursor.rowcount
+            conn.commit()
+            return affected
+
+        except Exception as e:
+            conn.rollback()
+            print(f"Error saving RAGAS test question embeddings: {str(e)}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_saved_question_embedding(
+        self,
+        question: str,
+        embedding_model: str,
+        document_id: int = None
+    ) -> Optional[List[float]]:
+        """
+        Get one saved embedding for an exact question and model.
+
+        Priority:
+        1) Exact question in provided document scope
+        2) Exact question in global scope (document_id IS NULL)
+        3) Exact question in any scope (most recent)
+        """
+        normalized_question = (question or "").strip()
+        if not normalized_question:
+            return None
+
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        try:
+            # 1) Scoped lookup
+            if document_id is not None:
+                cursor.execute(
+                    """
+                    SELECT qem.embedding
+                    FROM ragas_test_question_embeddings qem
+                    INNER JOIN ragas_test_questions q ON q.id = qem.test_question_id
+                    INNER JOIN embedding_models em ON em.id = qem.embedding_model_id
+                    WHERE em.model_name = %s
+                      AND q.question = %s
+                      AND q.document_id = %s
+                    LIMIT 1
+                    """,
+                    (embedding_model, normalized_question, document_id)
+                )
+                row = cursor.fetchone()
+                if row:
+                    embedding = row.get("embedding")
+                    if isinstance(embedding, str):
+                        embedding = json.loads(embedding)
+                    return embedding
+
+            # 2) Global fallback
+            cursor.execute(
+                """
+                SELECT qem.embedding
+                FROM ragas_test_question_embeddings qem
+                INNER JOIN ragas_test_questions q ON q.id = qem.test_question_id
+                INNER JOIN embedding_models em ON em.id = qem.embedding_model_id
+                WHERE em.model_name = %s
+                  AND q.question = %s
+                  AND q.document_id IS NULL
+                LIMIT 1
+                """,
+                (embedding_model, normalized_question)
+            )
+            row = cursor.fetchone()
+            if row:
+                embedding = row.get("embedding")
+                if isinstance(embedding, str):
+                    embedding = json.loads(embedding)
+                return embedding
+
+            # 3) Any-scope fallback
+            cursor.execute(
+                """
+                SELECT qem.embedding
+                FROM ragas_test_question_embeddings qem
+                INNER JOIN ragas_test_questions q ON q.id = qem.test_question_id
+                INNER JOIN embedding_models em ON em.id = qem.embedding_model_id
+                WHERE em.model_name = %s
+                  AND q.question = %s
+                ORDER BY q.created_at DESC
+                LIMIT 1
+                """,
+                (embedding_model, normalized_question)
+            )
+            row = cursor.fetchone()
+            if row:
+                embedding = row.get("embedding")
+                if isinstance(embedding, str):
+                    embedding = json.loads(embedding)
+                return embedding
+
+            return None
+        except Exception as e:
+            print(f"Error getting saved question embedding: {str(e)}")
+            return None
+        finally:
+            cursor.close()
+            conn.close()
     
     def get_or_create_embedding_model(self, model_name: str) -> int:
         """
@@ -360,7 +726,7 @@ class PGVectorManager:
                 c.document_id,
                 c.chunk_text,
                 c.metadata,
-                c.embedding <-> %s::vector AS distance,
+                c.embedding <=> %s::vector AS distance,
                 em.model_name,
                 em.provider
             FROM chunks c
