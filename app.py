@@ -222,7 +222,7 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
             unique_files = set(r['filename'] for r in results_summary)
             total_chunks = sum(r['chunks'] for r in results_summary)
             
-            st.success(f"✅ Indexación completada: {len(unique_files)} documento(s) × {len(unique_models)} modelo(s) = {total_chunks} chunks guardados")
+            st.success(f"Indexación completada: {len(unique_files)} documento(s) × {len(unique_models)} modelo(s) = {total_chunks} chunks guardados")
             
             # Show detailed summary
             with st.expander("Ver detalles del procesamiento"):
@@ -1242,7 +1242,7 @@ def render_chat():
 
 def render_model_comparison():
     """Render the model comparison interface using RAGAS."""
-    st.title("🔬 Comparación de Modelos de Embeddings")
+    st.title("Comparación de Modelos de Embeddings")
     
     st.markdown("""
     Esta herramienta permite comparar el rendimiento de diferentes modelos de embeddings 
@@ -1265,7 +1265,7 @@ def render_model_comparison():
         return
     
     # Configuration section
-    st.subheader("⚙️ Configuración de Evaluación")
+    st.subheader("Configuración de Evaluación")
     
     col1, col2 = st.columns(2)
     
@@ -1383,7 +1383,7 @@ def render_model_comparison():
             st.success("Evaluación completada!")
             
             # Create comparison table
-            st.subheader("📊 Resultados de Comparación")
+            st.subheader("Resultados de Comparación")
             
             comparison_data = []
             for model_name, metrics in results.items():
@@ -1404,7 +1404,7 @@ def render_model_comparison():
                 st.dataframe(df)
                 
                 # Show generated questions
-                st.subheader("❓ Preguntas Generadas")
+                st.subheader("Preguntas Generadas")
                 
                 # Get questions from first model result (all models use same questions)
                 questions_data = None
@@ -1676,9 +1676,9 @@ Respuesta de la pregunta 2 línea 2"""
 
     col_action_1, col_action_2 = st.columns([2, 1])
     with col_action_1:
-        save_requested = st.button("💾 Guardar preguntas y embeddings", type="primary")
+        save_requested = st.button("Guardar preguntas y embeddings", type="primary")
     with col_action_2:
-        only_questions_requested = st.button("📝 Guardar solo preguntas")
+        only_questions_requested = st.button("Guardar solo preguntas")
 
     if save_requested or only_questions_requested:
         deduped_map = {}
@@ -1770,10 +1770,10 @@ def main():
 
     # Create tabs for different views
     tab1, tab2, tab3, tab4 = st.tabs([
-        "💬 Conversación",
-        "📊 Estructura del documento",
-        "🔬 Comparación de Modelos",
-        "🧪 Preguntas de Prueba"
+        "Conversación",
+        "Estructura del documento",
+        "Comparación de Modelos",
+        "Preguntas de Prueba"
     ])
 
     with tab1:
