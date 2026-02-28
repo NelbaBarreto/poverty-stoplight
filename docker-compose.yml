@@ -3,9 +3,9 @@ services:
     image: pgvector/pgvector:pg17 # PostgreSQL with pgvector support
     container_name: pgvector-db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12356789
-      POSTGRES_DB: fundacion_py_db
+      POSTGRES_USER: sgadmin
+      POSTGRES_PASSWORD: sg4dm1n!
+      POSTGRES_DB: db_rag
     ports:
       - "5432:5432"
     volumes:

@@ -1,78 +1,126 @@
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Create documents table to store document metadata
-CREATE TABLE documents (
+-- ============================================================
+-- CATALOG TABLES
+-- ============================================================
+
+-- Catalog of embedding models
+CREATE TABLE embedding_models (
     id SERIAL PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    file_type VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    model_name VARCHAR(100) NOT NULL UNIQUE,
+    table_name VARCHAR(100) NOT NULL UNIQUE,
+    dimensions INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create chunks table to store document chunks with embeddings
+-- Chunk size configurations
+CREATE TABLE chunk_configs (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,  -- small / medium / large
+    chunk_size INTEGER NOT NULL,
+    overlap INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- DOCUMENTS
+-- ============================================================
+
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL UNIQUE,
+    file_type VARCHAR(50) NOT NULL,  -- pdf / csv / md
+    file_path TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- CHUNKS (text only, no embedding stored here)
+-- ============================================================
+
 CREATE TABLE chunks (
     id SERIAL PRIMARY KEY,
     document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_config_id INTEGER NOT NULL REFERENCES chunk_configs(id),
+    format VARCHAR(20) NOT NULL,  -- markdown / plaintext
+    chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding vector(1024),
-    chunk_index INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    metadata JSONB
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create indexes for faster retrieval
 CREATE INDEX idx_chunks_document_id ON chunks(document_id);
-CREATE INDEX idx_chunks_embedding ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_chunks_metadata ON chunks USING gin (metadata);
--- Create document_summary table to store document statistics
-CREATE TABLE document_summary (
+CREATE INDEX idx_chunks_config_format ON chunks(chunk_config_id, format);
+
+-- ============================================================
+-- EMBEDDING TABLES (one per model)
+-- IVFFlat indexes are created by ingest_all.py after data load
+-- ============================================================
+
+CREATE TABLE embeddings_bge_m3 (
     id SERIAL PRIMARY KEY,
-    document_id INTEGER NOT NULL UNIQUE REFERENCES documents(id) ON DELETE CASCADE,
-    num_pages INTEGER DEFAULT 0,
-    num_texts INTEGER DEFAULT 0,
-    num_tables INTEGER DEFAULT 0,
-    num_pictures INTEGER DEFAULT 0,
-    text_types JSONB,
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE UNIQUE,
+    embedding vector(1024) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create document_hierarchy table to store document structure (headings, sections, etc.)
-CREATE TABLE document_hierarchy (
+CREATE TABLE embeddings_nomic (
     id SERIAL PRIMARY KEY,
-    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    type VARCHAR(100),
-    text TEXT,
-    page_no INTEGER,
-    level INTEGER,
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE UNIQUE,
+    embedding vector(768) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create document_tables table to store table metadata and content
-CREATE TABLE document_tables (
+CREATE TABLE embeddings_mxbai (
     id SERIAL PRIMARY KEY,
-    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    table_number INTEGER,
-    page_no INTEGER,
-    caption TEXT,
-    table_data JSONB,
-    shape VARCHAR(50),
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE UNIQUE,
+    embedding vector(1024) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create document_pictures table to store image metadata
-CREATE TABLE document_pictures (
+CREATE TABLE embeddings_minilm (
     id SERIAL PRIMARY KEY,
-    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    picture_number INTEGER,
-    page_no INTEGER,
-    caption TEXT,
-    bounding_box JSONB,
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE UNIQUE,
+    embedding vector(384) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create indexes for the new tables
-CREATE INDEX idx_document_summary_doc_id ON document_summary(document_id);
-CREATE INDEX idx_document_hierarchy_doc_id ON document_hierarchy(document_id);
-CREATE INDEX idx_document_tables_doc_id ON document_tables(document_id);
-CREATE INDEX idx_document_pictures_doc_id ON document_pictures(document_id);
+CREATE TABLE embeddings_snowflake (
+    id SERIAL PRIMARY KEY,
+    chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE UNIQUE,
+    embedding vector(1024) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- KNOWLEDGE BASE (model Q&A from base_conocimientos.pdf)
+-- ============================================================
+
+CREATE TABLE knowledge_base (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    category VARCHAR(100),               -- thematic grouping
+    phase VARCHAR(20) DEFAULT 'fase_1',  -- fase_1 | fase_futura
+    source_document VARCHAR(255) DEFAULT 'base_conocimientos.pdf',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_kb_category ON knowledge_base(category);
+CREATE INDEX idx_kb_phase    ON knowledge_base(phase);
+
+-- ============================================================
+-- SEED CATALOG DATA
+-- ============================================================
+
+INSERT INTO embedding_models (model_name, table_name, dimensions) VALUES
+    ('bge-m3',                 'embeddings_bge_m3',   1024),
+    ('nomic-embed-text',       'embeddings_nomic',     768),
+    ('mxbai-embed-large',      'embeddings_mxbai',    1024),
+    ('all-minilm',             'embeddings_minilm',    384),
+    ('snowflake-arctic-embed', 'embeddings_snowflake', 1024);
+
+INSERT INTO chunk_configs (name, chunk_size, overlap) VALUES
+    ('small',  512,  64),
+    ('medium', 1024, 128),
+    ('large',  2048, 256);
