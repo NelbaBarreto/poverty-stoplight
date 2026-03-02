@@ -47,6 +47,8 @@ def initialize_session_state():
         st.session_state.selected_llm_provider = "openai"
     if "selected_llm_model" not in st.session_state:
         st.session_state.selected_llm_model = "gpt-4o-mini"
+    if "test_question_embeddings_cache" not in st.session_state:
+        st.session_state.test_question_embeddings_cache = {}
 
 
 def process_and_index(uploaded_files, embedding_models=None, replace_existing=None):
@@ -220,13 +222,13 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
             unique_files = set(r['filename'] for r in results_summary)
             total_chunks = sum(r['chunks'] for r in results_summary)
             
-            st.success(f"✅ Indexación completada: {len(unique_files)} documento(s) × {len(unique_models)} modelo(s) = {total_chunks} chunks guardados")
+            st.success(f"Indexación completada: {len(unique_files)} documento(s) × {len(unique_models)} modelo(s) = {total_chunks} chunks guardados")
             
             # Show detailed summary
             with st.expander("Ver detalles del procesamiento"):
                 import pandas as pd
                 df = pd.DataFrame(results_summary)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df)
         else:
             st.info("Indexación completada (no se guardaron nuevos chunks)")
 
@@ -854,7 +856,7 @@ def render_structure_viz():
                         # Find matching model info
                         matching_model = next((m for m in doc_models if m['model_name'] == model_name), None)
                         if matching_model:
-                            selected_embedding_model_id = matching_model['embedding_model_id']
+                            selected_embedding_model_id = matching_model['model_id']
                 else:
                     st.info("No hay modelos de embeddings asociados a este documento.")
                     selected_embedding_model_id = None
@@ -967,10 +969,42 @@ def render_chat():
     with col2:
         st.info(f"**Modelo LLM:** {st.session_state.selected_llm_model}")
 
+    # Saved questions quick-use in conversation
+    with st.expander("Usar pregunta guardada", expanded=False):
+        try:
+            pgvector_mgr = PGVectorManager()
+            saved_questions = pgvector_mgr.get_ragas_test_questions(document_id=None, limit=100)
+        except Exception:
+            saved_questions = []
+
+        selected_saved_question = None
+        selected_saved_ground_truth = None
+        if saved_questions:
+            saved_questions_options = [q.get("question") for q in saved_questions if q.get("question")]
+            selected_saved_question = st.selectbox(
+                "Selecciona una pregunta guardada:",
+                options=saved_questions_options,
+                key="chat_saved_question_selector"
+            )
+            selected_saved_row = next(
+                (q for q in saved_questions if q.get("question") == selected_saved_question),
+                None
+            )
+            if selected_saved_row:
+                selected_saved_ground_truth = selected_saved_row.get("ground_truth")
+            send_saved_question = st.button("Enviar pregunta guardada", key="send_saved_question_btn")
+        else:
+            st.info("No hay preguntas guardadas disponibles.")
+            send_saved_question = False
+
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+            if message["role"] == "user" and message.get("expected_answer"):
+                with st.expander("Respuesta esperada", expanded=False):
+                    st.markdown(message["expected_answer"])
             
             # Show chunks if this is an assistant message with chunks
             if message["role"] == "assistant" and "chunks" in message and message["chunks"]:
@@ -979,7 +1013,7 @@ def render_chat():
                     st.caption("Fragmentos usados para generar esta respuesta:")
                     
                     for chunk in chunks:
-                        st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Similitud: {chunk['similarity']}")
+                        st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Distancia: {chunk['similarity']}")
                         st.caption(f"Modelo: {chunk['model_name']} | Chunk ID: {chunk.get('chunk_id', 'N/A')}")
                         
                         with st.container():
@@ -992,106 +1026,212 @@ def render_chat():
     with bottom():
         prompt = st.chat_input("Haz una pregunta sobre tus documentos...")
 
+    use_saved_question_embedding = bool(send_saved_question and selected_saved_question)
+    if use_saved_question_embedding:
+        prompt = selected_saved_question
+
     if prompt:
         # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        expected_answer = selected_saved_ground_truth if use_saved_question_embedding else None
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt,
+            "expected_answer": expected_answer
+        })
         with st.chat_message("user"):
             st.markdown(prompt)
+            if expected_answer:
+                with st.expander("Respuesta esperada", expanded=False):
+                    st.markdown(expected_answer)
 
         # Get agent response
         with st.chat_message("assistant"):
             # Create status and message placeholders
             status_placeholder = st.empty()
             message_placeholder = st.empty()
+            search_results = []
 
             try:
-                # Create config with thread ID for conversation memory
-                config = {"configurable": {"thread_id": "document_chat"}}
+                if use_saved_question_embedding:
+                    status_placeholder.markdown("**Buscando embedding guardado en BD...**")
 
-                # Generator function for real-time streaming
-                def generate_response():
-                    """Generator that yields tokens from LangGraph stream."""
-                    status_placeholder.markdown("**Pensando...**")
-                    first_content_token = True
-                    tool_call_detected = False
-                    final_answer_started = False
-                    token_count = 0
-                    
-                    try:
-                        # Stream with "messages" mode for real LLM tokens
-                        for msg, metadata in st.session_state.agent.stream(
-                            {"messages": [HumanMessage(content=prompt)]},
-                            config=config,
-                            stream_mode="messages",
-                        ):
-                            
-                            # Check which node is streaming
-                            langgraph_node = metadata.get("langgraph_node", "")
+                    pgvector_mgr = PGVectorManager()
+                    query_model = st.session_state.selected_query_model
+                    saved_embedding = pgvector_mgr.get_saved_question_embedding(
+                        question=prompt,
+                        embedding_model=query_model,
+                        document_id=None
+                    )
 
-                            # Skip tool outputs entirely (they contain the search results, not answer tokens)
-                            if (
-                                "tools" in langgraph_node.lower()
-                                or "tool" in langgraph_node.lower()
-                            ):
-                                if not tool_call_detected:
-                                    status_placeholder.markdown(
-                                        "**Buscando en documentos...**"
-                                    )
-                                    tool_call_detected = True
-                                continue  # Skip all tool messages
+                    if not saved_embedding:
+                        raise ValueError(
+                            f"No existe embedding guardado para esta pregunta con el modelo {query_model}. "
+                            "Genera y guarda embeddings de preguntas en la pestaña de pruebas."
+                        )
 
-                            # Only stream content from the "agent" node (the LLM's response)
-                            # if "agent" in langgraph_node.lower() and hasattr(
-                            #     msg, "content"
-                            # ):
-                            if hasattr(
-                                msg, "content"
-                            ):
-                                content = msg.content
+                    retrieved_docs = pgvector_mgr.search_similar(
+                        saved_embedding,
+                        k=8,
+                        document_id=None,
+                        embedding_model=query_model
+                    )
 
-                                # Only yield non-empty content tokens
-                                if content:
-                                    token_count += 1
-                                    
-                                    # Update status on first content token
-                                    if first_content_token:
-                                        status_placeholder.markdown(
-                                            "**Generando respuesta...**"
-                                        )
-                                        first_content_token = False
-                                        final_answer_started = True
+                    for i, doc in enumerate(retrieved_docs, 1):
+                        metadata = doc.metadata or {}
+                        source = metadata.get("filename", metadata.get("source", "Unknown source"))
+                        page = metadata.get("page", "?")
+                        distance = metadata.get("distance", 0)
+                        search_results.append({
+                            "rank": i,
+                            "source": source,
+                            "page": page,
+                            "similarity": round(float(distance), 3),
+                            "content": doc.page_content.strip(),
+                            "chunk_id": metadata.get("chunk_id"),
+                            "model_name": metadata.get("embedding_model", query_model)
+                        })
 
-                                    # Yield the token only if we're in final answer mode
-                                    if final_answer_started:
-                                        yield content
-
-                        # Clear status when streaming is complete
+                    if not search_results:
+                        full_response = "No encontré fragmentos relevantes para esa pregunta guardada."
                         status_placeholder.empty()
+                        message_placeholder.markdown(full_response)
+                    else:
+                        context = "\n\n---\n\n".join(
+                            [
+                                f"Fuente: {c['source']} (pág. {c['page']}) | distancia: {c['similarity']}\n{c['content']}"
+                                for c in search_results
+                            ]
+                        )
+
+                        context_agent = create_documentation_agent(
+                            [],
+                            model_name=st.session_state.selected_llm_model,
+                            provider=st.session_state.selected_llm_provider
+                        )
+                        config = {"configurable": {"thread_id": "document_chat_saved_question"}}
+
+                        def generate_response():
+                            """Generator that yields tokens from LLM using DB-retrieved context."""
+                            status_placeholder.markdown("**Generando respuesta...**")
+                            token_count = 0
+
+                            answer_prompt = (
+                                "Responde la pregunta usando solo el contexto proporcionado. "
+                                "Si falta información, dilo claramente. Incluye fuentes (archivo y página).\n\n"
+                                f"Pregunta: {prompt}\n\n"
+                                f"Contexto:\n{context}"
+                            )
+
+                            try:
+                                for msg, _ in context_agent.stream(
+                                    {"messages": [HumanMessage(content=answer_prompt)]},
+                                    config=config,
+                                    stream_mode="messages",
+                                ):
+                                    if hasattr(msg, "content") and msg.content:
+                                        token_count += 1
+                                        yield msg.content
+
+                                status_placeholder.empty()
+                                if token_count == 0:
+                                    yield "Lo siento, no pude generar una respuesta en este momento."
+
+                            except Exception as e:
+                                print(f"[DEBUG ERROR] Excepción en generate_response (saved): {str(e)}")
+                                import traceback
+                                traceback.print_exc()
+                                yield f"Error en stream: {str(e)}"
+
+                        with message_placeholder.container():
+                            full_response = st.write_stream(generate_response())
+                else:
+                    # Create config with thread ID for conversation memory
+                    config = {"configurable": {"thread_id": "document_chat"}}
+
+                    # Generator function for real-time streaming
+                    def generate_response():
+                        """Generator that yields tokens from LangGraph stream."""
+                        status_placeholder.markdown("**Pensando...**")
+                        first_content_token = True
+                        tool_call_detected = False
+                        final_answer_started = False
+                        token_count = 0
                         
-                        if token_count == 0:
-                            print(f"*El agente no generó respuesta. Verifica los logs.*")
-                            yield "Lo siento, no pude generar una respuesta en este momento."
+                        try:
+                            # Stream with "messages" mode for real LLM tokens
+                            for msg, metadata in st.session_state.agent.stream(
+                                {"messages": [HumanMessage(content=prompt)]},
+                                config=config,
+                                stream_mode="messages",
+                            ):
+                                
+                                # Check which node is streaming
+                                langgraph_node = metadata.get("langgraph_node", "")
 
-                    except Exception as e:
-                        print(f"[DEBUG ERROR] Excepción en generate_response: {str(e)}")
-                        import traceback
-                        traceback.print_exc()
-                        yield f"Error en stream: {str(e)}"
+                                # Skip tool outputs entirely (they contain the search results, not answer tokens)
+                                if (
+                                    "tools" in langgraph_node.lower()
+                                    or "tool" in langgraph_node.lower()
+                                ):
+                                    if not tool_call_detected:
+                                        status_placeholder.markdown(
+                                            "**Buscando en documentos...**"
+                                        )
+                                        tool_call_detected = True
+                                    continue  # Skip all tool messages
 
-                # Use st.write_stream for automatic token-by-token display
-                with message_placeholder.container():
-                    full_response = st.write_stream(generate_response())
-                
-                # Show retrieved chunks after response
-                from src.tools import get_last_search_results
-                search_results = get_last_search_results()
+                                # Only stream content from the "agent" node (the LLM's response)
+                                # if "agent" in langgraph_node.lower() and hasattr(
+                                #     msg, "content"
+                                # ):
+                                if hasattr(
+                                    msg, "content"
+                                ):
+                                    content = msg.content
+
+                                    # Only yield non-empty content tokens
+                                    if content:
+                                        token_count += 1
+                                        
+                                        # Update status on first content token
+                                        if first_content_token:
+                                            status_placeholder.markdown(
+                                                "**Generando respuesta...**"
+                                            )
+                                            first_content_token = False
+                                            final_answer_started = True
+
+                                        # Yield the token only if we're in final answer mode
+                                        if final_answer_started:
+                                            yield content
+
+                            # Clear status when streaming is complete
+                            status_placeholder.empty()
+                            
+                            if token_count == 0:
+                                print(f"*El agente no generó respuesta. Verifica los logs.*")
+                                yield "Lo siento, no pude generar una respuesta en este momento."
+
+                        except Exception as e:
+                            print(f"[DEBUG ERROR] Excepción en generate_response: {str(e)}")
+                            import traceback
+                            traceback.print_exc()
+                            yield f"Error en stream: {str(e)}"
+
+                    # Use st.write_stream for automatic token-by-token display
+                    with message_placeholder.container():
+                        full_response = st.write_stream(generate_response())
+                    
+                    # Show retrieved chunks after response
+                    from src.tools import get_last_search_results
+                    search_results = get_last_search_results()
                 
                 if search_results:
-                    with st.expander(f"📚 Fragmentos recuperados ({len(search_results)} chunks)", expanded=False):
+                    with st.expander(f"Fragmentos recuperados ({len(search_results)} chunks)", expanded=False):
                         st.caption("Estos son los fragmentos de documentos que se usaron para generar la respuesta:")
                         
                         for chunk in search_results:
-                            st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Similitud: {chunk['similarity']}")
+                            st.markdown(f"**#{chunk['rank']} - {chunk['source']}** (Página {chunk['page']}) | Distancia: {chunk['similarity']}")
                             st.caption(f"Modelo: {chunk['model_name']} | Chunk ID: {chunk.get('chunk_id', 'N/A')}")
                             
                             # Show content in a code block for better readability
@@ -1121,7 +1261,7 @@ def render_chat():
 
 def render_model_comparison():
     """Render the model comparison interface using RAGAS."""
-    st.title("🔬 Comparación de Modelos de Embeddings")
+    st.title("Comparación de Modelos de Embeddings")
     
     st.markdown("""
     Esta herramienta permite comparar el rendimiento de diferentes modelos de embeddings 
@@ -1144,7 +1284,7 @@ def render_model_comparison():
         return
     
     # Configuration section
-    st.subheader("⚙️ Configuración de Evaluación")
+    st.subheader("Configuración de Evaluación")
     
     col1, col2 = st.columns(2)
     
@@ -1190,6 +1330,26 @@ def render_model_comparison():
             max_value=10,
             value=4
         )
+
+    st.write("**Embeddings de preguntas de test:**")
+    use_preloaded_test_embeddings = st.checkbox(
+        "Precargar y reutilizar embeddings por modelo",
+        value=True,
+        help="Genera embeddings de las preguntas una vez por modelo y los reutiliza en evaluaciones posteriores para evitar llamadas repetidas al endpoint"
+    )
+
+    col_cache_1, col_cache_2 = st.columns([2, 1])
+    with col_cache_1:
+        cache_models = len(st.session_state.test_question_embeddings_cache)
+        cache_questions = sum(
+            len(model_cache)
+            for model_cache in st.session_state.test_question_embeddings_cache.values()
+        )
+        st.caption(f"Caché actual: {cache_models} modelo(s), {cache_questions} pregunta(s) embebida(s)")
+    with col_cache_2:
+        if st.button("🗑️ Limpiar caché"):
+            st.session_state.test_question_embeddings_cache = {}
+            st.success("Caché de embeddings limpiada")
     
     # Run evaluation button
     st.divider()
@@ -1204,13 +1364,37 @@ def render_model_comparison():
         # Create evaluator
         try:
             evaluator = RAGASEvaluator()
+
+            # Generate a shared test set (one time) for all models
+            with st.spinner("Generando preguntas de prueba compartidas..."):
+                test_cases = evaluator.generate_synthetic_test_cases_from_db(
+                    document_id=document_id,
+                    num_questions=num_questions
+                )
+
+            if not test_cases:
+                st.error("No se pudieron generar preguntas de prueba para la evaluación")
+                return
+
+            precomputed_embeddings_by_model = None
+            if use_preloaded_test_embeddings:
+                with st.spinner("Precargando embeddings de preguntas por modelo..."):
+                    precomputed_embeddings_by_model = evaluator.precompute_test_question_embeddings(
+                        models=selected_models,
+                        test_cases=test_cases,
+                        cache=st.session_state.test_question_embeddings_cache,
+                        document_id=document_id,
+                        persist_to_db=True
+                    )
             
             # Run comparison
             with st.spinner("Ejecutando evaluaciones... Esto puede tomar varios minutos."):
                 results = evaluator.compare_embedding_models(
                     models=selected_models,
                     document_id=document_id,
-                    test_cases=None,  # Will generate synthetic questions
+                    test_cases=test_cases,
+                    precomputed_embeddings_by_model=precomputed_embeddings_by_model,
+                    num_questions=num_questions,
                     k=k_value
                 )
             
@@ -1218,7 +1402,7 @@ def render_model_comparison():
             st.success("Evaluación completada!")
             
             # Create comparison table
-            st.subheader("📊 Resultados de Comparación")
+            st.subheader("Resultados de Comparación")
             
             comparison_data = []
             for model_name, metrics in results.items():
@@ -1236,10 +1420,10 @@ def render_model_comparison():
             
             if comparison_data:
                 df = pd.DataFrame(comparison_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df)
                 
                 # Show generated questions
-                st.subheader("❓ Preguntas Generadas")
+                st.subheader("Preguntas Generadas")
                 
                 # Get questions from first model result (all models use same questions)
                 questions_data = None
@@ -1300,7 +1484,7 @@ def render_model_comparison():
                     yaxis=dict(range=[0, 1])
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig)
                 
                 # Retrieval time comparison
                 fig2 = go.Figure()
@@ -1324,7 +1508,7 @@ def render_model_comparison():
                     yaxis_title="Tiempo (segundos)"
                 )
                 
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2)
                 
                 # Best model recommendation
                 try:
@@ -1359,12 +1543,244 @@ def render_model_comparison():
                 })
             
             df_hist = pd.DataFrame(eval_data)
-            st.dataframe(df_hist, use_container_width=True)
+            st.dataframe(df_hist)
         else:
             st.info("No hay evaluaciones históricas disponibles.")
     
     except Exception as e:
         st.warning(f"No se pudieron cargar evaluaciones históricas: {str(e)}")
+
+
+def render_test_questions_manager():
+    """Render test questions management UI (persist questions + embeddings by model)."""
+    st.title("🧪 Gestión de Preguntas de Prueba")
+    st.markdown("Guarda preguntas y respuesta esperada (opcional) y sus embeddings asociados a los modelos seleccionados.")
+
+    pgvector_mgr = PGVectorManager()
+    all_models = EmbeddingsManager.list_all_models()
+
+    try:
+        all_docs = pgvector_mgr.get_all_documents()
+    except Exception as e:
+        st.error(f"Error al cargar documentos: {str(e)}")
+        return
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        doc_options = ["Global (sin documento)"] + [f"{d['id']} - {d['filename']}" for d in all_docs]
+        selected_doc_option = st.selectbox(
+            "Documento asociado:",
+            options=doc_options,
+            help="Asocia las preguntas a un documento específico o guárdalas como globales"
+        )
+
+        document_id = None
+        if selected_doc_option != "Global (sin documento)":
+            document_id = int(selected_doc_option.split(" - ")[0])
+
+    with col2:
+        model_options = [m["name"] for m in all_models]
+        selected_models = st.multiselect(
+            "Modelos de embedding para guardar:",
+            options=model_options,
+            default=model_options if model_options else [],
+            help="Se guardarán embeddings de estas preguntas para cada modelo seleccionado"
+        )
+
+    st.write("**Fuente de carga:**")
+    source_mode = st.radio(
+        "Tipo de entrada",
+        options=["Manual", "CSV"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    default_questions = """¿Qué es la Fundación Paraguaya?"""
+
+    questions_payload = []
+    if source_mode == "Manual":
+        manual_col1, manual_col2 = st.columns(2)
+        with manual_col1:
+            questions_text = st.text_area(
+                "Preguntas a guardar (una por línea):",
+                value=default_questions,
+                height=260,
+                help="Cada línea representa una pregunta."
+            )
+        with manual_col2:
+            ground_truth_separator = "\n---\n"
+            ground_truth_text = st.text_area(
+                "Respuestas esperadas (opcional, bloque por pregunta):",
+                value="",
+                height=260,
+                help="Permite múltiples líneas por respuesta. Separa cada respuesta con una línea que contenga solo ---"
+            )
+
+        parsed_questions = [q.strip() for q in questions_text.splitlines() if q.strip()]
+        parsed_ground_truths = [
+            gt.strip()
+            for gt in ground_truth_text.split(ground_truth_separator)
+        ] if ground_truth_text.strip() else []
+
+        for index, question in enumerate(parsed_questions):
+            ground_truth = ""
+            if index < len(parsed_ground_truths):
+                ground_truth = parsed_ground_truths[index]
+
+            questions_payload.append({
+                "question": question,
+                "ground_truth": ground_truth
+            })
+
+        if parsed_questions and len(parsed_ground_truths) > len(parsed_questions):
+            st.warning("Hay más respuestas esperadas que preguntas; las líneas extra se ignorarán.")
+        elif parsed_ground_truths and len(parsed_ground_truths) < len(parsed_questions):
+            st.info("Hay menos respuestas esperadas que preguntas; las restantes se guardarán sin respuesta esperada.")
+
+        with st.expander("Formato de ejemplo para respuestas con saltos de línea", expanded=False):
+            st.code(
+                """Respuesta de la pregunta 1 línea 1
+Respuesta de la pregunta 1 línea 2
+---
+Respuesta de la pregunta 2 línea 1
+Respuesta de la pregunta 2 línea 2"""
+            )
+    else:
+        csv_file = st.file_uploader(
+            "Cargar CSV",
+            type=["csv"],
+            help="Columnas esperadas: pregunta/question y opcionalmente respuesta_esperada/ground_truth/expected_answer"
+        )
+
+        if csv_file is not None:
+            try:
+                df_csv = pd.read_csv(csv_file)
+                normalized = {str(col).strip().lower(): col for col in df_csv.columns}
+
+                question_col = None
+                for candidate in ["pregunta", "question"]:
+                    if candidate in normalized:
+                        question_col = normalized[candidate]
+                        break
+
+                answer_col = None
+                for candidate in ["respuesta_esperada", "ground_truth", "expected_answer", "answer"]:
+                    if candidate in normalized:
+                        answer_col = normalized[candidate]
+                        break
+
+                if question_col is None:
+                    st.error("El CSV debe tener columna 'pregunta' o 'question'.")
+                else:
+                    for _, row in df_csv.iterrows():
+                        question = str(row.get(question_col, "") or "").strip()
+                        if not question:
+                            continue
+
+                        ground_truth = ""
+                        if answer_col is not None:
+                            cell = row.get(answer_col, "")
+                            if pd.notna(cell):
+                                ground_truth = str(cell).strip()
+
+                        questions_payload.append({
+                            "question": question,
+                            "ground_truth": ground_truth
+                        })
+
+                    st.caption(f"CSV cargado: {len(questions_payload)} fila(s) válida(s)")
+            except Exception as e:
+                st.error(f"Error leyendo CSV: {str(e)}")
+
+    col_action_1, col_action_2 = st.columns([2, 1])
+    with col_action_1:
+        save_requested = st.button("Guardar preguntas y embeddings", type="primary")
+    with col_action_2:
+        only_questions_requested = st.button("Guardar solo preguntas")
+
+    if save_requested or only_questions_requested:
+        deduped_map = {}
+        for item in questions_payload:
+            question = (item.get("question") or "").strip()
+            if not question:
+                continue
+            existing = deduped_map.get(question)
+            if existing is None:
+                deduped_map[question] = {
+                    "question": question,
+                    "ground_truth": (item.get("ground_truth") or "").strip()
+                }
+            else:
+                if not existing.get("ground_truth") and (item.get("ground_truth") or "").strip():
+                    existing["ground_truth"] = (item.get("ground_truth") or "").strip()
+
+        unique_questions = list(deduped_map.values())
+
+        if not unique_questions:
+            st.error("Ingresa al menos una pregunta")
+            return
+
+        if save_requested and not selected_models:
+            st.error("Selecciona al menos un modelo para guardar embeddings")
+            return
+
+        try:
+            evaluator = RAGASEvaluator()
+
+            inserted_questions = pgvector_mgr.save_ragas_test_questions(
+                test_cases=unique_questions,
+                document_id=document_id
+            )
+
+            test_cases = unique_questions
+
+            if save_requested:
+                with st.spinner("Guardando embeddings por modelo..."):
+                    evaluator.precompute_test_question_embeddings(
+                        models=selected_models,
+                        test_cases=test_cases,
+                        cache=st.session_state.test_question_embeddings_cache,
+                        document_id=document_id,
+                        persist_to_db=True
+                    )
+
+                st.success(
+                    f"Guardado completado: {len(unique_questions)} pregunta(s) procesadas ({inserted_questions} nuevas) y embeddings para {len(selected_models)} modelo(s)."
+                )
+            else:
+                st.success(f"Guardado completado: {len(unique_questions)} pregunta(s) procesadas ({inserted_questions} nuevas).")
+
+        except Exception as e:
+            st.error(f"Error al guardar preguntas/embeddings: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+
+    st.divider()
+    st.subheader("Preguntas guardadas")
+
+    preview_limit = st.slider("Cantidad a mostrar:", min_value=5, max_value=100, value=20)
+    preview_doc_only = st.checkbox("Mostrar solo preguntas del documento seleccionado", value=False)
+
+    preview_document_id = document_id if preview_doc_only else None
+    saved_questions = pgvector_mgr.get_ragas_test_questions(
+        document_id=preview_document_id,
+        limit=preview_limit
+    )
+
+    if saved_questions:
+        preview_data = [
+            {
+                "ID": q.get("id"),
+                "Pregunta": q.get("question"),
+                "Respuesta esperada": q.get("ground_truth"),
+                "Creado": q.get("created_at")
+            }
+            for q in saved_questions
+        ]
+        st.dataframe(pd.DataFrame(preview_data))
+    else:
+        st.info("No hay preguntas guardadas para mostrar.")
 
 def main():
     """Main application function."""
@@ -1372,7 +1788,12 @@ def main():
     render_sidebar()
 
     # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs(["💬 Conversación", "📊 Estructura del documento", "🔬 Comparación de Modelos"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Conversación",
+        "Estructura del documento",
+        "Comparación de Modelos",
+        "Preguntas de Prueba"
+    ])
 
     with tab1:
         render_chat()
@@ -1382,6 +1803,9 @@ def main():
     
     with tab3:
         render_model_comparison()
+
+    with tab4:
+        render_test_questions_manager()
 
 
 if __name__ == "__main__":

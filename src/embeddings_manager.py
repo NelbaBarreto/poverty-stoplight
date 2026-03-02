@@ -40,6 +40,14 @@ EMBEDDING_MODELS = {
             "description": "HuggingFace - All MPNet Base V2, modelo ligero (768 dim)",
             "endpoint_url": "https://shrk7i1bsvrjsaxk.us-east-1.aws.endpoints.huggingface.cloud"
         }
+        ,
+        "nomic-embed-text-v2-moe-uba": {
+            "provider": "huggingface",
+            "model_name": "nomic-embed-text-v2-moe-uba",
+            "dimension": 768,
+            "description": "HuggingFace - Nomic Embed Text V2 MOE UBA",
+            "endpoint_url": "https://umicb7no6g9g12ua.us-east-1.aws.endpoints.huggingface.cloud"
+        }
     }
 }
 

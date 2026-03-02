@@ -114,11 +114,147 @@ Answer:"""
         
         return test_cases
 
+    def generate_synthetic_test_cases_from_db(
+        self,
+        document_id: int = None,
+        num_questions: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate synthetic test cases from stored chunks in PostgreSQL.
+
+        Args:
+            document_id: Optional document ID to filter by
+            num_questions: Number of synthetic questions to generate
+
+        Returns:
+            List of test cases with question and ground_truth
+        """
+        # 1) Try to reuse persisted questions first
+        persisted_questions = self.pgvector_manager.get_ragas_test_questions(
+            document_id=document_id,
+            limit=num_questions
+        )
+
+        test_cases: List[Dict[str, Any]] = []
+        for row in persisted_questions:
+            question = row.get("question")
+            if question:
+                test_cases.append({
+                    "question": question,
+                    "ground_truth": row.get("ground_truth") or ""
+                })
+
+        # 2) Generate missing questions if needed
+        missing_count = num_questions - len(test_cases)
+        if missing_count <= 0:
+            return test_cases[:num_questions]
+
+        conn = self.pgvector_manager.get_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT chunk_text FROM chunks"
+        params = []
+
+        if document_id:
+            query += " WHERE document_id = %s"
+            params.append(document_id)
+
+        query += " LIMIT %s"
+        params.append(max(missing_count * 3, 10))
+        cursor.execute(query, params)
+
+        docs = [Document(page_content=row[0]) for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+
+        generated_cases = self.generate_synthetic_questions(docs, num_questions=missing_count)
+
+        if generated_cases:
+            self.pgvector_manager.save_ragas_test_questions(
+                test_cases=generated_cases,
+                document_id=document_id
+            )
+
+        test_cases.extend(generated_cases)
+        return test_cases[:num_questions]
+
+    def precompute_test_question_embeddings(
+        self,
+        models: List[str],
+        test_cases: List[Dict[str, Any]],
+        cache: Dict[str, Dict[str, List[float]]] = None,
+        document_id: int = None,
+        persist_to_db: bool = True
+    ) -> Dict[str, List[List[float]]]:
+        """
+        Precompute question embeddings for each model, reusing cache when available.
+
+        Args:
+            models: Embedding models to precompute
+            test_cases: Test cases containing a `question` field
+            cache: Optional mutable cache {model: {question: embedding}}
+            document_id: Optional document scope for persisted embeddings
+            persist_to_db: Persist newly computed embeddings in DB
+
+        Returns:
+            Mapping {model: [embedding_in_test_case_order]}
+        """
+        if cache is None:
+            cache = {}
+
+        precomputed = {}
+        questions = [tc.get("question", "") for tc in test_cases]
+
+        for model in models:
+            model_cache = cache.setdefault(model, {})
+            model_embeddings = []
+
+            # Load persisted embeddings from DB for uncached questions
+            db_candidates = [q for q in questions if q and q not in model_cache]
+            if db_candidates:
+                persisted = self.pgvector_manager.get_ragas_test_question_embeddings(
+                    embedding_model=model,
+                    questions=db_candidates,
+                    document_id=document_id
+                )
+                model_cache.update(persisted)
+
+            uncached_questions = [q for q in questions if q and q not in model_cache]
+
+            embeddings_provider = None
+            if uncached_questions:
+                embeddings_provider = EmbeddingsManager.create_embeddings(model)
+
+            newly_computed = {}
+
+            for question in questions:
+                if not question:
+                    continue
+
+                if question not in model_cache:
+                    embedding = embeddings_provider.embed_query(question)
+                    model_cache[question] = embedding
+                    newly_computed[question] = embedding
+
+                model_embeddings.append(model_cache[question])
+
+            if persist_to_db and newly_computed:
+                self.pgvector_manager.save_ragas_test_question_embeddings(
+                    embedding_model=model,
+                    question_embeddings=newly_computed,
+                    document_id=document_id
+                )
+
+            precomputed[model] = model_embeddings
+
+        return precomputed
+
     def evaluate_embedding_model(
         self,
         embedding_model: str,
         document_id: int = None,
         test_cases: List[Dict[str, Any]] = None,
+        precomputed_question_embeddings: List[List[float]] = None,
         k: int = 4
     ) -> Dict[str, Any]:
         """
@@ -135,31 +271,18 @@ Answer:"""
         """
         print(f"\n=== Evaluating model: {embedding_model} ===")
         
-        # Create embeddings provider
-        embeddings = EmbeddingsManager.create_embeddings(embedding_model)
+        # Create embeddings provider only if embeddings are not precomputed
+        embeddings = None
+        if precomputed_question_embeddings is None:
+            embeddings = EmbeddingsManager.create_embeddings(embedding_model)
         
         # If no test cases provided, generate them
         if test_cases is None:
             print("Generating synthetic test questions...")
-            # Get some documents to generate questions from
-            conn = self.pgvector_manager.get_connection()
-            cursor = conn.cursor()
-            
-            query = "SELECT chunk_text FROM chunks"
-            params = []
-            
-            if document_id:
-                query += " WHERE document_id = %s"
-                params.append(document_id)
-            
-            query += " LIMIT 10"
-            cursor.execute(query, params)
-            
-            docs = [Document(page_content=row[0]) for row in cursor.fetchall()]
-            cursor.close()
-            conn.close()
-            
-            test_cases = self.generate_synthetic_questions(docs, num_questions=5)
+            test_cases = self.generate_synthetic_test_cases_from_db(
+                document_id=document_id,
+                num_questions=5
+            )
         
         if not test_cases:
             raise ValueError("No test cases available for evaluation")
@@ -175,11 +298,14 @@ Answer:"""
         
         for i, test_case in enumerate(test_cases):
             question = test_case["question"]
-            ground_truth = test_case["ground_truth"]
+            ground_truth = test_case.get("ground_truth", "")
             
             # Retrieve contexts
             start_time = time.time()
-            query_embedding = embeddings.embed_query(question)
+            if precomputed_question_embeddings is not None and i < len(precomputed_question_embeddings):
+                query_embedding = precomputed_question_embeddings[i]
+            else:
+                query_embedding = embeddings.embed_query(question)
             retrieved_docs = self.pgvector_manager.search_similar(
                 query_embedding,
                 k=k,
@@ -309,6 +435,8 @@ Answer:"""
         models: List[str],
         document_id: int = None,
         test_cases: List[Dict[str, Any]] = None,
+        precomputed_embeddings_by_model: Dict[str, List[List[float]]] = None,
+        num_questions: int = 5,
         k: int = 4
     ) -> Dict[str, Dict[str, Any]]:
         """
@@ -324,11 +452,26 @@ Answer:"""
             Dictionary mapping model names to their evaluation metrics
         """
         results = {}
+
+        # Generate one shared test set for all models if not provided
+        if test_cases is None:
+            test_cases = self.generate_synthetic_test_cases_from_db(
+                document_id=document_id,
+                num_questions=num_questions
+            )
         
         for model in models:
             try:
+                model_precomputed = None
+                if precomputed_embeddings_by_model:
+                    model_precomputed = precomputed_embeddings_by_model.get(model)
+
                 metrics = self.evaluate_embedding_model(
-                    model, document_id, test_cases, k
+                    embedding_model=model,
+                    document_id=document_id,
+                    test_cases=test_cases,
+                    precomputed_question_embeddings=model_precomputed,
+                    k=k
                 )
                 results[model] = metrics
                 
