@@ -8,6 +8,7 @@ __pycache__/
 venv/
 .venv/
 *.egg-info/
-
+db/*.sql
+db/*.sql.gz
 # Chroma
 chroma_db/
