@@ -114,7 +114,6 @@ class PGVectorManager:
         """
         conn = self.get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        print(f"Fetching RAGAS test questions")
         try:
             if document_id is not None:
                 cursor.execute(
@@ -186,7 +185,6 @@ class PGVectorManager:
         Returns:
             Mapping question -> embedding vector
         """
-        print(f"Fetching RAGAS test question embeddings for model '{embedding_model}' and {len(questions)} questions")
         if not questions:
             return {}
 

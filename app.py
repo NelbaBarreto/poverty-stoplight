@@ -856,7 +856,7 @@ def render_structure_viz():
                         # Find matching model info
                         matching_model = next((m for m in doc_models if m['model_name'] == model_name), None)
                         if matching_model:
-                            selected_embedding_model_id = matching_model['embedding_model_id']
+                            selected_embedding_model_id = matching_model['model_id']
                 else:
                     st.info("No hay modelos de embeddings asociados a este documento.")
                     selected_embedding_model_id = None
@@ -978,6 +978,7 @@ def render_chat():
             saved_questions = []
 
         selected_saved_question = None
+        selected_saved_ground_truth = None
         if saved_questions:
             saved_questions_options = [q.get("question") for q in saved_questions if q.get("question")]
             selected_saved_question = st.selectbox(
@@ -985,6 +986,12 @@ def render_chat():
                 options=saved_questions_options,
                 key="chat_saved_question_selector"
             )
+            selected_saved_row = next(
+                (q for q in saved_questions if q.get("question") == selected_saved_question),
+                None
+            )
+            if selected_saved_row:
+                selected_saved_ground_truth = selected_saved_row.get("ground_truth")
             send_saved_question = st.button("Enviar pregunta guardada", key="send_saved_question_btn")
         else:
             st.info("No hay preguntas guardadas disponibles.")
@@ -994,6 +1001,10 @@ def render_chat():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+            if message["role"] == "user" and message.get("expected_answer"):
+                with st.expander("Respuesta esperada", expanded=False):
+                    st.markdown(message["expected_answer"])
             
             # Show chunks if this is an assistant message with chunks
             if message["role"] == "assistant" and "chunks" in message and message["chunks"]:
@@ -1021,9 +1032,17 @@ def render_chat():
 
     if prompt:
         # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        expected_answer = selected_saved_ground_truth if use_saved_question_embedding else None
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt,
+            "expected_answer": expected_answer
+        })
         with st.chat_message("user"):
             st.markdown(prompt)
+            if expected_answer:
+                with st.expander("Respuesta esperada", expanded=False):
+                    st.markdown(expected_answer)
 
         # Get agent response
         with st.chat_message("assistant"):
