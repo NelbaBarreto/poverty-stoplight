@@ -1,7 +1,7 @@
 """
 Vector store management for document storage and retrieval.
 """
-from typing import List
+from typing import List, Callable
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.pgvector_manager import PGVectorManager
@@ -11,24 +11,57 @@ from src.embeddings_manager import EmbeddingsManager
 class VectorStoreManager:
     """Manages document chunking, embedding, and vector storage."""
 
-    def __init__(self, embedding_model: str = "text-embedding-3-small"):
+    def __init__(
+        self,
+        embedding_model: str = "text-embedding-3-small",
+        chunk_size: int = 1000,
+        chunk_overlap: int = 100,
+        length_function_name: str = "characters",
+    ):
         """
         Initialize the vector store manager.
         
         Args:
             embedding_model: Name of the embedding model to use
+            chunk_size: Target chunk size
+            chunk_overlap: Overlap between consecutive chunks
+            length_function_name: Unit for measuring chunk length (characters, words, tokens)
         """
         # Create embeddings provider
         self.embedding_model = embedding_model
         self.embeddings = EmbeddingsManager.create_embeddings(embedding_model)
+
+        self.chunk_size = max(1, int(chunk_size))
+        self.chunk_overlap = max(0, min(int(chunk_overlap), self.chunk_size - 1))
+        self.length_function_name = length_function_name
+        self.length_function = self._get_length_function(length_function_name)
         
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=100,
-            length_function=len,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            length_function=self.length_function,
         )
         self.pgvector_manager = PGVectorManager()
         self.vectorstore = None
+
+    def _get_length_function(self, length_function_name: str) -> Callable[[str], int]:
+        """Get length function for chunking."""
+        normalized = (length_function_name or "characters").lower()
+
+        if normalized == "words":
+            return lambda text: len((text or "").split())
+
+        if normalized == "tokens":
+            try:
+                import tiktoken
+
+                encoding = tiktoken.get_encoding("cl100k_base")
+                return lambda text: len(encoding.encode(text or ""))
+            except Exception:
+                print("Warning: tiktoken unavailable, falling back to character length")
+                return lambda text: len(text or "")
+
+        return lambda text: len(text or "")
 
     def chunk_documents(self, documents: List[Document]) -> List[Document]:
         """

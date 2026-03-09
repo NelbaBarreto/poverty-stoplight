@@ -29,6 +29,14 @@ class DocumentProcessor:
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
 
+    def _export_markdown(self, docling_document) -> str:
+        """Export document content as markdown (export_to_text is deprecated)."""
+        try:
+            print("Exporting markdown content...")
+            return docling_document.export_to_markdown()
+        except Exception:
+            return ""
+
     def process_uploaded_files(self, uploaded_files) -> tuple[List[Document], List[Any]]:
         """
         Process uploaded files and convert them to LangChain Document objects.
@@ -56,12 +64,15 @@ class DocumentProcessor:
                 try:
                     result = self.converter.convert(temp_file_path)
 
-                    # Export to markdown
-                    markdown_content = result.document.export_to_markdown()
+                    # Export to markdown (export_to_text is deprecated)
+                    document_content = self._export_markdown(result.document)
+                    if not document_content.strip():
+                        print(f"No se pudo extraer texto de {uploaded_file.name}")
+                        continue
 
                     # Create LangChain document
                     doc = Document(
-                        page_content=markdown_content,
+                        page_content=document_content,
                         metadata={
                             "filename": uploaded_file.name,
                             "file_type": uploaded_file.type,

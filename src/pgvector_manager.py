@@ -933,11 +933,11 @@ class PGVectorManager:
             conn.close()
     def save_document_structure(self, document_id: int, structure: dict) -> bool:
         """
-        Save complete document structure (summary, hierarchy, tables, pictures).
+        Save complete document structure (summary, hierarchy, tables).
 
         Args:
             document_id: ID of the document
-            structure: Dictionary with 'summary', 'hierarchy', 'tables', 'pictures' keys
+            structure: Dictionary with 'summary', 'hierarchy', 'tables' keys
 
         Returns:
             True if successful, False otherwise
@@ -946,6 +946,12 @@ class PGVectorManager:
         cursor = conn.cursor()
 
         try:
+            # Remove image metadata for this document (deprecated in current pipeline)
+            cursor.execute(
+                "DELETE FROM document_pictures WHERE document_id = %s",
+                (document_id,)
+            )
+
             # Save summary
             summary = structure.get('summary', {})
             cursor.execute(
@@ -964,7 +970,7 @@ class PGVectorManager:
                     summary.get('num_pages', 0),
                     summary.get('num_texts', 0),
                     summary.get('num_tables', 0),
-                    summary.get('num_pictures', 0),
+                    0,
                     json.dumps(summary.get('text_types', {}))
                 )
             )
@@ -1015,24 +1021,6 @@ class PGVectorManager:
                 )
             print(f"Saved {len(tables)} tables for document {document_id}")
 
-            # Save pictures metadata
-            pictures = structure.get('pictures', [])
-            for pic in pictures:
-                cursor.execute(
-                    """
-                    INSERT INTO document_pictures (document_id, picture_number, page_no, caption, bounding_box)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (
-                        document_id,
-                        pic.get('picture_number', 0),
-                        pic.get('page', None),
-                        pic.get('caption', ''),
-                        json.dumps(pic.get('bounding_box', {})) if pic.get('bounding_box') else None
-                    )
-                )
-            print(f"Saved {len(pictures)} pictures for document {document_id}")
-
             conn.commit()
             return True
 
@@ -1071,7 +1059,7 @@ class PGVectorManager:
                     'num_pages': summary_row['num_pages'],
                     'num_texts': summary_row['num_texts'],
                     'num_tables': summary_row['num_tables'],
-                    'num_pictures': summary_row['num_pictures'],
+                    'num_pictures': 0,
                     'text_types': summary_row['text_types'] or {}
                 }
 
@@ -1111,27 +1099,37 @@ class PGVectorManager:
                         pass
                 tables.append(table_dict)
             structure['tables'] = tables
-
-            # Get pictures
-            cursor.execute(
-                "SELECT picture_number, page_no, caption, bounding_box FROM document_pictures WHERE document_id = %s ORDER BY picture_number",
-                (document_id,)
-            )
-            pictures = []
-            for row in cursor.fetchall():
-                pictures.append({
-                    'picture_number': row['picture_number'],
-                    'page': row['page_no'],
-                    'caption': row['caption'],
-                    'bounding_box': row['bounding_box'] or {}
-                })
-            structure['pictures'] = pictures
+            structure['pictures'] = []
 
             return structure
 
         except Exception as e:
             print(f"Error retrieving document structure: {str(e)}")
             return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def purge_all_picture_metadata(self) -> int:
+        """
+        Delete all image/geometric metadata from database.
+
+        Returns:
+            Number of deleted rows
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("DELETE FROM document_pictures")
+            deleted_rows = cursor.rowcount or 0
+            cursor.execute("UPDATE document_summary SET num_pictures = 0")
+            conn.commit()
+            return deleted_rows
+        except Exception as e:
+            conn.rollback()
+            print(f"Error deleting picture metadata: {str(e)}")
+            return 0
         finally:
             cursor.close()
             conn.close()

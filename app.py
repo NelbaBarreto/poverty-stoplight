@@ -49,6 +49,12 @@ def initialize_session_state():
         st.session_state.selected_llm_model = "gpt-4o-mini"
     if "test_question_embeddings_cache" not in st.session_state:
         st.session_state.test_question_embeddings_cache = {}
+    if "chunk_size" not in st.session_state:
+        st.session_state.chunk_size = 1000
+    if "chunk_overlap" not in st.session_state:
+        st.session_state.chunk_overlap = 100
+    if "chunk_length_function" not in st.session_state:
+        st.session_state.chunk_length_function = "characters"
 
 
 def process_and_index(uploaded_files, embedding_models=None, replace_existing=None):
@@ -61,8 +67,18 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
         if not embedding_models:
             st.error("No hay modelos de embeddings seleccionados")
             return
+
+        chunk_size = int(st.session_state.chunk_size)
+        chunk_overlap = int(st.session_state.chunk_overlap)
+        chunk_length_function = st.session_state.chunk_length_function
+        if chunk_overlap >= chunk_size:
+            chunk_overlap = max(0, chunk_size - 1)
+            st.session_state.chunk_overlap = chunk_overlap
         
         st.info(f"Usando {len(embedding_models)} modelo(s) de embeddings: **{', '.join(embedding_models)}**")
+        st.info(
+            f"Chunking: size={chunk_size}, overlap={chunk_overlap}, length={chunk_length_function}"
+        )
         
         # Step 1: Process documents with Docling
         with st.spinner(
@@ -81,7 +97,12 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
         # Step 2: Group documents by filename and chunk each document separately
         with st.spinner("Dividiendo documentos en fragmentos..."):
             # Use first model just for chunking
-            vs_manager = VectorStoreManager(embedding_model=embedding_models[0])
+            vs_manager = VectorStoreManager(
+                embedding_model=embedding_models[0],
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                length_function_name=chunk_length_function,
+            )
             
             # Group documents by filename
             docs_by_file = {}
@@ -160,7 +181,12 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
             for filename, file_chunks in all_chunks_by_file.items():
                 with st.spinner(f"Procesando {filename} con {embedding_model}..."):
                     # Create a new manager for this model
-                    vs_manager = VectorStoreManager(embedding_model=embedding_model)
+                    vs_manager = VectorStoreManager(
+                        embedding_model=embedding_model,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        length_function_name=chunk_length_function,
+                    )
                     # Generate embeddings and save to database
                     result = vs_manager.create_vectorstore(file_chunks, replace_existing=replace_existing or False)
                     
@@ -176,6 +202,12 @@ def process_and_index(uploaded_files, embedding_models=None, replace_existing=No
 
         # Step 4: Extract and save document structure for each document
         with st.spinner("Guardando estructura de documentos..."):
+            deleted_picture_rows = pgvector_mgr.purge_all_picture_metadata()
+            if deleted_picture_rows > 0:
+                st.info(
+                    f"Se eliminaron {deleted_picture_rows} registros previos de imágenes/metadatos geométricos"
+                )
+
             for docling_doc_data in docling_docs:
                 try:
                     # Extract structure
@@ -370,6 +402,37 @@ def render_sidebar():
             # Fallback to first selected model
             if selected_models:
                 st.session_state.selected_query_model = selected_models[0]
+
+        st.divider()
+        st.subheader("Chunking")
+
+        st.session_state.chunk_size = st.slider(
+            "Chunk size",
+            min_value=200,
+            max_value=3000,
+            value=int(st.session_state.chunk_size),
+            step=100,
+            help="Tamaño objetivo de cada fragmento",
+        )
+
+        max_overlap = max(0, int(st.session_state.chunk_size) - 1)
+        st.session_state.chunk_overlap = st.slider(
+            "Chunk overlap",
+            min_value=0,
+            max_value=max_overlap,
+            value=min(int(st.session_state.chunk_overlap), max_overlap),
+            step=10,
+            help="Solapamiento entre fragmentos consecutivos",
+        )
+
+        st.session_state.chunk_length_function = st.selectbox(
+            "Length function",
+            options=["characters", "words", "tokens"],
+            index=["characters", "words", "tokens"].index(st.session_state.chunk_length_function)
+            if st.session_state.chunk_length_function in ["characters", "words", "tokens"]
+            else 0,
+            help="Unidad usada para medir tamaño de fragmento",
+        )
 
         st.divider()
         
@@ -633,20 +696,18 @@ def render_structure_viz():
         visualizer = DocumentStructureVisualizer(selected_doc_data['doc'])
 
         # Display structure in tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Jerarquía", "Tablas", "Imágenes"])
+        tab1, tab2, tab3 = st.tabs(["Resumen", "Jerarquía", "Tablas"])
 
         with tab1:
             st.subheader("Resumen del documento")
             summary = visualizer.get_document_summary()
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Páginas", summary['num_pages'])
             with col2:
                 st.metric("Tablas", summary['num_tables'])
             with col3:
-                st.metric("Imágenes", summary['num_pictures'])
-            with col4:
                 st.metric("Elementos de texto", summary['num_texts'])
 
             st.subheader("Tipos de contenido")
@@ -687,33 +748,6 @@ def render_structure_viz():
             else:
                 st.info("No se encontraron tablas en este documento")
 
-        with tab4:
-            st.subheader("Imágenes")
-            pictures_info = visualizer.get_pictures_info()
-
-            if pictures_info:
-                for pic_data in pictures_info:
-                    st.markdown(f"**Imagen {pic_data['picture_number']}** (Página {pic_data['page']})")
-
-                    if pic_data['caption']:
-                        st.caption(pic_data['caption'])
-
-                    # Display the actual image if available
-                    if pic_data['pil_image'] is not None:
-                        st.image(pic_data['pil_image'])
-                    else:
-                        st.info("Datos de la imagen no disponibles")
-
-                    # Show bounding box info
-                    if pic_data['bounding_box']:
-                        bbox = pic_data['bounding_box']
-                        with st.expander("📐 Detalles de posición"):
-                            st.text(f"Posición: ({bbox['left']:.1f}, {bbox['top']:.1f}) - ({bbox['right']:.1f}, {bbox['bottom']:.1f})")
-
-                    st.divider()
-            else:
-                st.info("No se encontraron imágenes en este documento")
-
     else:
         # Base de datos: show persisted documents and their structure
         try:
@@ -748,21 +782,19 @@ def render_structure_viz():
             return
 
         # Display structure in tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Resumen", "Jerarquía", "Tablas", "Imágenes", "Fragmentos"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Jerarquía", "Tablas", "Fragmentos"])
 
         with tab1:
             st.subheader("Resumen del documento")
             if 'summary' in structure:
                 summary = structure['summary']
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Páginas", summary.get('num_pages', 0))
                 with col2:
                     st.metric("Elementos de texto", summary.get('num_texts', 0))
                 with col3:
                     st.metric("Tablas", summary.get('num_tables', 0))
-                with col4:
-                    st.metric("Imágenes", summary.get('num_pictures', 0))
 
                 st.subheader("Tipos de contenido")
                 text_types = summary.get('text_types', {})
@@ -806,26 +838,6 @@ def render_structure_viz():
                 st.info("No se encontraron tablas en este documento")
 
         with tab4:
-            st.subheader("Imágenes")
-            pictures = structure.get('pictures', [])
-            if pictures:
-                for pic_data in pictures:
-                    st.markdown(f"**Imagen {pic_data.get('picture_number')}** (Página {pic_data.get('page')})")
-
-                    if pic_data.get('caption'):
-                        st.caption(pic_data['caption'])
-
-                    # Show bounding box info
-                    if pic_data.get('bounding_box'):
-                        bbox = pic_data['bounding_box']
-                        with st.expander("📐 Detalles de posición"):
-                            st.text(f"Posición: ({bbox.get('left', 0):.1f}, {bbox.get('top', 0):.1f}) - ({bbox.get('right', 0):.1f}, {bbox.get('bottom', 0):.1f})")
-
-                    st.divider()
-            else:
-                st.info("No se encontraron imágenes en este documento")
-
-        with tab5:
             st.subheader("Fragmentos de texto")
             
             # Get available embedding models for this document

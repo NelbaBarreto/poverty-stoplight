@@ -108,45 +108,7 @@ class DocumentStructureVisualizer:
         Returns:
             List of dictionaries with picture information and PIL images
         """
-        pictures_info = []
-
-        if not hasattr(self.doc, 'pictures') or not self.doc.pictures:
-            return pictures_info
-
-        for i, pic in enumerate(self.doc.pictures, 1):
-            prov = getattr(pic, 'prov', [])
-
-            if prov:
-                page_no = prov[0].page_no
-                bbox = prov[0].bbox
-
-                # Get caption if available
-                caption_text = getattr(pic, 'caption_text', None)
-                caption = caption_text if caption_text and not callable(caption_text) else None
-
-                # Get PIL image if available
-                pil_image = None
-                try:
-                    if hasattr(pic, 'image') and pic.image is not None:
-                        if hasattr(pic.image, 'pil_image'):
-                            pil_image = pic.image.pil_image
-                except Exception as e:
-                    print(f"Warning: Could not extract image {i}: {e}")
-
-                pictures_info.append({
-                    'picture_number': i,
-                    'page': page_no,
-                    'caption': caption,
-                    'pil_image': pil_image,  # Add PIL image
-                    'bounding_box': {
-                        'left': bbox.l,
-                        'top': bbox.t,
-                        'right': bbox.r,
-                        'bottom': bbox.b
-                    } if bbox else None
-                })
-
-        return pictures_info
+        return []
 
     def get_document_summary(self) -> Dict[str, Any]:
         """
@@ -171,7 +133,7 @@ class DocumentStructureVisualizer:
             'num_pages': len(pages) if pages else 0,
             'num_texts': len(texts),
             'num_tables': len(tables),
-            'num_pictures': len(pictures),
+            'num_pictures': 0,
             'text_types': text_types
         }
 
