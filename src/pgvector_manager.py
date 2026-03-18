@@ -201,6 +201,58 @@ class PGVectorManager:
             cursor.close()
             conn.close()
 
+    def search_similar_new_schema(
+        self,
+        embedding: List[float],
+        embed_table: str,
+        chunk_config_name: str,
+        k: int = 8,
+    ) -> List[Document]:
+        """Search using the multi-embedding schema (embeddings_bge_m3, etc.)."""
+        ALLOWED_TABLES = {
+            "embeddings_bge_m3", "embeddings_nomic", "embeddings_mxbai",
+            "embeddings_minilm", "embeddings_snowflake",
+        }
+        if embed_table not in ALLOWED_TABLES:
+            raise ValueError(f"Invalid embed_table: {embed_table}")
+
+        conn = self.get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        try:
+            embedding_str = "[" + ",".join(str(e) for e in embedding) + "]"
+            query = f"""
+                SELECT c.id, c.chunk_text, c.metadata,
+                       d.filename, d.file_type,
+                       e.embedding <-> %s::vector AS distance
+                FROM {embed_table} e
+                JOIN chunks c       ON e.chunk_id        = c.id
+                JOIN chunk_configs cc ON c.chunk_config_id = cc.id
+                JOIN documents d    ON c.document_id     = d.id
+                WHERE cc.name = %s
+                ORDER BY distance
+                LIMIT %s
+            """
+            cursor.execute(query, [embedding_str, chunk_config_name, k])
+            documents = []
+            for row in cursor.fetchall():
+                raw_meta = row.get("metadata") or {}
+                metadata = raw_meta.copy() if isinstance(raw_meta, dict) else {}
+                metadata.update({
+                    "chunk_id":  row.get("id"),
+                    "filename":  row.get("filename"),
+                    "file_type": row.get("file_type"),
+                    "format":    row.get("file_type"),
+                    "distance":  float(row.get("distance", 0)),
+                })
+                documents.append(Document(page_content=row.get("chunk_text", ""), metadata=metadata))
+            return documents
+        except Exception as e:
+            print(f"Error in search_similar_new_schema: {e}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
     def get_chunks_by_document(self, document_id: int) -> List[Document]:
         """
         Retrieve all chunks for a specific document.
