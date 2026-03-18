@@ -14,3 +14,8 @@ langchain-text-splitters
 numpy
 psycopg2-binary
 sqlalchemy
+langchain-ollama
+tqdm
+tabulate
+ragas
+datasets

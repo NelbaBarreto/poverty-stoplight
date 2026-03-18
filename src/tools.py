@@ -9,6 +9,21 @@ from src.pgvector_manager import PGVectorManager
 OLLAMA_URL = "http://localhost:11434/api/embeddings"
 EMBED_MODEL = "bge-m3"
 
+EMBED_MODEL_TABLE = {
+    "bge-m3":                  "embeddings_bge_m3",
+    "nomic-embed-text":        "embeddings_nomic",
+    "mxbai-embed-large":       "embeddings_mxbai",
+    "all-minilm":              "embeddings_minilm",
+    "snowflake-arctic-embed":  "embeddings_snowflake",
+}
+
+
+def get_query_embedding(embed_model: str, query: str) -> list:
+    """Get embedding vector for a query using Ollama."""
+    resp = requests.post(OLLAMA_URL, json={"model": embed_model, "prompt": query})
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
 def create_search_tool(document_id: Optional[int] = None):
     """
     Create a search tool that retrieves from PostgreSQL pgvector database.
