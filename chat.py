@@ -21,7 +21,6 @@ st.set_page_config(
 AVAILABLE_LLM_MODELS = [
     "qwen3:8b",
     "gpt-oss:20b",
-    "deepseek-r1:32b",
     "deepseek-r1:14b",
     "deepseek-r1:8b",
     "llama3.2:latest",
