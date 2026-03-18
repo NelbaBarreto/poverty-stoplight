@@ -19,6 +19,7 @@ st.set_page_config(
 
 # ── LLM models available locally ─────────────────────────────
 AVAILABLE_LLM_MODELS = [
+    "qwen3:8b",
     "gpt-oss:20b",
     "deepseek-r1:32b",
     "deepseek-r1:14b",
