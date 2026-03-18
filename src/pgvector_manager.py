@@ -221,13 +221,13 @@ class PGVectorManager:
         try:
             embedding_str = "[" + ",".join(str(e) for e in embedding) + "]"
             query = f"""
-                SELECT c.id, c.chunk_text, c.metadata,
+                SELECT c.id, c.chunk_text, c.format, c.chunk_index,
                        d.filename, d.file_type,
                        e.embedding <-> %s::vector AS distance
                 FROM {embed_table} e
-                JOIN chunks c       ON e.chunk_id        = c.id
+                JOIN chunks c         ON e.chunk_id        = c.id
                 JOIN chunk_configs cc ON c.chunk_config_id = cc.id
-                JOIN documents d    ON c.document_id     = d.id
+                JOIN documents d      ON c.document_id     = d.id
                 WHERE cc.name = %s
                 ORDER BY distance
                 LIMIT %s
@@ -235,15 +235,14 @@ class PGVectorManager:
             cursor.execute(query, [embedding_str, chunk_config_name, k])
             documents = []
             for row in cursor.fetchall():
-                raw_meta = row.get("metadata") or {}
-                metadata = raw_meta.copy() if isinstance(raw_meta, dict) else {}
-                metadata.update({
-                    "chunk_id":  row.get("id"),
-                    "filename":  row.get("filename"),
-                    "file_type": row.get("file_type"),
-                    "format":    row.get("file_type"),
-                    "distance":  float(row.get("distance", 0)),
-                })
+                metadata = {
+                    "chunk_id":    row.get("id"),
+                    "filename":    row.get("filename"),
+                    "file_type":   row.get("file_type"),
+                    "format":      row.get("format"),
+                    "chunk_index": row.get("chunk_index"),
+                    "distance":    float(row.get("distance", 0)),
+                }
                 documents.append(Document(page_content=row.get("chunk_text", ""), metadata=metadata))
             return documents
         except Exception as e:
