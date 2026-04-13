@@ -137,11 +137,11 @@ def upsert_score(conn, eval_run_id: int, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def fetch_pending_faithfulness(conn, llm_filter, embed_filter, chunk_filter, questions_limit=None) -> list[dict]:
-    """Return scored eval_runs that still have NULL faithfulness."""
+    """Return scored eval_runs that still have NULL faithfulness OR NULL context_precision."""
     where_clauses = [
         "er.status = 'success'",
         "es.status = 'success'",
-        "es.faithfulness IS NULL",
+        "(es.faithfulness IS NULL OR es.context_precision IS NULL)",
     ]
     params: list = []
 

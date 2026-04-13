@@ -438,14 +438,16 @@ def fetch_data(conn, questions_limit=None) -> list[dict]:
             es.context_precision,
             es.context_recall,
             ROUND(
-                (COALESCE(es.faithfulness,0) + COALESCE(es.answer_relevancy,0)
-                 + COALESCE(es.context_precision,0) + COALESCE(es.context_recall,0))
-                / NULLIF(
-                    (CASE WHEN es.faithfulness       IS NOT NULL THEN 1 ELSE 0 END
-                     + CASE WHEN es.answer_relevancy IS NOT NULL THEN 1 ELSE 0 END
-                     + CASE WHEN es.context_precision IS NOT NULL THEN 1 ELSE 0 END
-                     + CASE WHEN es.context_recall   IS NOT NULL THEN 1 ELSE 0 END),
-                    0
+                (
+                    (COALESCE(es.faithfulness,0) + COALESCE(es.answer_relevancy,0)
+                     + COALESCE(es.context_precision,0) + COALESCE(es.context_recall,0))
+                    / NULLIF(
+                        (CASE WHEN es.faithfulness        IS NOT NULL THEN 1 ELSE 0 END
+                         + CASE WHEN es.answer_relevancy  IS NOT NULL THEN 1 ELSE 0 END
+                         + CASE WHEN es.context_precision IS NOT NULL THEN 1 ELSE 0 END
+                         + CASE WHEN es.context_recall    IS NOT NULL THEN 1 ELSE 0 END),
+                        0
+                    )
                 )::numeric, 4
             )                      AS avg_score,
             er.retrieval_time_ms,

@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Métricas RAGAS — Explicación Técnica Detallada</title>
+  <style>
+    :root {
+      --primary:   #1e3a5f;
+      --accent:    #2980b9;
+      --success:   #27ae60;
+      --warning:   #f39c12;
+      --danger:    #e74c3c;
+      --light-bg:  #f4f7fb;
+      --card-bg:   #ffffff;
+      --border:    #dce3ed;
+      --text:      #2c3e50;
+      --muted:     #7f8c8d;
+      --code-bg:   #1e2d3d;
+      --code-text: #e8f4f8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--light-bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, #2c5282 100%);
+      color: #fff;
+      padding: 48px 40px 36px;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    header p  { font-size: 1rem; opacity: .85; max-width: 700px; }
+    .header-meta {
+      display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap;
+    }
+    .header-meta span {
+      background: rgba(255,255,255,.15);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: .85rem;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 1.5rem; font-weight: 700;
+      color: var(--primary);
+      border-left: 5px solid var(--accent);
+      padding-left: 14px;
+      margin: 48px 0 24px;
+    }
+
+    /* ── Metric card ── */
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 40px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+    .metric-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 22px 28px;
+      border-bottom: 1px solid var(--border);
+    }
+    .metric-icon {
+      width: 52px; height: 52px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; flex-shrink: 0;
+    }
+    .metric-header h2 { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
+    .metric-header p  { font-size: .9rem; color: var(--muted); margin-top: 2px; }
+    .metric-body { padding: 28px; }
+
+    /* colors per metric */
+    .faith  .metric-icon { background: #fef3c7; }
+    .ar     .metric-icon { background: #d1fae5; }
+    .cp     .metric-icon { background: #dbeafe; }
+    .cr     .metric-icon { background: #ede9fe; }
+    .faith  .metric-header { border-left: 5px solid #f59e0b; }
+    .ar     .metric-header { border-left: 5px solid #10b981; }
+    .cp     .metric-header { border-left: 5px solid #3b82f6; }
+    .cr     .metric-header { border-left: 5px solid #8b5cf6; }
+
+    /* ── Sub-sections inside card ── */
+    .sub-section { margin-bottom: 28px; }
+    .sub-section h3 {
+      font-size: 1rem; font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .sub-section h3::before {
+      content: '▸'; color: var(--accent); font-size: .8rem;
+    }
+
+    /* ── Step list ── */
+    .steps { list-style: none; padding: 0; }
+    .steps li {
+      display: flex; gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .steps li:last-child { border-bottom: none; }
+    .step-num {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700; flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content strong { display: block; font-size: .95rem; margin-bottom: 4px; }
+    .step-content p { font-size: .9rem; color: #555; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-size: .82rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+    /* inline code */
+    p code, li code, td code {
+      background: #eef2f7;
+      color: #c0392b;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: .85em;
+    }
+
+    /* ── Formula box ── */
+    .formula {
+      background: #f8faff;
+      border: 2px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 12px 0;
+      font-family: 'Cascadia Code', monospace;
+      font-size: .9rem;
+      color: var(--primary);
+      text-align: center;
+    }
+
+    /* ── Prompt box ── */
+    .prompt-box {
+      background: #1a1a2e;
+      color: #a8d8ea;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: .82rem;
+      font-family: monospace;
+      margin: 12px 0;
+      border-left: 4px solid #e94560;
+    }
+    .prompt-label {
+      color: #e94560; font-weight: bold; font-size: .78rem;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+
+    /* ── Data flow ── */
+    .flow {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 8px; margin: 14px 0;
+    }
+    .flow-box {
+      background: #eef2f7; border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px;
+      font-size: .85rem; font-weight: 600; color: var(--primary);
+    }
+    .flow-arrow { color: var(--accent); font-size: 1.2rem; font-weight: bold; }
+
+    /* ── Score scale ── */
+    .score-scale {
+      display: flex; gap: 0; border-radius: 8px;
+      overflow: hidden; margin: 12px 0;
+    }
+    .score-band {
+      flex: 1; padding: 10px 14px;
+      text-align: center; font-size: .82rem;
+    }
+    .score-band strong { display: block; font-size: 1rem; }
+    .band-excellent { background: #d1fae5; color: #065f46; }
+    .band-good      { background: #fef3c7; color: #92400e; }
+    .band-moderate  { background: #fed7aa; color: #9a3412; }
+    .band-poor      { background: #fee2e2; color: #991b1b; }
+
+    /* ── Model info table ── */
+    .model-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    .model-table th, .model-table td {
+      padding: 10px 14px; text-align: left;
+      border-bottom: 1px solid var(--border); font-size: .9rem;
+    }
+    .model-table th {
+      background: #f0f4f8; font-weight: 700; color: var(--primary);
+    }
+    .model-table tr:hover td { background: #f8faff; }
+
+    /* ── Note/warning box ── */
+    .note {
+      background: #fffbeb; border-left: 4px solid #f59e0b;
+      border-radius: 0 8px 8px 0; padding: 14px 18px;
+      font-size: .88rem; margin: 12px 0;
+    }
+    .note strong { color: #92400e; }
+
+    .info {
+      background: #eff6ff; border-left: 4px solid #3b82f6;
+      border-radius: 0 8px 8px 0; padding: 14px 18px;
+      font-size: .88rem; margin: 12px 0;
+    }
+    .info strong { color: #1e40af; }
+
+    /* ── Summary comparison table ── */
+    .summary-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .summary-table th, .summary-table td {
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      font-size: .88rem; text-align: left;
+    }
+    .summary-table th {
+      background: var(--primary); color: #fff; font-weight: 700;
+    }
+    .summary-table tr:nth-child(even) td { background: #f8faff; }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--primary); color: rgba(255,255,255,.7);
+      text-align: center; padding: 28px;
+      font-size: .85rem; margin-top: 60px;
+    }
+
+    /* ── Experiment stats ── */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; margin: 20px 0;
+    }
+    .stat-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px; text-align: center;
+    }
+    .stat-card .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--accent); }
+    .stat-card .stat-label { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Métricas RAGAS — Explicación Técnica Detallada</h1>
+  <p>Documentación completa de los algoritmos, modelos y origen de datos utilizados para evaluar el sistema RAG del Semáforo de Pobreza.</p>
+  <div class="header-meta">
+    <span>📊 Proyecto: Semáforo de Pobreza</span>
+    <span>🤖 Framework: RAGAS 0.4.x</span>
+    <span>🔬 4 Métricas evaluadas</span>
+    <span>📅 2026</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ══════════════════════════════════════
+       INTRODUCCIÓN
+  ══════════════════════════════════════ -->
+  <div class="section-title">¿Qué es RAGAS?</div>
+
+  <div class="metric-body" style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; margin-bottom:32px;">
+    <p>
+      <strong>RAGAS (Retrieval Augmented Generation Assessment)</strong> es un framework de evaluación automática para sistemas RAG.
+      Permite medir la calidad de las respuestas generadas sin necesidad de evaluadores humanos para cada pregunta,
+      usando un <em>LLM juez</em> externo que actúa como árbitro.
+    </p>
+    <br>
+    <p>Un sistema RAG tiene dos componentes que pueden fallar independientemente:</p>
+    <ul style="margin: 12px 0 0 20px;">
+      <li style="margin-bottom:6px;"><strong>Retrieval (recuperación):</strong> ¿Se recuperaron los chunks correctos? → medido por <em>Context Precision</em> y <em>Context Recall</em></li>
+      <li><strong>Generation (generación):</strong> ¿La respuesta es fiel y relevante? → medido por <em>Faithfulness</em> y <em>Answer Relevancy</em></li>
+    </ul>
+    <br>
+    <div class="flow">
+      <div class="flow-box">Pregunta del usuario</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Retriever (pgvector)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Chunks recuperados</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">LLM generador</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Respuesta final</div>
+    </div>
+    <div class="flow" style="margin-top:6px;">
+      <div class="flow-box" style="background:#fef3c7;">Context Precision / Recall</div>
+      <div class="flow-arrow" style="opacity:0">→</div>
+      <div class="flow-box" style="background:#fef3c7; margin-left: 168px;">Faithfulness / Answer Relevancy</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       DATOS DEL EXPERIMENTO
+  ══════════════════════════════════════ -->
+  <div class="section-title">Datos del Experimento</div>
+
+  <div class="metric-body" style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; margin-bottom:32px;">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">1,798</div>
+        <div class="stat-label">Evaluaciones totales</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">30</div>
+        <div class="stat-label">Preguntas del knowledge base</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">60</div>
+        <div class="stat-label">Combinaciones LLM × Embed × Chunk</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4</div>
+        <div class="stat-label">LLMs evaluados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5</div>
+        <div class="stat-label">Modelos de embedding</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3</div>
+        <div class="stat-label">Configuraciones de chunk</div>
+      </div>
+    </div>
+
+    <h3 style="margin: 20px 0 10px; font-size:1rem; color:var(--primary);">Estructura de cada evaluación en la base de datos</h3>
+    <pre><code>-- Tabla eval_runs: una fila = una combinación ejecutada
+SELECT
+    kb.question,            -- pregunta original
+    er.generated_answer,    -- respuesta generada por el LLM evaluado
+    er.retrieved_contexts,  -- JSON con los chunks recuperados de pgvector
+    kb.answer AS ground_truth  -- respuesta de referencia (verdad)
+FROM eval_runs er
+JOIN knowledge_base kb ON er.knowledge_base_id = kb.id
+JOIN eval_scores    es ON er.id = es.eval_run_id</code></pre>
+
+    <h3 style="margin: 20px 0 10px; font-size:1rem; color:var(--primary);">LLMs evaluados en el experimento</h3>
+    <table class="model-table">
+      <tr><th>LLM</th><th>Proveedor</th><th>Parámetros</th></tr>
+      <tr><td><code>qwen3:8b</code></td><td>Alibaba (Ollama)</td><td>~8B</td></tr>
+      <tr><td><code>gpt-oss:20b</code></td><td>Local (Ollama)</td><td>~20B</td></tr>
+      <tr><td><code>llama3.2:3b</code></td><td>Meta (Ollama)</td><td>3B</td></tr>
+      <tr><td><code>llama3.2:latest</code></td><td>Meta (Ollama)</td><td>~3B</td></tr>
+    </table>
+
+    <h3 style="margin: 20px 0 10px; font-size:1rem; color:var(--primary);">Modelos de embedding evaluados</h3>
+    <table class="model-table">
+      <tr><th>Modelo</th><th>Dimensiones</th><th>Tabla en BD</th></tr>
+      <tr><td><code>bge-m3</code></td><td>1024</td><td>embeddings_bge_m3</td></tr>
+      <tr><td><code>nomic-embed-text</code></td><td>768</td><td>embeddings_nomic</td></tr>
+      <tr><td><code>mxbai-embed-large</code></td><td>1024</td><td>embeddings_mxbai</td></tr>
+      <tr><td><code>all-minilm</code></td><td>384</td><td>embeddings_minilm</td></tr>
+      <tr><td><code>snowflake-arctic-embed</code></td><td>1024</td><td>embeddings_snowflake</td></tr>
+    </table>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MÉTRICA 1: FAITHFULNESS
+  ══════════════════════════════════════ -->
+  <div class="section-title">Métricas de Evaluación</div>
+
+  <div class="metric-card faith">
+    <div class="metric-header">
+      <div class="metric-icon">🎯</div>
+      <div>
+        <h2>1. Faithfulness (Fidelidad)</h2>
+        <p>¿La respuesta está respaldada por los contextos recuperados?</p>
+      </div>
+    </div>
+    <div class="metric-body">
+
+      <div class="sub-section">
+        <h3>¿Qué mide?</h3>
+        <p>Faithfulness detecta <strong>alucinaciones</strong>: situaciones donde el LLM genera información que no está presente
+        ni puede inferirse de los chunks recuperados. Un score de 1.0 significa que cada afirmación de la respuesta
+        tiene soporte en el contexto; 0.0 significa que todo fue inventado.</p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Modelos juez utilizados</h3>
+        <table class="model-table">
+          <tr><th>Rol</th><th>Modelo</th><th>Justificación</th></tr>
+          <tr>
+            <td>LLM Juez</td>
+            <td><code>gpt-4o-mini</code> (temperatura=0)</td>
+            <td>Requiere generar JSON estructurado con veredictos. Los modelos locales (gpt-oss:20b, llama3.2) producían NaN al fallar en el formato.</td>
+          </tr>
+          <tr>
+            <td>Embeddings</td>
+            <td><code>text-embedding-3-small</code> (OpenAI)</td>
+            <td>Requerido internamente por RAGAS para este módulo.</td>
+          </tr>
+        </table>
+        <div class="note">
+          <strong>⚠️ Nota:</strong> Se intentó primero con modelos Ollama (gpt-oss:20b). El algoritmo requiere que el LLM genere
+          un JSON estructurado con campos <code>statement</code>, <code>reason</code> y <code>verdict</code>. Los modelos locales
+          fallaban consistentemente en seguir este formato estricto, resultando en NaN. Se migró a gpt-4o-mini que tiene
+          mayor adhesión a instrucciones de formato.
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Origen de los datos</h3>
+        <div class="flow">
+          <div class="flow-box" style="background:#fef3c7;">generated_answer<br><small>(eval_runs)</small></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="background:#fef3c7;">retrieved_contexts<br><small>(eval_runs JSON)</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#d1fae5;">gpt-4o-mini<br><small>juez</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#dbeafe;">faithfulness score<br><small>(eval_scores)</small></div>
+        </div>
+        <p style="margin-top:10px; font-size:.9rem;">
+          El <code>ground_truth</code> <strong>no se usa</strong> en Faithfulness — la verificación es exclusivamente contra los contextos recuperados.
+        </p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Algoritmo paso a paso</h3>
+        <ul class="steps">
+          <li>
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Descomposición en afirmaciones atómicas</strong>
+              <p>El LLM juez recibe la <code>generated_answer</code> y la divide en afirmaciones simples e independientes, cada una verificable por separado.</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS — Paso 1</div>
+                Given the following statement, break it down into individual factual claims.<br>
+                Each claim should be a single, verifiable statement.<br><br>
+                Statement: "El Semáforo tiene 50 indicadores en 8 dimensiones.<br>
+                La dimensión de Vivienda incluye acceso a agua potable."<br><br>
+                Output:<br>
+                ["El Semáforo tiene 50 indicadores",<br>
+                &nbsp;"Los indicadores están distribuidos en 8 dimensiones",<br>
+                &nbsp;"La dimensión de Vivienda incluye acceso a agua potable"]
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Verificación de cada afirmación contra el contexto</strong>
+              <p>Por cada afirmación, el LLM verifica si puede ser inferida directamente de los <code>retrieved_contexts</code>. Devuelve un JSON con veredicto 1 (soportado) o 0 (no soportado).</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS — Paso 2</div>
+                Consider the given context and following statements, then determine<br>
+                whether they are supported by the information present in the context.<br><br>
+                Context: "...texto de los chunks recuperados..."<br>
+                Statement: "El Semáforo tiene 50 indicadores"<br><br>
+                Output JSON:<br>
+                {"statement": "El Semáforo tiene 50 indicadores",<br>
+                &nbsp;"reason": "The context explicitly mentions 50 indicators",<br>
+                &nbsp;"verdict": 1}<br><br>
+                {"statement": "La dimensión tiene 12 sub-indicadores",<br>
+                &nbsp;"reason": "This specific number is not mentioned in context",<br>
+                &nbsp;"verdict": 0}
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>Cálculo del score final</strong>
+              <p>Se divide el número de afirmaciones soportadas entre el total:</p>
+              <div class="formula">
+                Faithfulness = Σ(verdict = 1) / total_afirmaciones
+              </div>
+              <pre><code># Implementación en el código del proyecto
+df = result.to_pandas()
+faithfulness = df["faithfulness"].iloc[i]  # float 0.0 – 1.0
+
+# Guardado en PostgreSQL
+UPDATE eval_scores
+   SET faithfulness = 0.833
+ WHERE eval_run_id = 1234</code></pre>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h3>Escala de interpretación</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>≥ 0.80</strong>Excelente<br><small>Casi sin alucinaciones</small></div>
+          <div class="score-band band-good"><strong>0.60–0.79</strong>Bueno<br><small>Alucinaciones menores</small></div>
+          <div class="score-band band-moderate"><strong>0.40–0.59</strong>Moderado<br><small>Alucinaciones notables</small></div>
+          <div class="score-band band-poor"><strong>&lt; 0.40</strong>Deficiente<br><small>Inventa información</small></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MÉTRICA 2: ANSWER RELEVANCY
+  ══════════════════════════════════════ -->
+  <div class="metric-card ar">
+    <div class="metric-header">
+      <div class="metric-icon">💬</div>
+      <div>
+        <h2>2. Answer Relevancy (Relevancia de la Respuesta)</h2>
+        <p>¿La respuesta generada responde la pregunta del usuario?</p>
+      </div>
+    </div>
+    <div class="metric-body">
+
+      <div class="sub-section">
+        <h3>¿Qué mide?</h3>
+        <p>Answer Relevancy detecta respuestas <strong>vagas, incompletas o fuera de tema</strong>. No evalúa si la información es correcta,
+        sino si la respuesta está orientada a contestar la pregunta específica. Una respuesta correcta pero sobre otro tema tendría score bajo.</p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Modelos juez utilizados</h3>
+        <table class="model-table">
+          <tr><th>Rol</th><th>Modelo</th><th>Justificación</th></tr>
+          <tr>
+            <td>LLM Juez</td>
+            <td><code>gpt-oss:20b</code> (Ollama, temperatura=0)</td>
+            <td>Genera preguntas sintéticas a partir de la respuesta. Los modelos locales funcionan bien para esta tarea de generación libre (no requiere JSON estricto).</td>
+          </tr>
+          <tr>
+            <td>Embeddings</td>
+            <td><code>bge-m3</code> (Ollama, 1024 dims)</td>
+            <td>Calcula la similitud coseno entre la pregunta original y las preguntas sintéticas.</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="sub-section">
+        <h3>Origen de los datos</h3>
+        <div class="flow">
+          <div class="flow-box" style="background:#d1fae5;">question<br><small>(knowledge_base)</small></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="background:#d1fae5;">generated_answer<br><small>(eval_runs)</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#fef3c7;">gpt-oss:20b<br><small>genera preguntas</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#fef3c7;">bge-m3<br><small>coseno similitud</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#dbeafe;">answer_relevancy<br><small>(eval_scores)</small></div>
+        </div>
+        <p style="margin-top:10px; font-size:.9rem;">
+          El <code>ground_truth</code> y los <code>retrieved_contexts</code> <strong>no se usan</strong> en esta métrica.
+        </p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Algoritmo paso a paso</h3>
+        <ul class="steps">
+          <li>
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Generación de preguntas sintéticas</strong>
+              <p>El LLM juez recibe la <code>generated_answer</code> y genera N=3 preguntas que esa respuesta podría contestar.</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS — Paso 1</div>
+                Generate a question for the given answer.<br><br>
+                Answer: "El Semáforo de Pobreza evalúa 50 indicadores distribuidos<br>
+                en 8 dimensiones como vivienda, salud y educación."<br><br>
+                Pregunta sintética 1: "¿Cuántos indicadores evalúa el Semáforo?"<br>
+                Pregunta sintética 2: "¿Qué dimensiones cubre el Semáforo de Pobreza?"<br>
+                Pregunta sintética 3: "¿Cómo está organizado el Semáforo de Pobreza?"
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Cálculo de embeddings</strong>
+              <p>Se vectorizan la pregunta original y cada pregunta sintética usando <code>bge-m3</code>:</p>
+              <pre><code>embedding_original   = bge-m3.embed("¿Cuáles son los indicadores del semáforo?")
+embedding_sintetica1 = bge-m3.embed("¿Cuántos indicadores evalúa el Semáforo?")
+embedding_sintetica2 = bge-m3.embed("¿Qué dimensiones cubre el Semáforo?")
+embedding_sintetica3 = bge-m3.embed("¿Cómo está organizado el Semáforo?")</code></pre>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>Similitud coseno y promedio</strong>
+              <p>Se calcula la similitud coseno entre la pregunta original y cada sintética, luego se promedia:</p>
+              <div class="formula">
+                Answer Relevancy = (1/N) × Σ cosine_sim(emb_original, emb_sintética_i)
+              </div>
+              <div class="info">
+                <strong>📌 Intuición:</strong> Si la respuesta fue vaga o fuera de tema, las preguntas sintéticas generadas divergirán
+                de la pregunta original → similitud coseno baja → score bajo.
+                Si la respuesta es directa y específica, las preguntas sintéticas serán similares a la original → score alto.
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h3>Escala de interpretación</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>≥ 0.80</strong>Excelente<br><small>Respuesta directa y específica</small></div>
+          <div class="score-band band-good"><strong>0.60–0.79</strong>Bueno<br><small>Responde con alguna divagación</small></div>
+          <div class="score-band band-moderate"><strong>0.40–0.59</strong>Moderado<br><small>Respuesta parcialmente relevante</small></div>
+          <div class="score-band band-poor"><strong>&lt; 0.40</strong>Deficiente<br><small>Respuesta fuera de tema</small></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MÉTRICA 3: CONTEXT PRECISION
+  ══════════════════════════════════════ -->
+  <div class="metric-card cp">
+    <div class="metric-header">
+      <div class="metric-icon">🔍</div>
+      <div>
+        <h2>3. Context Precision (Precisión del Contexto)</h2>
+        <p>¿Los chunks más relevantes aparecen en las posiciones más altas del ranking?</p>
+      </div>
+    </div>
+    <div class="metric-body">
+
+      <div class="sub-section">
+        <h3>¿Qué mide?</h3>
+        <p>Context Precision evalúa la <strong>calidad del ranking del retriever</strong>. No solo si se recuperaron chunks relevantes,
+        sino si esos chunks relevantes están en las primeras posiciones. Un retriever que coloca chunks irrelevantes al inicio
+        (aunque los relevantes estén en la lista) tendrá score bajo.</p>
+        <div class="info">
+          <strong>📌 ¿Por qué importa el ranking?</strong> Los LLMs tienden a prestar más atención al inicio del contexto
+          (fenómeno "lost in the middle"). Si los chunks irrelevantes aparecen primero, el LLM podría ignorar los relevantes.
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Modelos juez utilizados</h3>
+        <table class="model-table">
+          <tr><th>Rol</th><th>Modelo</th><th>Justificación</th></tr>
+          <tr>
+            <td>LLM Juez</td>
+            <td><code>gpt-4o-mini</code> (OpenAI, temperatura=0)</td>
+            <td>Determina si cada chunk es relevante comparándolo con el ground truth. Requiere razonamiento preciso → se usó OpenAI.</td>
+          </tr>
+          <tr>
+            <td>Embeddings</td>
+            <td><code>text-embedding-3-small</code> (OpenAI)</td>
+            <td>Requerido internamente por RAGAS.</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="sub-section">
+        <h3>Origen de los datos</h3>
+        <div class="flow">
+          <div class="flow-box" style="background:#dbeafe;">question<br><small>(knowledge_base)</small></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="background:#dbeafe;">retrieved_contexts<br><small>(eval_runs JSON)</small></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="background:#dbeafe;">ground_truth<br><small>(knowledge_base)</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#d1fae5;">gpt-4o-mini<br><small>verifica relevancia</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#fef3c7;">context_precision<br><small>(eval_scores)</small></div>
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Algoritmo paso a paso</h3>
+        <ul class="steps">
+          <li>
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Clasificación de relevancia por posición</strong>
+              <p>Para cada chunk recuperado en posición k (k=1,2,3,...), el LLM juez determina si ese chunk es relevante
+              para responder la pregunta, usando el <code>ground_truth</code> como referencia:</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS</div>
+                Given the question and reference answer, determine if the following<br>
+                context is relevant and useful to answer the question.<br><br>
+                Question: "¿Cuáles son los indicadores del semáforo?"<br>
+                Reference: "50 indicadores en 8 dimensiones..."<br>
+                Context [posición 1]: "...texto del chunk 1..."<br><br>
+                Output: {"relevance": 1}  ← relevante<br>
+                Output: {"relevance": 0}  ← no relevante
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Cálculo de precisión ponderada por rango</strong>
+              <p>Se aplica una fórmula que penaliza los chunks relevantes en posiciones bajas:</p>
+              <div class="formula">
+                Context Precision@K = Σ<sub>k=1..K</sub>( Precision@k × rel<sub>k</sub> ) / total_relevantes<br><br>
+                donde: Precision@k = (chunks relevantes en posiciones 1..k) / k
+              </div>
+              <pre><code># Ejemplo con 4 chunks recuperados:
+# Posición 1: relevante (rel=1)  → Precision@1 = 1/1 = 1.00
+# Posición 2: irrelevante (rel=0) → no contribuye
+# Posición 3: relevante (rel=1)  → Precision@3 = 2/3 = 0.67
+# Posición 4: irrelevante (rel=0) → no contribuye
+
+# Total relevantes = 2
+# Context Precision = (1.00 + 0.67) / 2 = 0.833
+
+# Si los mismos chunks estuvieran en orden 2,4,1,3:
+# Posición 1: irrelevante → no cuenta
+# Posición 2: relevante  → Precision@2 = 1/2 = 0.50
+# Posición 3: irrelevante → no cuenta
+# Posición 4: relevante  → Precision@4 = 2/4 = 0.50
+# Context Precision = (0.50 + 0.50) / 2 = 0.50  ← peor ranking = peor score</code></pre>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h3>Escala de interpretación</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>≥ 0.80</strong>Excelente<br><small>Relevantes al inicio</small></div>
+          <div class="score-band band-good"><strong>0.50–0.79</strong>Bueno<br><small>Ranking mayormente correcto</small></div>
+          <div class="score-band band-moderate"><strong>0.30–0.49</strong>Moderado<br><small>Mucho ruido en el ranking</small></div>
+          <div class="score-band band-poor"><strong>&lt; 0.30</strong>Deficiente<br><small>Retriever mal ordenado</small></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MÉTRICA 4: CONTEXT RECALL
+  ══════════════════════════════════════ -->
+  <div class="metric-card cr">
+    <div class="metric-header">
+      <div class="metric-icon">📚</div>
+      <div>
+        <h2>4. Context Recall (Cobertura del Contexto)</h2>
+        <p>¿El contexto recuperado contiene toda la información necesaria para responder?</p>
+      </div>
+    </div>
+    <div class="metric-body">
+
+      <div class="sub-section">
+        <h3>¿Qué mide?</h3>
+        <p>Context Recall evalúa si el retriever <strong>encontró suficiente información</strong>. Si el ground truth dice que la respuesta
+        correcta requiere información de 5 oraciones y el retriever solo recuperó chunks que cubren 3, el recall será 3/5 = 0.60.
+        Un recall bajo significa que el LLM no tenía toda la información disponible para responder correctamente.</p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Modelos juez utilizados</h3>
+        <table class="model-table">
+          <tr><th>Rol</th><th>Modelo</th><th>Justificación</th></tr>
+          <tr>
+            <td>LLM Juez</td>
+            <td><code>gpt-oss:20b</code> (Ollama, temperatura=0)</td>
+            <td>Verifica qué oraciones del ground truth pueden atribuirse al contexto. Funciona bien con modelos locales para esta tarea de matching semántico.</td>
+          </tr>
+          <tr>
+            <td>Embeddings</td>
+            <td><code>bge-m3</code> (Ollama)</td>
+            <td>Usado internamente por RAGAS en algunas variantes de la métrica.</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="sub-section">
+        <h3>Origen de los datos</h3>
+        <div class="flow">
+          <div class="flow-box" style="background:#ede9fe;">retrieved_contexts<br><small>(eval_runs JSON)</small></div>
+          <div class="flow-arrow">+</div>
+          <div class="flow-box" style="background:#ede9fe;">ground_truth<br><small>(knowledge_base)</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#d1fae5;">gpt-oss:20b<br><small>matching</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-box" style="background:#fef3c7;">context_recall<br><small>(eval_scores)</small></div>
+        </div>
+        <p style="margin-top:10px; font-size:.9rem;">
+          La <code>generated_answer</code> <strong>no se usa</strong> en Context Recall — es una métrica pura del retriever, no del generador.
+        </p>
+      </div>
+
+      <div class="sub-section">
+        <h3>Algoritmo paso a paso</h3>
+        <ul class="steps">
+          <li>
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Descomposición del ground truth en oraciones</strong>
+              <p>El LLM juez divide la respuesta de referencia en oraciones individuales:</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS — Paso 1</div>
+                Break down the following reference answer into individual sentences:<br><br>
+                Reference: "El Semáforo evalúa 50 indicadores. Están distribuidos en<br>
+                8 dimensiones. La dimensión de vivienda incluye agua potable<br>
+                y saneamiento. Las familias se autoaplican la encuesta."<br><br>
+                Oraciones: ["El Semáforo evalúa 50 indicadores",<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Están distribuidos en 8 dimensiones",<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"La dimensión de vivienda incluye agua potable y saneamiento",<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Las familias se autoaplican la encuesta"]
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Verificación de cobertura por el contexto</strong>
+              <p>Por cada oración del ground truth, el LLM verifica si puede ser atribuida a algún chunk recuperado:</p>
+              <div class="prompt-box">
+                <div class="prompt-label">Prompt interno RAGAS — Paso 2</div>
+                For each sentence in the reference, determine if it is attributable<br>
+                to the provided context.<br><br>
+                Context: "...textos de los chunks recuperados..."<br><br>
+                Sentence 1: "El Semáforo evalúa 50 indicadores" → attributed: 1<br>
+                Sentence 2: "Están distribuidos en 8 dimensiones" → attributed: 1<br>
+                Sentence 3: "Incluye agua potable y saneamiento"  → attributed: 1<br>
+                Sentence 4: "Las familias se autoaplican la encuesta" → attributed: 0
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>Cálculo del score final</strong>
+              <div class="formula">
+                Context Recall = oraciones_atribuidas_al_contexto / total_oraciones_ground_truth
+              </div>
+              <pre><code># Ejemplo:
+# Ground truth: 4 oraciones
+# Cubiertas por el contexto: 3
+# Context Recall = 3/4 = 0.75
+
+# Guardado en PostgreSQL
+UPDATE eval_scores
+   SET context_recall = 0.75
+ WHERE eval_run_id = 1234</code></pre>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sub-section">
+        <h3>Escala de interpretación</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>≥ 0.80</strong>Excelente<br><small>Contexto muy completo</small></div>
+          <div class="score-band band-good"><strong>0.50–0.79</strong>Bueno<br><small>Cubre la mayoría</small></div>
+          <div class="score-band band-moderate"><strong>0.30–0.49</strong>Aceptable<br><small>Información parcial</small></div>
+          <div class="score-band band-poor"><strong>&lt; 0.30</strong>Deficiente<br><small>Retriever pierde info clave</small></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       EJEMPLOS REALES DEL PROYECTO
+  ══════════════════════════════════════ -->
+  <div class="section-title">Ejemplos Reales del Proyecto</div>
+
+  <div class="info" style="margin-bottom:20px;">
+    <strong>📌 Fuente:</strong> Datos extraídos directamente de la tabla <code>eval_scores</code> + <code>eval_runs</code> + <code>knowledge_base</code> de la base de datos PostgreSQL del experimento. Cada ejemplo es una combinación real ejecutada.
+  </div>
+
+  <!-- Ejemplo 1: Alto puntaje -->
+  <div class="metric-card" style="border-left: 5px solid #27ae60;">
+    <div class="metric-header" style="border-left:none;">
+      <div class="metric-icon" style="background:#d1fae5;">✅</div>
+      <div>
+        <h2>Ejemplo 1 — Combinación con puntaje alto</h2>
+        <p><code>gpt-oss:20b</code> + <code>bge-m3</code> + chunk <code>small</code></p>
+      </div>
+    </div>
+    <div class="metric-body">
+      <div class="sub-section">
+        <h3>Datos de entrada</h3>
+        <table class="model-table">
+          <tr><th>Campo</th><th>Valor</th></tr>
+          <tr><td><strong>Pregunta (user_input)</strong></td><td>¿Qué es la Fundación Paraguaya?</td></tr>
+          <tr><td><strong>Respuesta generada (response)</strong></td><td>La Fundación Paraguaya es una empresa social dedicada a la eliminación de la pobreza. Desarrolla y aplica la herramienta Semáforo de Eliminación de Pobreza, que permite a las familias autoevaluarse mediante 50 indicadores y recibir un modelo de intervención para salir de la pobreza. Brinda soluciones directas como créditos, capacitación financiera y microfranquicias...</td></tr>
+          <tr><td><strong>Ground Truth (reference)</strong></td><td>La Fundación Paraguaya es una organización sin fines de lucro fundada en 1985 por Martín Burt, con el propósito de brindar oportunidades de desarrollo a las familias a través del acceso a microfinanzas...</td></tr>
+        </table>
+      </div>
+      <div class="sub-section">
+        <h3>Scores obtenidos</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>1.000</strong>Faithfulness<br><small>Sin alucinaciones</small></div>
+          <div class="score-band band-excellent"><strong>0.937</strong>Answer Relevancy<br><small>Respuesta directa</small></div>
+          <div class="score-band band-excellent"><strong>1.000</strong>Context Precision<br><small>Chunks relevantes al inicio</small></div>
+          <div class="score-band band-good"><strong>0.625</strong>Context Recall<br><small>Cubre parte del ground truth</small></div>
+        </div>
+      </div>
+      <div class="sub-section">
+        <h3>Interpretación</h3>
+        <ul style="margin-left:20px; font-size:.9rem;">
+          <li style="margin-bottom:6px;"><strong>Faithfulness = 1.000:</strong> Todas las afirmaciones de la respuesta (empresa social, 50 indicadores, créditos, microfranquicias) estaban presentes en los chunks recuperados. Cero alucinaciones.</li>
+          <li style="margin-bottom:6px;"><strong>Answer Relevancy = 0.937:</strong> Las preguntas sintéticas generadas por gpt-oss:20b a partir de la respuesta eran muy similares a "¿Qué es la Fundación Paraguaya?" → respuesta muy relevante.</li>
+          <li style="margin-bottom:6px;"><strong>Context Precision = 1.000:</strong> Todos los chunks recuperados eran relevantes y los más relevantes aparecieron primero en el ranking de pgvector.</li>
+          <li><strong>Context Recall = 0.625:</strong> El contexto cubrió aproximadamente 5 de 8 oraciones del ground truth. Las oraciones sobre la historia de 1985 y el fundador Martín Burt no estaban en los chunks recuperados con chunk <em>small</em>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ejemplo 2: Alucinación -->
+  <div class="metric-card" style="border-left: 5px solid #e74c3c;">
+    <div class="metric-header" style="border-left:none;">
+      <div class="metric-icon" style="background:#fee2e2;">🚨</div>
+      <div>
+        <h2>Ejemplo 2 — Alucinación detectada por Faithfulness</h2>
+        <p><code>llama3.2:latest</code> + <code>nomic-embed-text</code> + chunk <code>large</code></p>
+      </div>
+    </div>
+    <div class="metric-body">
+      <div class="sub-section">
+        <h3>Datos de entrada</h3>
+        <table class="model-table">
+          <tr><th>Campo</th><th>Valor</th></tr>
+          <tr><td><strong>Pregunta</strong></td><td>¿Qué es el Banco de Soluciones?</td></tr>
+          <tr>
+            <td><strong>Respuesta generada</strong></td>
+            <td style="color:#c0392b; font-weight:600;">
+              "El Banco de Soluciones es la <u>asistente conversacional</u> que te ayudará a encontrar soluciones y respuestas a tus preguntas. Estoy aquí para proporcionarte información y apoyo en una variedad de temas, desde <u>educación y desarrollo económico hasta tecnología e innovación</u>. Mi objetivo es brindarte información precisa y útil, basada en <u>fuentes confiables y actualizadas</u>."
+            </td>
+          </tr>
+          <tr><td><strong>Ground Truth</strong></td><td>El Banco de Soluciones es una plataforma colaborativa que reúne herramientas, servicios y recursos prácticos para acompañar a las personas, familias y comunidades en la mejora de sus indicadores del Semáforo...</td></tr>
+        </table>
+      </div>
+      <div class="sub-section">
+        <h3>Scores obtenidos</h3>
+        <div class="score-scale">
+          <div class="score-band band-poor"><strong>0.100</strong>Faithfulness<br><small>Casi todo inventado</small></div>
+          <div class="score-band band-excellent"><strong>0.913</strong>Answer Relevancy<br><small>Responde la pregunta</small></div>
+          <div class="score-band band-poor"><strong>0.000</strong>Context Precision<br><small>Chunks erróneos al inicio</small></div>
+          <div class="score-band band-poor"><strong>0.000</strong>Context Recall<br><small>Contexto sin info útil</small></div>
+        </div>
+      </div>
+      <div class="sub-section">
+        <h3>Interpretación — ¿Qué salió mal?</h3>
+        <ul style="margin-left:20px; font-size:.9rem;">
+          <li style="margin-bottom:6px;"><strong>Faithfulness = 0.100:</strong> El LLM confundió "Banco de Soluciones" con el nombre del chatbot (<em>Luz</em>). Las afirmaciones "asistente conversacional", "educación y tecnología e innovación", "fuentes confiables y actualizadas" <strong>no estaban en ningún chunk recuperado</strong> — fueron inventadas. Solo 1 de ~10 afirmaciones tenía soporte real.</li>
+          <li style="margin-bottom:6px;"><strong>Answer Relevancy = 0.913:</strong> A pesar de alucinaciones, la respuesta <em>sí intenta responder</em> "¿Qué es el Banco de Soluciones?" → las preguntas sintéticas generadas eran similares a la original. <strong>Answer Relevancy no detecta alucinaciones</strong>, solo mide si la respuesta está orientada a la pregunta.</li>
+          <li style="margin-bottom:6px;"><strong>Context Precision = 0.000 y Context Recall = 0.000:</strong> El embedding <code>nomic-embed-text</code> con chunk <code>large</code> recuperó chunks completamente irrelevantes para esta pregunta (posiblemente documentos sobre el manual metodológico en lugar del banco de soluciones).</li>
+        </ul>
+        <div class="note">
+          <strong>⚠️ Lección:</strong> Este ejemplo demuestra la diferencia entre métricas. Answer Relevancy puede ser alta aunque el contenido sea falso. Por eso es imprescindible usar <strong>Faithfulness junto con Answer Relevancy</strong> — una respuesta puede parecer relevante pero estar completamente fabricada.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ejemplo 3: Fallo total del retriever -->
+  <div class="metric-card" style="border-left: 5px solid #f39c12;">
+    <div class="metric-header" style="border-left:none;">
+      <div class="metric-icon" style="background:#fef3c7;">⚠️</div>
+      <div>
+        <h2>Ejemplo 3 — Fallo completo del retriever</h2>
+        <p><code>gpt-oss:20b</code> + <code>snowflake-arctic-embed</code> + chunk <code>small</code></p>
+      </div>
+    </div>
+    <div class="metric-body">
+      <div class="sub-section">
+        <h3>Datos de entrada</h3>
+        <table class="model-table">
+          <tr><th>Campo</th><th>Valor</th></tr>
+          <tr><td><strong>Pregunta</strong></td><td>¿Necesito estar vinculado a una organización para usar el Banco?</td></tr>
+          <tr><td><strong>Respuesta generada</strong></td><td style="color:#c0392b;">"No se encuentra la respuesta en el contexto." (Fuente: manual-metodologico-v4-2024-esp-engl.pdf)</td></tr>
+          <tr><td><strong>Ground Truth</strong></td><td>No. Podés usar el Banco de Soluciones tanto si ya sos usuario del Semáforo como si no. Cualquier persona puede explorar Soluciones y recibir orientación a través del chatbot, sin necesidad de estar vinculada a una organización...</td></tr>
+        </table>
+      </div>
+      <div class="sub-section">
+        <h3>Scores obtenidos</h3>
+        <div class="score-scale">
+          <div class="score-band band-excellent"><strong>0.000</strong>Faithfulness<br><small>No hay afirmaciones</small></div>
+          <div class="score-band band-poor"><strong>0.000</strong>Answer Relevancy<br><small>No respondió nada</small></div>
+          <div class="score-band band-poor"><strong>0.000</strong>Context Precision<br><small>Contexto incorrecto</small></div>
+          <div class="score-band band-poor"><strong>0.000</strong>Context Recall<br><small>Nada del GT cubierto</small></div>
+        </div>
+      </div>
+      <div class="sub-section">
+        <h3>Interpretación — ¿Qué salió mal?</h3>
+        <ul style="margin-left:20px; font-size:.9rem;">
+          <li style="margin-bottom:6px;"><strong>Context Precision = 0 y Context Recall = 0:</strong> El embedding <code>snowflake-arctic-embed</code> con chunk <code>small</code> recuperó chunks del manual metodológico en lugar del documento del Banco de Soluciones. El retriever falló completamente.</li>
+          <li style="margin-bottom:6px;"><strong>Answer Relevancy = 0:</strong> El LLM <code>gpt-oss:20b</code> respondió honestamente que no tenía contexto — pero una respuesta "no sé" genera preguntas sintéticas que divergen completamente de la pregunta original → score 0.</li>
+          <li><strong>Faithfulness = 0:</strong> Sin afirmaciones verificables en la respuesta, no hay nada que evaluar. RAGAS asigna 0 por defecto.</li>
+        </ul>
+        <div class="info">
+          <strong>📌 Conclusión:</strong> Este caso muestra que <code>snowflake-arctic-embed</code> con chunk pequeño tiene problemas para recuperar información sobre el Banco de Soluciones. El modelo de embedding es el cuello de botella, no el LLM generador.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TABLA COMPARATIVA FINAL
+  ══════════════════════════════════════ -->
+  <div class="section-title">Resumen Comparativo</div>
+
+  <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:40px;">
+    <table class="summary-table">
+      <tr>
+        <th>Métrica</th>
+        <th>Componente que evalúa</th>
+        <th>Inputs necesarios</th>
+        <th>LLM Juez</th>
+        <th>Detecta</th>
+      </tr>
+      <tr>
+        <td><strong>🎯 Faithfulness</strong></td>
+        <td>Generador</td>
+        <td>answer + contexts</td>
+        <td>gpt-4o-mini (OpenAI)</td>
+        <td>Alucinaciones</td>
+      </tr>
+      <tr>
+        <td><strong>💬 Answer Relevancy</strong></td>
+        <td>Generador</td>
+        <td>question + answer</td>
+        <td>gpt-oss:20b (Ollama)</td>
+        <td>Respuestas vagas / off-topic</td>
+      </tr>
+      <tr>
+        <td><strong>🔍 Context Precision</strong></td>
+        <td>Retriever (ranking)</td>
+        <td>question + contexts + ground_truth</td>
+        <td>gpt-4o-mini (OpenAI)</td>
+        <td>Chunks irrelevantes en posiciones altas</td>
+      </tr>
+      <tr>
+        <td><strong>📚 Context Recall</strong></td>
+        <td>Retriever (cobertura)</td>
+        <td>contexts + ground_truth</td>
+        <td>gpt-oss:20b (Ollama)</td>
+        <td>Información faltante en el contexto</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       FLUJO COMPLETO DEL PIPELINE
+  ══════════════════════════════════════ -->
+  <div class="section-title">Pipeline Completo de Evaluación</div>
+
+  <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; margin-bottom:40px;">
+    <pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                    FASE 1 — GENERACIÓN (run_eval.py)                │
+│                                                                     │
+│  Para cada combinación LLM × Embedding × ChunkConfig × Pregunta:   │
+│  1. Embeber pregunta con modelo de embedding (Ollama)               │
+│  2. Buscar top-K chunks similares en pgvector (PostgreSQL)          │
+│  3. Generar respuesta con LLM evaluado (Ollama)                     │
+│  4. Guardar en eval_runs: generated_answer + retrieved_contexts     │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │ 1,798 filas generadas
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              FASE 2a — SCORING OLLAMA (run_ragas.py)                │
+│                                                                     │
+│  Juez: gpt-oss:20b + bge-m3 (local, Ollama)                        │
+│  Métricas: Answer Relevancy + Context Recall                        │
+│  Batch size: 50 | Workers: 1 (secuencial)                           │
+│  Resultado: eval_scores.answer_relevancy + context_recall           │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              FASE 2b — SCORING OPENAI (run_ragas.py --openai)       │
+│                                                                     │
+│  Juez: gpt-4o-mini + text-embedding-3-small (OpenAI API)           │
+│  Métricas: Faithfulness + Context Precision                         │
+│  Batch size: 5 | Workers: 4 | Límite: 10,000 req/día               │
+│  Resultado: eval_scores.faithfulness + context_precision            │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │ 1,797/1,798 filas completadas (~100%)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              FASE 3 — REPORTE (generate_rag_report.py)              │
+│                                                                     │
+│  Agrega scores por combinación, genera visualizaciones              │
+│  Output: rag_evaluation_report_en.html + _es.html                   │
+└─────────────────────────────────────────────────────────────────────┘</code></pre>
+  </div>
+
+</div>
+
+<footer>
+  <p>Semáforo de Pobreza — Fundación Paraguaya | Evaluación RAG con RAGAS 0.4.x | 2026</p>
+  <p style="margin-top:6px; font-size:.8rem;">Jueces: gpt-4o-mini (Faithfulness, Context Precision) · gpt-oss:20b + bge-m3 (Answer Relevancy, Context Recall)</p>
+</footer>
+
+</body>
+</html>

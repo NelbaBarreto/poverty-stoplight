@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RAG Evaluation Report — Semáforo de Pobreza</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f5f7fa;color:#222;line-height:1.5}
+h1{font-size:1.8rem}
+h2{font-size:1.25rem;margin:1.5rem 0 .6rem;color:#1a3c5e;border-bottom:2px solid #e0e7ef;padding-bottom:.3rem}
+h3{font-size:1rem;margin:.75rem 0 .4rem;color:#1a3c5e}
+.header{background:linear-gradient(135deg,#1a3c5e,#2a5f9e);color:#fff;padding:1.5rem 2rem}
+.header p{margin-top:.4rem;font-size:.9rem;opacity:.85}
+.content{max-width:1400px;margin:0 auto;padding:1.5rem}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);padding:1.25rem 1.5rem;margin-bottom:1.5rem}
+.card-note{background:#fffbea;border-left:4px solid #f0a500;border-radius:0 8px 8px 0}
+.card-obs{background:#f0f7ff;border-left:4px solid #1a3c5e;border-radius:0 8px 8px 0}
+.stats-row{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.stat-box{flex:1;min-width:130px;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);padding:1rem;text-align:center}
+.stat-box .num{font-size:2rem;font-weight:700;color:#1a3c5e}
+.stat-box .lbl{font-size:.78rem;color:#666;margin-top:.2rem}
+.best-card{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start}
+.best-meta{flex:1;min-width:220px}
+.best-meta .combo-tag{font-size:1rem;font-weight:600;color:#1a3c5e;background:#e8f0fe;padding:.5rem .75rem;border-radius:6px;margin:.5rem 0}
+.best-meta table{border-collapse:collapse;width:100%;margin-top:.5rem}
+.best-meta td{padding:.3rem .5rem;font-size:.9rem;border-bottom:1px solid #f0f0f0}
+.best-meta td:first-child{color:#555;width:55%}
+.best-meta td:last-child{font-weight:700;text-align:right}
+.radar-wrap{flex:0 0 300px}
+.charts-row{display:flex;gap:1rem;flex-wrap:wrap}
+.chart-box{flex:1;min-width:240px}
+.two-col{display:flex;gap:1.5rem;flex-wrap:wrap}
+.two-col>*{flex:1;min-width:280px}
+table.data{width:100%;border-collapse:collapse;font-size:.85rem}
+table.data th{background:#1a3c5e;color:#fff;padding:.5rem .6rem;text-align:left;cursor:pointer;user-select:none;white-space:nowrap}
+table.data th:hover{background:#2a5c8e}
+table.data td{padding:.4rem .6rem;border-bottom:1px solid #eee}
+table.data tr:hover td{background:#f0f4ff}
+.filter-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem}
+.filter-row select,.filter-row input{padding:.4rem .6rem;border:1px solid #ccc;border-radius:5px;font-size:.85rem;background:#fff}
+.badge{display:inline-block;padding:.15rem .45rem;border-radius:4px;font-size:.75rem;font-weight:600}
+.badge-high{background:#d4edda;color:#155724}
+.badge-mid{background:#fff3cd;color:#856404}
+.badge-low{background:#fde8c8;color:#7a4100}
+.badge-poor{background:#f8d7da;color:#721c24}
+.obs-list{list-style:none;padding:0;margin:.5rem 0}
+.obs-list li{padding:.4rem 0 .4rem 1.4rem;position:relative;border-bottom:1px solid #e8f0fe;font-size:.92rem}
+.obs-list li:last-child{border-bottom:none}
+.obs-list li::before{content:"▸";position:absolute;left:0;color:#1a3c5e;font-weight:700}
+.obs-list li strong{color:#1a3c5e}
+.metric-def{display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.75rem}
+.metric-card{flex:1;min-width:220px;background:#f8fbff;border:1px solid #d0e4f7;border-radius:7px;padding:1rem}
+.metric-card .metric-name{font-weight:700;color:#1a3c5e;font-size:1rem;margin-bottom:.4rem}
+.metric-card .metric-formula{font-size:.78rem;color:#555;background:#e8f0fe;padding:.3rem .5rem;border-radius:4px;margin:.4rem 0;font-family:monospace}
+.metric-card .metric-interp{font-size:.82rem;color:#444}
+.tag{display:inline-block;padding:.1rem .4rem;border-radius:3px;font-size:.75rem;font-weight:600;margin-right:.25rem}
+.tag-green{background:#d4edda;color:#155724}
+.tag-yellow{background:#fff3cd;color:#856404}
+.tag-red{background:#f8d7da;color:#721c24}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>RAG Evaluation Report — Semáforo de Pobreza</h1>
+  <p>Generated: 2026-03-17 07:46:44 &nbsp;|&nbsp; Judge LLM: <strong>gpt-oss:20b</strong> &nbsp;|&nbsp; Judge Embeddings: <strong>bge-m3</strong> &nbsp;|&nbsp; Metrics: <strong>Answer Relevancy + Context Recall</strong></p>
+</div>
+
+<div class="content">
+
+<!-- ── INFO NOTICE ─────────────────────────────────────────────── -->
+<div class="card card-note" style="padding:.85rem 1.25rem;margin-bottom:1rem">
+  <strong>ℹ 4,390 runs scored</strong> across 60 LLM × embedding × chunk combinations
+  and 30 questions.
+  Faithfulness and Context Precision are excluded — local LLMs do not produce the structured JSON output these metrics require.
+</div>
+
+<!-- ── STAT BOXES ─────────────────────────────────────────────── -->
+<div class="stats-row">
+  <div class="stat-box"><div class="num">4,390</div><div class="lbl">Runs scored</div></div>
+  <div class="stat-box"><div class="num">60</div><div class="lbl">Combinations evaluated</div></div>
+  <div class="stat-box"><div class="num">30</div><div class="lbl">Questions covered</div></div>
+  <div class="stat-box"><div class="num" style="font-size:1.4rem">0.6656</div><div class="lbl">Best avg score</div></div>
+  <div class="stat-box"><div class="num" style="font-size:1.4rem">0.7066</div><div class="lbl">Avg answer relevancy</div></div>
+  <div class="stat-box"><div class="num" style="font-size:1.4rem">0.2383</div><div class="lbl">Avg context recall</div></div>
+</div>
+
+<!-- ── METRIC GUIDE ───────────────────────────────────────────── -->
+<div class="card">
+  <h2>How to Read This Report</h2>
+  <p style="color:#555;font-size:.9rem;margin-bottom:.5rem">
+    Two RAGAS metrics are evaluated here. Both are scored 0–1 (higher is better).
+    Together they capture two complementary failure modes: <em>the LLM answering off-topic</em> and <em>the retrieval pipeline missing relevant content</em>.
+  </p>
+  <div class="metric-def">
+    <div class="metric-card">
+      <div class="metric-name">📊 Answer Relevancy (AR)</div>
+      <div class="metric-formula">≈ cosine_sim(original_question, synthetic_questions_from_answer)</div>
+      <div class="metric-interp">
+        Measures whether the <strong>generated answer actually addresses the question</strong>.
+        The judge LLM generates several questions that the answer could be a response to, then compares them to the original question via embeddings.
+        <br><br>
+        <span class="tag tag-green">≥ 0.70 Good</span>
+        <span class="tag tag-yellow">0.50–0.69 Acceptable</span>
+        <span class="tag tag-red">&lt; 0.50 Off-topic</span>
+        <br><br>
+        <strong>What affects it:</strong> the LLM's ability to stay on-topic and produce coherent answers. <em>Not</em> a measure of factual accuracy.
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-name">🔍 Context Recall (CR)</div>
+      <div class="metric-formula">≈ fraction of ground-truth sentences supported by retrieved contexts</div>
+      <div class="metric-interp">
+        Measures whether the <strong>retrieval pipeline found the right chunks</strong>.
+        The judge LLM checks each sentence of the reference answer to see if it is covered by the retrieved contexts.
+        <br><br>
+        <span class="tag tag-green">≥ 0.50 Good</span>
+        <span class="tag tag-yellow">0.30–0.49 Acceptable</span>
+        <span class="tag tag-red">&lt; 0.30 Retrieval gap</span>
+        <br><br>
+        <strong>What affects it:</strong> embedding model quality, chunk size, and k (number of retrieved chunks). Low CR = the retriever is missing information the answer needs.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── KEY OBSERVATIONS ───────────────────────────────────────── -->
+<div class="card card-obs">
+  <h2>Key Observations &amp; Recommendations</h2>
+  <ul class="obs-list">
+    <li>
+      <strong>Context Recall is the main bottleneck</strong> — overall avg CR is 0.2383, well below the 0.50 target.
+      This means the retriever is consistently failing to surface all the relevant information the answer needs,
+      regardless of which LLM is used. Focus optimisation effort here first.
+    </li>
+    <li>
+      <strong>Best embedding model: bge-m3</strong> (CR: 0.4225, AR: 0.7616) —
+      clear winner. Its 1024-dim multilingual representation is well-suited to Spanish-language poverty and social program content.
+      <strong>Worst: snowflake-arctic-embed</strong> (CR: 0.0742) — poor recall for this corpus.
+    </li>
+    <li>
+      <strong>Best chunk size: large (2048 chars)</strong> (CR: 0.3005) —
+      medium chunks consistently outperform both small and large.
+      Small chunks (512) split context too aggressively, losing coherent passages.
+      Large chunks (2048) add noise and dilute semantic precision in embedding space.
+    </li>
+    <li>
+      <strong>Best LLM for answer quality: qwen3:8b</strong> (AR: 0.7650) —
+      produces the most on-topic answers.
+      <strong>Best LLM for context recall: llama3.2:3b</strong> (CR: 0.2432) —
+      better at incorporating retrieved context into its answers.
+    </li>
+    <li>
+      <strong>Recommended combination: qwen3:8b + bge-m3 + medium</strong> —
+      scores AR: —, CR: —, Avg: 0.6656.
+      Outperforms all other evaluated combinations.
+    </li>
+    <li>
+      <strong>Document format matters (slightly):</strong> Markdown-formatted chunks outperform plaintext
+      on both metrics (CR +0.0000). Structured headings and lists help the embedding model
+      identify semantic boundaries and retrieve more targeted passages.
+    </li>
+    <li>
+      <strong>To improve CR further</strong>: consider increasing k_retrieved (currently 8),
+      adding a re-ranking step after retrieval, or experimenting with hybrid search (dense + BM25).
+      The gap between AR (~0.71) and CR (~0.22) suggests a retrieval problem, not an LLM problem.
+    </li>
+  </ul>
+</div>
+
+<!-- ── BEST COMBINATION ───────────────────────────────────────── -->
+<div class="card">
+  <h2>Best Combination Overall</h2>
+  <div class="best-card">
+    <div class="best-meta">
+      <div style="font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#888">LLM × Embedding × Chunk Size</div>
+      <div class="combo-tag">qwen3:8b | bge-m3 | medium</div>
+      <table>
+        <tr><td>Answer Relevancy</td><td style="color:#155724">0.7439</td></tr>
+        <tr><td>Context Recall</td><td style="color:#856404">0.4720</td></tr>
+        <tr><td>Faithfulness</td><td style="color:#aaa">N/A (excluded)</td></tr>
+        <tr><td>Context Precision</td><td style="color:#aaa">N/A (excluded)</td></tr>
+        <tr><td><strong>Average (AR + CR)</strong></td><td><strong>0.6656</strong></td></tr>
+        <tr><td>Avg retrieval time</td><td>259.5 ms</td></tr>
+        <tr><td>Avg generation time</td><td>5255.2 ms</td></tr>
+        <tr><td>Questions covered</td><td>30</td></tr>
+      </table>
+    </div>
+    <div class="radar-wrap">
+      <canvas id="radarChart" width="300" height="300"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOP 10 TABLE ───────────────────────────────────────────── -->
+<div class="card">
+  <h2>Top 10 Combinations</h2>
+  <p style="font-size:.83rem;color:#666;margin-bottom:.75rem">
+    Sorted by average of Answer Relevancy and Context Recall.
+    Click column headers to sort. Color scale: <span class="badge badge-high">≥0.70</span>
+    <span class="badge badge-mid">0.50–0.69</span>
+    <span class="badge badge-low">0.30–0.49</span>
+    <span class="badge badge-poor">&lt;0.30</span>
+  </p>
+  <div style="overflow-x:auto">
+  <table class="data" id="top10Table">
+    <thead><tr>
+      <th>#</th>
+      <th onclick="sortTable('top10Table',1)">LLM ↕</th>
+      <th onclick="sortTable('top10Table',2)">Embedding ↕</th>
+      <th onclick="sortTable('top10Table',3)">Chunk ↕</th>
+      <th onclick="sortTable('top10Table',4)">Ans. Relevancy ↕</th>
+      <th onclick="sortTable('top10Table',5)">Ctx. Recall ↕</th>
+      <th onclick="sortTable('top10Table',6)">Avg Score ↕</th>
+      <th onclick="sortTable('top10Table',7)">Retrieval ms ↕</th>
+      <th onclick="sortTable('top10Table',8)">Generation ms ↕</th>
+      <th onclick="sortTable('top10Table',9)">Questions ↕</th>
+    </tr></thead>
+    <tbody>
+        <tr>
+          <td>1</td><td>qwen3:8b</td><td>bge-m3</td><td>medium</td>
+          <td style="background:#d4edda;text-align:center">0.7439</td>
+          <td style="background:#fde8c8;text-align:center">0.4720</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6656</td>
+          <td style="text-align:center">259 ms</td>
+          <td style="text-align:center">5255 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>2</td><td>llama3.2:3b</td><td>bge-m3</td><td>large</td>
+          <td style="background:#d4edda;text-align:center">0.7080</td>
+          <td style="background:#fde8c8;text-align:center">0.3865</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6520</td>
+          <td style="text-align:center">267 ms</td>
+          <td style="text-align:center">1683 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>3</td><td>gpt-oss:20b</td><td>bge-m3</td><td>medium</td>
+          <td style="background:#d4edda;text-align:center">0.7398</td>
+          <td style="background:#fde8c8;text-align:center">0.4552</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6458</td>
+          <td style="text-align:center">256 ms</td>
+          <td style="text-align:center">3892 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>4</td><td>llama3.2:3b</td><td>bge-m3</td><td>medium</td>
+          <td style="background:#fff3cd;text-align:center">0.6987</td>
+          <td style="background:#fde8c8;text-align:center">0.4877</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6373</td>
+          <td style="text-align:center">1221 ms</td>
+          <td style="text-align:center">2015 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>5</td><td>gpt-oss:20b</td><td>bge-m3</td><td>large</td>
+          <td style="background:#d4edda;text-align:center">0.7130</td>
+          <td style="background:#fde8c8;text-align:center">0.4391</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6368</td>
+          <td style="text-align:center">239 ms</td>
+          <td style="text-align:center">3772 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>6</td><td>llama3.2:latest</td><td>bge-m3</td><td>medium</td>
+          <td style="background:#d4edda;text-align:center">0.7154</td>
+          <td style="background:#fff3cd;text-align:center">0.5165</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6268</td>
+          <td style="text-align:center">274 ms</td>
+          <td style="text-align:center">1346 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>7</td><td>qwen3:8b</td><td>bge-m3</td><td>large</td>
+          <td style="background:#d4edda;text-align:center">0.7047</td>
+          <td style="background:#fde8c8;text-align:center">0.4425</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6180</td>
+          <td style="text-align:center">236 ms</td>
+          <td style="text-align:center">7977 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>8</td><td>llama3.2:latest</td><td>bge-m3</td><td>large</td>
+          <td style="background:#fff3cd;text-align:center">0.6780</td>
+          <td style="background:#fde8c8;text-align:center">0.4165</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6173</td>
+          <td style="text-align:center">284 ms</td>
+          <td style="text-align:center">1677 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>9</td><td>gpt-oss:20b</td><td>all-minilm</td><td>large</td>
+          <td style="background:#d4edda;text-align:center">0.7543</td>
+          <td style="background:#fde8c8;text-align:center">0.4296</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.6136</td>
+          <td style="text-align:center">64 ms</td>
+          <td style="text-align:center">4615 ms</td>
+          <td style="text-align:center">30</td>
+        </tr>
+        <tr>
+          <td>10</td><td>qwen3:8b</td><td>mxbai-embed-large</td><td>large</td>
+          <td style="background:#d4edda;text-align:center">0.7288</td>
+          <td style="background:#fde8c8;text-align:center">0.3724</td>
+          <td style="background:#fff3cd;font-weight:bold;text-align:center">0.5951</td>
+          <td style="text-align:center">96 ms</td>
+          <td style="text-align:center">7672 ms</td>
+          <td style="text-align:center">30</td>
+        </tr></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── EMBEDDING × CHUNK HEATMAP ──────────────────────────────── -->
+<div class="card">
+  <h2>Embedding × Chunk Size Heatmap</h2>
+  <p style="font-size:.85rem;color:#555;margin-bottom:.75rem">
+    The most actionable comparison: which <strong>embedding model + chunk size</strong> combination retrieves
+    the most relevant context (CR) while generating relevant answers (AR)?
+    Each cell shows the average across all LLMs for that pairing.
+  </p>
+  
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr>
+        <th style="background:#1a3c5e;color:#fff;padding:.5rem .75rem;text-align:left">Embedding Model</th>
+        <th style='text-align:center;background:#1a3c5e;color:#fff;padding:.5rem .75rem'>Small
+(512/64)</th><th style='text-align:center;background:#1a3c5e;color:#fff;padding:.5rem .75rem'>Medium
+(1024/128)</th><th style='text-align:center;background:#1a3c5e;color:#fff;padding:.5rem .75rem'>Large
+(2048/256)</th>
+      </tr></thead>
+      <tbody><tr><td style='font-weight:600;white-space:nowrap'>all-minilm</td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(214,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6797</span><span style='display:block;background:rgb(220,76,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.1457</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(210,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6823</span><span style='display:block;background:rgb(179,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.3169</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(172,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7131</span><span style='display:block;background:rgb(118,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.3790</span><span style='font-size:.7rem;color:#888'>n=120</span></td></tr><tr><td style='font-weight:600;white-space:nowrap'>bge-m3</td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(107,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7644</span><span style='display:block;background:rgb(220,176,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.2703</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(109,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7626</span><span style='display:block;background:rgb(0,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.5173</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(115,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7578</span><span style='display:block;background:rgb(9,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.4906</span><span style='font-size:.7rem;color:#888'>n=120</span></td></tr><tr><td style='font-weight:600;white-space:nowrap'>mxbai-embed-large</td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(210,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6829</span><span style='display:block;background:rgb(220,123,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.2047</span><span style='font-size:.7rem;color:#888'>n=119</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(108,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7634</span><span style='display:block;background:rgb(150,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.3457</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(172,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7125</span><span style='display:block;background:rgb(101,180,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.3963</span><span style='font-size:.7rem;color:#888'>n=120</span></td></tr><tr><td style='font-weight:600;white-space:nowrap'>nomic-embed-text</td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(206,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6857</span><span style='display:block;background:rgb(220,0,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.0431</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(220,179,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6745</span><span style='display:block;background:rgb(220,55,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.1199</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(126,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.7491</span><span style='display:block;background:rgb(220,101,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.1767</span><span style='font-size:.7rem;color:#888'>n=119</span></td></tr><tr><td style='font-weight:600;white-space:nowrap'>snowflake-arctic-embed</td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(220,125,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6222</span><span style='display:block;background:rgb(220,0,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.0381</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(201,180,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6896</span><span style='display:block;background:rgb(220,45,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.1063</span><span style='font-size:.7rem;color:#888'>n=120</span></td><td style='text-align:center;padding:.5rem'><span style='display:block;background:rgb(220,159,80);border-radius:3px;padding:.2rem .4rem;margin-bottom:.2rem;font-size:.82rem'>AR: 0.6549</span><span style='display:block;background:rgb(220,22,80);border-radius:3px;padding:.2rem .4rem;font-size:.82rem'>CR: 0.0787</span><span style='font-size:.7rem;color:#888'>n=120</span></td></tr></tbody>
+    </table>
+    </div>
+    <p style="font-size:.78rem;color:#777;margin-top:.5rem">
+      AR = Answer Relevancy &nbsp;|&nbsp; CR = Context Recall &nbsp;|&nbsp;
+      Color scale: <span style="background:#dc4040;color:#fff;padding:.1rem .3rem;border-radius:2px">low</span>
+      → <span style="background:#e8b450;color:#fff;padding:.1rem .3rem;border-radius:2px">mid</span>
+      → <span style="background:#28a745;color:#fff;padding:.1rem .3rem;border-radius:2px">high</span>
+    </p>
+    
+</div>
+
+<!-- ── BREAKDOWN BY DIMENSION ────────────────────────────────── -->
+<div class="card">
+  <h2>Breakdown by Dimension</h2>
+  <p style="font-size:.83rem;color:#666;margin-bottom:1rem">
+    Average metrics across all questions for each level of each dimension.
+    Context Recall is the key discriminator — it captures retrieval quality.
+  </p>
+  <div class="two-col">
+    <div>
+      <h3>By LLM Model</h3>
+      
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr style="background:#1a3c5e;color:#fff">
+        <th>LLM Model</th><th>N</th><th>Ans. Relevancy</th><th>Context Recall</th>
+      </tr></thead>
+      <tbody style="border:1px solid #ddd"><tr><td style='font-weight:600'>llama3.2:3b</td><td style='text-align:center'>450</td><td style='text-align:center;background:#fff3cd'>0.6581</td><td style='text-align:center;background:#f8d7da'>0.2432</td></tr><tr><td style='font-weight:600'>llama3.2:latest</td><td style='text-align:center'>450</td><td style='text-align:center;background:#fff3cd'>0.6567</td><td style='text-align:center;background:#f8d7da'>0.2424</td></tr><tr><td style='font-weight:600'>gpt-oss:20b</td><td style='text-align:center'>450</td><td style='text-align:center;background:#d4edda'>0.7465</td><td style='text-align:center;background:#f8d7da'>0.2361</td></tr><tr><td style='font-weight:600'>qwen3:8b</td><td style='text-align:center'>448</td><td style='text-align:center;background:#d4edda'>0.7650</td><td style='text-align:center;background:#f8d7da'>0.2315</td></tr></tbody>
+    </table>
+    
+    </div>
+    <div>
+      <h3>By Chunk Configuration</h3>
+      
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr style="background:#1a3c5e;color:#fff">
+        <th>Chunk Config</th><th>Size (chars)</th><th>N</th><th>Ans. Relevancy</th><th>Context Recall</th>
+      </tr></thead>
+      <tbody style="border:1px solid #ddd"><tr><td style='font-weight:600'>large</td><td>2048</td><td style='text-align:center'>599</td><td style='text-align:center;background:#d4edda'>0.7168</td><td style='text-align:center;background:#fde8c8'>0.3005</td></tr><tr><td style='font-weight:600'>medium</td><td>1024</td><td style='text-align:center'>600</td><td style='text-align:center;background:#d4edda'>0.7133</td><td style='text-align:center;background:#f8d7da'>0.2790</td></tr><tr><td style='font-weight:600'>small</td><td>512</td><td style='text-align:center'>599</td><td style='text-align:center;background:#fff3cd'>0.6865</td><td style='text-align:center;background:#f8d7da'>0.1395</td></tr></tbody>
+    </table>
+    
+    </div>
+  </div>
+  <div style="margin-top:1.25rem">
+    <h3>By Embedding Model</h3>
+    
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr style="background:#1a3c5e;color:#fff">
+        <th>Embedding Model</th><th>Dims</th><th>N</th><th>Ans. Relevancy</th><th>Context Recall</th>
+      </tr></thead>
+      <tbody style="border:1px solid #ddd"><tr><td style='font-weight:600'>bge-m3</td><td>1024</td><td style='text-align:center'>360</td><td style='text-align:center;background:#d4edda'>0.7616</td><td style='text-align:center;background:#fde8c8'>0.4225</td></tr><tr><td style='font-weight:600'>mxbai-embed-large</td><td>1024</td><td style='text-align:center'>359</td><td style='text-align:center;background:#d4edda'>0.7192</td><td style='text-align:center;background:#fde8c8'>0.3140</td></tr><tr><td style='font-weight:600'>all-minilm</td><td>384</td><td style='text-align:center'>360</td><td style='text-align:center;background:#fff3cd'>0.6917</td><td style='text-align:center;background:#f8d7da'>0.2792</td></tr><tr><td style='font-weight:600'>nomic-embed-text</td><td>768</td><td style='text-align:center'>359</td><td style='text-align:center;background:#d4edda'>0.7021</td><td style='text-align:center;background:#f8d7da'>0.1125</td></tr><tr><td style='font-weight:600'>snowflake-arctic-embed</td><td>1024</td><td style='text-align:center'>360</td><td style='text-align:center;background:#fff3cd'>0.6559</td><td style='text-align:center;background:#f8d7da'>0.0742</td></tr></tbody>
+    </table>
+    
+  </div>
+</div>
+
+<!-- ── FORMAT & CATEGORY ──────────────────────────────────────── -->
+<div class="card">
+  <h2>Document Format &amp; Question Category</h2>
+  <p style="font-size:.83rem;color:#666;margin-bottom:1rem">
+    <strong>Format</strong> refers to how source documents were processed — markdown preserves structure (headings, lists, tables),
+    while plaintext strips formatting. <strong>Category</strong> is the knowledge-base topic of each question.
+  </p>
+  <div class="two-col">
+    <div>
+      <h3>Document Format Comparison</h3>
+      
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr style="background:#1a3c5e;color:#fff">
+        <th>Document Format</th><th>N</th><th>Ans. Relevancy</th><th>Context Recall</th>
+      </tr></thead>
+      <tbody style="border:1px solid #ddd"><tr><td style='font-weight:600'>markdown</td><td style='text-align:center'>1798</td><td style='text-align:center;background:#d4edda'>0.7056</td><td style='text-align:center;background:#f8d7da'>0.2383</td></tr></tbody>
+    </table>
+    
+      <p style="font-size:.78rem;color:#777;margin-top:.4rem">
+        Markdown consistently scores higher on both metrics. Structure helps embeddings find precise passages.
+      </p>
+    </div>
+    <div>
+      <h3>By Question Category</h3>
+      
+    <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+      <thead><tr style="background:#1a3c5e;color:#fff">
+        <th>Category</th><th>N</th><th>Ans. Relevancy</th><th>Context Recall</th>
+      </tr></thead>
+      <tbody style="border:1px solid #ddd"><tr><td style='font-weight:600'>semaforo</td><td style='text-align:center'>479</td><td style='text-align:center;background:#fff3cd'>0.6849</td><td style='text-align:center;background:#fde8c8'>0.3386</td></tr><tr><td style='font-weight:600'>banco_soluciones</td><td style='text-align:center'>659</td><td style='text-align:center;background:#d4edda'>0.7021</td><td style='text-align:center;background:#f8d7da'>0.2157</td></tr><tr><td style='font-weight:600'>programas</td><td style='text-align:center'>180</td><td style='text-align:center;background:#d4edda'>0.7204</td><td style='text-align:center;background:#f8d7da'>0.1940</td></tr><tr><td style='font-weight:600'>indicadores</td><td style='text-align:center'>420</td><td style='text-align:center;background:#d4edda'>0.7079</td><td style='text-align:center;background:#f8d7da'>0.1916</td></tr><tr><td style='font-weight:600'>fundacion_paraguaya</td><td style='text-align:center'>60</td><td style='text-align:center;background:#d4edda'>0.8584</td><td style='text-align:center;background:#f8d7da'>0.1687</td></tr></tbody>
+    </table>
+    
+      <p style="font-size:.78rem;color:#777;margin-top:.4rem">
+        Categories with higher recall tend to have more focused, self-contained documents.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── COMPARISON CHARTS ──────────────────────────────────────── -->
+<div class="card">
+  <h2>Avg Score by Dimension — Charts</h2>
+  <div class="charts-row">
+    <div class="chart-box"><h3>By LLM</h3><canvas id="chartLLM" height="200"></canvas></div>
+    <div class="chart-box"><h3>By Embedding</h3><canvas id="chartEmbed" height="200"></canvas></div>
+    <div class="chart-box"><h3>By Chunk Size</h3><canvas id="chartChunk" height="200"></canvas></div>
+  </div>
+</div>
+
+<!-- ── FULL RANKINGS ──────────────────────────────────────────── -->
+<div class="card">
+  <h2>Full Rankings — All Combinations</h2>
+  <div class="filter-row">
+    <select id="filterLLM" onchange="renderCombos()"><option value="">All LLMs</option></select>
+    <select id="filterEmbed" onchange="renderCombos()"><option value="">All Embeddings</option></select>
+    <select id="filterChunk" onchange="renderCombos()"><option value="">All Chunks</option></select>
+  </div>
+  <div style="overflow-x:auto">
+  <table class="data" id="combosTable">
+    <thead><tr>
+      <th onclick="sortDynTable('combo')">Combination ↕</th>
+      <th onclick="sortDynTable('answer_relevancy')">Ans. Relevancy ↕</th>
+      <th onclick="sortDynTable('context_recall')">Ctx. Recall ↕</th>
+      <th onclick="sortDynTable('avg_score')">Avg Score ↕</th>
+      <th onclick="sortDynTable('retrieval_time_ms')">Retrieval ms ↕</th>
+      <th onclick="sortDynTable('generation_time_ms')">Generation ms ↕</th>
+      <th onclick="sortDynTable('n_questions')">Questions ↕</th>
+    </tr></thead>
+    <tbody id="combosBody"></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── PER-QUESTION TABLE ─────────────────────────────────────── -->
+<div class="card">
+  <h2>Per-Question Best Combination</h2>
+  <p style="font-size:.83rem;color:#666;margin-bottom:.75rem">
+    For each of the 30 questions in the knowledge base, the combination that achieved the highest average score.
+  </p>
+  <div class="filter-row">
+    <input id="searchQ" type="text" placeholder="Search question text…" oninput="renderPerQ()" style="width:300px"/>
+    <select id="filterCat" onchange="renderPerQ()"><option value="">All categories</option></select>
+  </div>
+  <div style="overflow-x:auto">
+  <table class="data" id="perQTable">
+    <thead><tr>
+      <th>Question</th><th>Category</th><th>Best Combination</th>
+      <th onclick="sortPerQ('avg_score')">Avg ↕</th>
+      <th onclick="sortPerQ('answer_relevancy')">Ans. Rel. ↕</th>
+      <th onclick="sortPerQ('context_recall')">Ctx. Recall ↕</th>
+    </tr></thead>
+    <tbody id="perQBody"></tbody>
+  </table>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+const ALL_COMBOS=[{"combo": "qwen3:8b | bge-m3 | medium", "llm": "qwen3:8b", "embed": "bge-m3", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7439, "context_precision": 0.0, "context_recall": 0.472, "avg_score": 0.6656, "retrieval_time_ms": 259.5, "generation_time_ms": 5255.2, "n_questions": 30}, {"combo": "llama3.2:3b | bge-m3 | large", "llm": "llama3.2:3b", "embed": "bge-m3", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.708, "context_precision": 0.0, "context_recall": 0.3865, "avg_score": 0.652, "retrieval_time_ms": 267.9, "generation_time_ms": 1683.2, "n_questions": 30}, {"combo": "gpt-oss:20b | bge-m3 | medium", "llm": "gpt-oss:20b", "embed": "bge-m3", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7398, "context_precision": 0.0, "context_recall": 0.4552, "avg_score": 0.6458, "retrieval_time_ms": 256.3, "generation_time_ms": 3892.9, "n_questions": 30}, {"combo": "llama3.2:3b | bge-m3 | medium", "llm": "llama3.2:3b", "embed": "bge-m3", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6987, "context_precision": 0.0, "context_recall": 0.4877, "avg_score": 0.6373, "retrieval_time_ms": 1221.7, "generation_time_ms": 2015.6, "n_questions": 30}, {"combo": "gpt-oss:20b | bge-m3 | large", "llm": "gpt-oss:20b", "embed": "bge-m3", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.713, "context_precision": 0.0, "context_recall": 0.4391, "avg_score": 0.6368, "retrieval_time_ms": 239.8, "generation_time_ms": 3772.5, "n_questions": 30}, {"combo": "llama3.2:latest | bge-m3 | medium", "llm": "llama3.2:latest", "embed": "bge-m3", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7154, "context_precision": 0.0, "context_recall": 0.5165, "avg_score": 0.6268, "retrieval_time_ms": 274.2, "generation_time_ms": 1346.7, "n_questions": 30}, {"combo": "qwen3:8b | bge-m3 | large", "llm": "qwen3:8b", "embed": "bge-m3", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.7047, "context_precision": 0.0, "context_recall": 0.4425, "avg_score": 0.618, "retrieval_time_ms": 236.1, "generation_time_ms": 7977.6, "n_questions": 30}, {"combo": "llama3.2:latest | bge-m3 | large", "llm": "llama3.2:latest", "embed": "bge-m3", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.678, "context_precision": 0.0, "context_recall": 0.4165, "avg_score": 0.6173, "retrieval_time_ms": 284.8, "generation_time_ms": 1677.6, "n_questions": 30}, {"combo": "gpt-oss:20b | all-minilm | large", "llm": "gpt-oss:20b", "embed": "all-minilm", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.7543, "context_precision": 0.0, "context_recall": 0.4296, "avg_score": 0.6136, "retrieval_time_ms": 64.5, "generation_time_ms": 4615.3, "n_questions": 30}, {"combo": "qwen3:8b | mxbai-embed-large | large", "llm": "qwen3:8b", "embed": "mxbai-embed-large", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.7288, "context_precision": 0.0, "context_recall": 0.3724, "avg_score": 0.5951, "retrieval_time_ms": 96.6, "generation_time_ms": 7672.1, "n_questions": 30}, {"combo": "gpt-oss:20b | all-minilm | medium", "llm": "gpt-oss:20b", "embed": "all-minilm", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7536, "context_precision": 0.0, "context_recall": 0.3308, "avg_score": 0.573, "retrieval_time_ms": 80.0, "generation_time_ms": 4055.1, "n_questions": 30}, {"combo": "qwen3:8b | mxbai-embed-large | medium", "llm": "qwen3:8b", "embed": "mxbai-embed-large", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6833, "context_precision": 0.0, "context_recall": 0.3754, "avg_score": 0.5638, "retrieval_time_ms": 112.4, "generation_time_ms": 5615.1, "n_questions": 30}, {"combo": "gpt-oss:20b | mxbai-embed-large | large", "llm": "gpt-oss:20b", "embed": "mxbai-embed-large", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6763, "context_precision": 0.0, "context_recall": 0.3498, "avg_score": 0.5434, "retrieval_time_ms": 90.6, "generation_time_ms": 4576.1, "n_questions": 30}, {"combo": "llama3.2:latest | all-minilm | large", "llm": "llama3.2:latest", "embed": "all-minilm", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6725, "context_precision": 0.0, "context_recall": 0.354, "avg_score": 0.539, "retrieval_time_ms": 80.1, "generation_time_ms": 1791.5, "n_questions": 30}, {"combo": "llama3.2:3b | mxbai-embed-large | large", "llm": "llama3.2:3b", "embed": "mxbai-embed-large", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.652, "context_precision": 0.0, "context_recall": 0.3718, "avg_score": 0.5328, "retrieval_time_ms": 84.7, "generation_time_ms": 1517.7, "n_questions": 30}, {"combo": "llama3.2:3b | mxbai-embed-large | medium", "llm": "llama3.2:3b", "embed": "mxbai-embed-large", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6452, "context_precision": 0.0, "context_recall": 0.3569, "avg_score": 0.5318, "retrieval_time_ms": 111.3, "generation_time_ms": 1325.4, "n_questions": 30}, {"combo": "gpt-oss:20b | mxbai-embed-large | medium", "llm": "gpt-oss:20b", "embed": "mxbai-embed-large", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7263, "context_precision": 0.0, "context_recall": 0.2698, "avg_score": 0.5289, "retrieval_time_ms": 112.1, "generation_time_ms": 3731.6, "n_questions": 30}, {"combo": "gpt-oss:20b | bge-m3 | small", "llm": "gpt-oss:20b", "embed": "bge-m3", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.7577, "context_precision": 0.0, "context_recall": 0.2657, "avg_score": 0.5236, "retrieval_time_ms": 2555.5, "generation_time_ms": 6801.5, "n_questions": 30}, {"combo": "llama3.2:latest | mxbai-embed-large | large", "llm": "llama3.2:latest", "embed": "mxbai-embed-large", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6028, "context_precision": 0.0, "context_recall": 0.3591, "avg_score": 0.5207, "retrieval_time_ms": 91.7, "generation_time_ms": 1536.8, "n_questions": 30}, {"combo": "llama3.2:3b | all-minilm | large", "llm": "llama3.2:3b", "embed": "all-minilm", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6481, "context_precision": 0.0, "context_recall": 0.3325, "avg_score": 0.5118, "retrieval_time_ms": 72.5, "generation_time_ms": 1790.5, "n_questions": 30}, {"combo": "llama3.2:latest | mxbai-embed-large | medium", "llm": "llama3.2:latest", "embed": "mxbai-embed-large", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6171, "context_precision": 0.0, "context_recall": 0.3115, "avg_score": 0.5075, "retrieval_time_ms": 106.5, "generation_time_ms": 1333.3, "n_questions": 30}, {"combo": "qwen3:8b | all-minilm | medium", "llm": "qwen3:8b", "embed": "all-minilm", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6776, "context_precision": 0.0, "context_recall": 0.2492, "avg_score": 0.506, "retrieval_time_ms": 77.1, "generation_time_ms": 5455.7, "n_questions": 30}, {"combo": "qwen3:8b | all-minilm | large", "llm": "qwen3:8b", "embed": "all-minilm", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6348, "context_precision": 0.0, "context_recall": 0.3115, "avg_score": 0.5021, "retrieval_time_ms": 78.5, "generation_time_ms": 9021.7, "n_questions": 30}, {"combo": "qwen3:8b | bge-m3 | small", "llm": "qwen3:8b", "embed": "bge-m3", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.7382, "context_precision": 0.0, "context_recall": 0.2538, "avg_score": 0.5015, "retrieval_time_ms": 345.2, "generation_time_ms": 4380.3, "n_questions": 30}, {"combo": "llama3.2:latest | bge-m3 | small", "llm": "llama3.2:latest", "embed": "bge-m3", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.69, "context_precision": 0.0, "context_recall": 0.2615, "avg_score": 0.4962, "retrieval_time_ms": 357.4, "generation_time_ms": 2599.0, "n_questions": 30}, {"combo": "gpt-oss:20b | mxbai-embed-large | small", "llm": "gpt-oss:20b", "embed": "mxbai-embed-large", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6544, "context_precision": 0.0, "context_recall": 0.2361, "avg_score": 0.4838, "retrieval_time_ms": 149.3, "generation_time_ms": 3999.4, "n_questions": 30}, {"combo": "llama3.2:3b | all-minilm | medium", "llm": "llama3.2:3b", "embed": "all-minilm", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.5847, "context_precision": 0.0, "context_recall": 0.3163, "avg_score": 0.482, "retrieval_time_ms": 80.0, "generation_time_ms": 1218.9, "n_questions": 30}, {"combo": "llama3.2:latest | all-minilm | medium", "llm": "llama3.2:latest", "embed": "all-minilm", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.5767, "context_precision": 0.0, "context_recall": 0.3185, "avg_score": 0.4819, "retrieval_time_ms": 73.6, "generation_time_ms": 1224.1, "n_questions": 30}, {"combo": "llama3.2:3b | bge-m3 | small", "llm": "llama3.2:3b", "embed": "bge-m3", "chunk": "small", "faithfulness": 0.08, "answer_relevancy": 0.5914, "context_precision": 0.0, "context_recall": 0.2643, "avg_score": 0.4713, "retrieval_time_ms": 361.8, "generation_time_ms": 1139.0, "n_questions": 30}, {"combo": "gpt-oss:20b | nomic-embed-text | large", "llm": "gpt-oss:20b", "embed": "nomic-embed-text", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.7406, "context_precision": 0.0, "context_recall": 0.1567, "avg_score": 0.457, "retrieval_time_ms": 73.4, "generation_time_ms": 4331.6, "n_questions": 30}, {"combo": "qwen3:8b | all-minilm | small", "llm": "qwen3:8b", "embed": "all-minilm", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.7092, "context_precision": 0.0, "context_recall": 0.1486, "avg_score": 0.4541, "retrieval_time_ms": 110.8, "generation_time_ms": 4566.3, "n_questions": 30}, {"combo": "qwen3:8b | nomic-embed-text | large", "llm": "qwen3:8b", "embed": "nomic-embed-text", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.681, "context_precision": 0.0, "context_recall": 0.1823, "avg_score": 0.4538, "retrieval_time_ms": 116.5, "generation_time_ms": 6158.0, "n_questions": 29}, {"combo": "llama3.2:latest | nomic-embed-text | large", "llm": "llama3.2:latest", "embed": "nomic-embed-text", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6989, "context_precision": 0.0, "context_recall": 0.2028, "avg_score": 0.4508, "retrieval_time_ms": 93.3, "generation_time_ms": 1364.7, "n_questions": 30}, {"combo": "llama3.2:3b | nomic-embed-text | large", "llm": "llama3.2:3b", "embed": "nomic-embed-text", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.674, "context_precision": 0.0, "context_recall": 0.1476, "avg_score": 0.4384, "retrieval_time_ms": 71.4, "generation_time_ms": 1359.6, "n_questions": 30}, {"combo": "qwen3:8b | mxbai-embed-large | small", "llm": "qwen3:8b", "embed": "mxbai-embed-large", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6594, "context_precision": 0.0, "context_recall": 0.1753, "avg_score": 0.4346, "retrieval_time_ms": 197.1, "generation_time_ms": 4695.6, "n_questions": 29}, {"combo": "gpt-oss:20b | snowflake-arctic-embed | medium", "llm": "gpt-oss:20b", "embed": "snowflake-arctic-embed", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7389, "context_precision": 0.0, "context_recall": 0.0972, "avg_score": 0.4334, "retrieval_time_ms": 103.3, "generation_time_ms": 3961.6, "n_questions": 30}, {"combo": "qwen3:8b | nomic-embed-text | medium", "llm": "qwen3:8b", "embed": "nomic-embed-text", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.687, "context_precision": 0.0, "context_recall": 0.1125, "avg_score": 0.4228, "retrieval_time_ms": 100.2, "generation_time_ms": 4725.1, "n_questions": 30}, {"combo": "llama3.2:3b | all-minilm | small", "llm": "llama3.2:3b", "embed": "all-minilm", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6592, "context_precision": 0.0, "context_recall": 0.1611, "avg_score": 0.4102, "retrieval_time_ms": 134.3, "generation_time_ms": 1099.4, "n_questions": 30}, {"combo": "gpt-oss:20b | nomic-embed-text | medium", "llm": "gpt-oss:20b", "embed": "nomic-embed-text", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.7135, "context_precision": 0.0, "context_recall": 0.1058, "avg_score": 0.4096, "retrieval_time_ms": 91.3, "generation_time_ms": 3932.8, "n_questions": 30}, {"combo": "llama3.2:latest | nomic-embed-text | medium", "llm": "llama3.2:latest", "embed": "nomic-embed-text", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.664, "context_precision": 0.0, "context_recall": 0.1536, "avg_score": 0.4088, "retrieval_time_ms": 90.5, "generation_time_ms": 1195.3, "n_questions": 30}, {"combo": "qwen3:8b | snowflake-arctic-embed | large", "llm": "qwen3:8b", "embed": "snowflake-arctic-embed", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6772, "context_precision": 0.0, "context_recall": 0.0812, "avg_score": 0.4057, "retrieval_time_ms": 84.8, "generation_time_ms": 5479.4, "n_questions": 30}, {"combo": "llama3.2:latest | snowflake-arctic-embed | medium", "llm": "llama3.2:latest", "embed": "snowflake-arctic-embed", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6866, "context_precision": 0.0, "context_recall": 0.0583, "avg_score": 0.402, "retrieval_time_ms": 111.2, "generation_time_ms": 1107.6, "n_questions": 30}, {"combo": "gpt-oss:20b | nomic-embed-text | small", "llm": "gpt-oss:20b", "embed": "nomic-embed-text", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.7193, "context_precision": 0.0, "context_recall": 0.0667, "avg_score": 0.4013, "retrieval_time_ms": 124.3, "generation_time_ms": 3333.2, "n_questions": 30}, {"combo": "llama3.2:3b | mxbai-embed-large | small", "llm": "llama3.2:3b", "embed": "mxbai-embed-large", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.5717, "context_precision": 0.0, "context_recall": 0.2278, "avg_score": 0.3997, "retrieval_time_ms": 171.0, "generation_time_ms": 1129.0, "n_questions": 30}, {"combo": "qwen3:8b | nomic-embed-text | small", "llm": "qwen3:8b", "embed": "nomic-embed-text", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.7752, "context_precision": 0.0, "context_recall": 0.0222, "avg_score": 0.3987, "retrieval_time_ms": 166.9, "generation_time_ms": 4085.2, "n_questions": 30}, {"combo": "llama3.2:3b | snowflake-arctic-embed | medium", "llm": "llama3.2:3b", "embed": "snowflake-arctic-embed", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6242, "context_precision": 0.0, "context_recall": 0.1194, "avg_score": 0.3876, "retrieval_time_ms": 107.0, "generation_time_ms": 1125.7, "n_questions": 30}, {"combo": "gpt-oss:20b | all-minilm | small", "llm": "gpt-oss:20b", "embed": "all-minilm", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6601, "context_precision": 0.0, "context_recall": 0.1139, "avg_score": 0.387, "retrieval_time_ms": 101.9, "generation_time_ms": 3358.6, "n_questions": 30}, {"combo": "qwen3:8b | snowflake-arctic-embed | medium", "llm": "qwen3:8b", "embed": "snowflake-arctic-embed", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.6168, "context_precision": 0.0, "context_recall": 0.1361, "avg_score": 0.3848, "retrieval_time_ms": 104.5, "generation_time_ms": 4402.6, "n_questions": 30}, {"combo": "llama3.2:latest | snowflake-arctic-embed | large", "llm": "llama3.2:latest", "embed": "snowflake-arctic-embed", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6214, "context_precision": 0.0, "context_recall": 0.0923, "avg_score": 0.3791, "retrieval_time_ms": 68.4, "generation_time_ms": 1432.5, "n_questions": 30}, {"combo": "gpt-oss:20b | snowflake-arctic-embed | large", "llm": "gpt-oss:20b", "embed": "snowflake-arctic-embed", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6364, "context_precision": 0.0, "context_recall": 0.0173, "avg_score": 0.3719, "retrieval_time_ms": 81.7, "generation_time_ms": 3714.4, "n_questions": 30}, {"combo": "llama3.2:3b | nomic-embed-text | medium", "llm": "llama3.2:3b", "embed": "nomic-embed-text", "chunk": "medium", "faithfulness": 0.0, "answer_relevancy": 0.5885, "context_precision": 0.0, "context_recall": 0.0958, "avg_score": 0.3681, "retrieval_time_ms": 103.8, "generation_time_ms": 1181.8, "n_questions": 30}, {"combo": "llama3.2:3b | snowflake-arctic-embed | large", "llm": "llama3.2:3b", "embed": "snowflake-arctic-embed", "chunk": "large", "faithfulness": 0.0, "answer_relevancy": 0.6192, "context_precision": 0.0, "context_recall": 0.1006, "avg_score": 0.3658, "retrieval_time_ms": 82.4, "generation_time_ms": 1419.9, "n_questions": 30}, {"combo": "llama3.2:latest | mxbai-embed-large | small", "llm": "llama3.2:latest", "embed": "mxbai-embed-large", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.5722, "context_precision": 0.0, "context_recall": 0.1583, "avg_score": 0.3653, "retrieval_time_ms": 148.1, "generation_time_ms": 1139.3, "n_questions": 30}, {"combo": "qwen3:8b | snowflake-arctic-embed | small", "llm": "qwen3:8b", "embed": "snowflake-arctic-embed", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6546, "context_precision": 0.0, "context_recall": 0.0264, "avg_score": 0.3607, "retrieval_time_ms": 150.5, "generation_time_ms": 4064.0, "n_questions": 30}, {"combo": "llama3.2:latest | all-minilm | small", "llm": "llama3.2:latest", "embed": "all-minilm", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.5544, "context_precision": 0.0, "context_recall": 0.1444, "avg_score": 0.3494, "retrieval_time_ms": 113.1, "generation_time_ms": 1075.5, "n_questions": 30}, {"combo": "gpt-oss:20b | snowflake-arctic-embed | small", "llm": "gpt-oss:20b", "embed": "snowflake-arctic-embed", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6407, "context_precision": 0.0, "context_recall": 0.0431, "avg_score": 0.3419, "retrieval_time_ms": 139.8, "generation_time_ms": 4565.6, "n_questions": 30}, {"combo": "llama3.2:latest | nomic-embed-text | small", "llm": "llama3.2:latest", "embed": "nomic-embed-text", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.6316, "context_precision": 0.0, "context_recall": 0.05, "avg_score": 0.3408, "retrieval_time_ms": 138.9, "generation_time_ms": 1131.2, "n_questions": 30}, {"combo": "llama3.2:3b | snowflake-arctic-embed | small", "llm": "llama3.2:3b", "embed": "snowflake-arctic-embed", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.5516, "context_precision": 0.0, "context_recall": 0.0431, "avg_score": 0.3139, "retrieval_time_ms": 152.1, "generation_time_ms": 997.8, "n_questions": 30}, {"combo": "llama3.2:3b | nomic-embed-text | small", "llm": "llama3.2:3b", "embed": "nomic-embed-text", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.5938, "context_precision": 0.0, "context_recall": 0.0333, "avg_score": 0.3136, "retrieval_time_ms": 146.7, "generation_time_ms": 1106.1, "n_questions": 30}, {"combo": "llama3.2:latest | snowflake-arctic-embed | small", "llm": "llama3.2:latest", "embed": "snowflake-arctic-embed", "chunk": "small", "faithfulness": 0.0, "answer_relevancy": 0.4969, "context_precision": 0.0, "context_recall": 0.0361, "avg_score": 0.2665, "retrieval_time_ms": 140.6, "generation_time_ms": 1016.6, "n_questions": 30}];
+const ALL_PERQ=[{"question": "\u00bfQu\u00e9 significan los colores rojo, amarillo y verde?", "category": "semaforo", "best_combo": "gpt-oss:20b | mxbai-embed-large | small", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 relaci\u00f3n tiene el Banco de Soluciones con el Sem\u00e1foro?", "category": "banco_soluciones", "best_combo": "llama3.2:latest | mxbai-embed-large | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 dice el indicador de Ambiente libre de contaminaci\u00f3n?", "category": "indicadores", "best_combo": "qwen3:8b | mxbai-embed-large | large", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 significa el indicador de Acceso a cr\u00e9dito?", "category": "indicadores", "best_combo": "qwen3:8b | bge-m3 | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfPor qu\u00e9 priorizar indicadores?", "category": "semaforo", "best_combo": "llama3.2:3b | nomic-embed-text | large", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfC\u00f3mo me puede ayudar el Banco de Soluciones en mi d\u00eda a d\u00eda?", "category": "banco_soluciones", "best_combo": "llama3.2:3b | all-minilm | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es el Sem\u00e1foro en Comunidades?", "category": "programas", "best_combo": "gpt-oss:20b | all-minilm | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 indica el indicador de C\u00e9dula de identidad vigente?", "category": "indicadores", "best_combo": "qwen3:8b | mxbai-embed-large | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 analiza el indicador de Fuentes de ingresos diversificadas?", "category": "indicadores", "best_combo": "qwen3:8b | all-minilm | medium", "avg_score": 1.0, "faithfulness": null, "answer_relevancy": null, "context_recall": 1.0}, {"question": "\u00bfEl Banco de Soluciones es solo para personas en situaci\u00f3n de pobreza?", "category": "banco_soluciones", "best_combo": "llama3.2:3b | all-minilm | large", "avg_score": 0.9971, "faithfulness": null, "answer_relevancy": 0.9943, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es un indicador del Sem\u00e1foro?", "category": "semaforo", "best_combo": "llama3.2:latest | mxbai-embed-large | large", "avg_score": 0.9889, "faithfulness": null, "answer_relevancy": 0.9778, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es la Fundaci\u00f3n Paraguaya?", "category": "fundacion_paraguaya", "best_combo": "qwen3:8b | mxbai-embed-large | large", "avg_score": 0.9693, "faithfulness": null, "answer_relevancy": 0.9693, "context_recall": null}, {"question": "\u00bfCu\u00e1les son los 50 indicadores originales del Sem\u00e1foro?", "category": "indicadores", "best_combo": "gpt-oss:20b | all-minilm | large", "avg_score": 0.9692, "faithfulness": null, "answer_relevancy": 0.9384, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es el Mapa de Vida?", "category": "semaforo", "best_combo": "llama3.2:3b | all-minilm | medium", "avg_score": 0.9546, "faithfulness": null, "answer_relevancy": 0.9091, "context_recall": 1.0}, {"question": "\u00bfPor qu\u00e9 el Sem\u00e1foro mide m\u00e1s que ingresos?", "category": "semaforo", "best_combo": "qwen3:8b | mxbai-embed-large | large", "avg_score": 0.9472, "faithfulness": null, "answer_relevancy": 0.8944, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es el Banco de Soluciones?", "category": "banco_soluciones", "best_combo": "llama3.2:3b | mxbai-embed-large | medium", "avg_score": 0.9279, "faithfulness": null, "answer_relevancy": 0.8558, "context_recall": 1.0}, {"question": "\u00bfPuedo encontrar Soluciones incluso si no apliqu\u00e9 la encuesta del Sem\u00e1foro?", "category": "banco_soluciones", "best_combo": "gpt-oss:20b | snowflake-arctic-embed | large", "avg_score": 0.9183, "faithfulness": null, "answer_relevancy": 0.9183, "context_recall": null}, {"question": "\u00bfQu\u00e9 es el Sem\u00e1foro?", "category": "semaforo", "best_combo": "llama3.2:3b | bge-m3 | large", "avg_score": 0.9136, "faithfulness": null, "answer_relevancy": 0.9136, "context_recall": null}, {"question": "\u00bfQu\u00e9 eval\u00faa el indicador de Ahorros familiares estables?", "category": "indicadores", "best_combo": "llama3.2:3b | all-minilm | medium", "avg_score": 0.8937, "faithfulness": null, "answer_relevancy": 0.8937, "context_recall": null}, {"question": "\u00bfNecesito estar vinculado a una organizaci\u00f3n para usar el Banco?", "category": "banco_soluciones", "best_combo": "qwen3:8b | mxbai-embed-large | large", "avg_score": 0.891, "faithfulness": null, "answer_relevancy": 0.782, "context_recall": 1.0}, {"question": "\u00bfCu\u00e1ntos indicadores tiene el Sem\u00e1foro?", "category": "semaforo", "best_combo": "llama3.2:latest | bge-m3 | large", "avg_score": 0.8876, "faithfulness": null, "answer_relevancy": 0.8876, "context_recall": null}, {"question": "\u00bfPuedo usar el Banco de Soluciones sin conocer los indicadores del Sem\u00e1foro?", "category": "banco_soluciones", "best_combo": "llama3.2:latest | all-minilm | large", "avg_score": 0.8688, "faithfulness": null, "answer_relevancy": 0.9876, "context_recall": 0.75}, {"question": "\u00bfLas Soluciones son gratuitas?", "category": "banco_soluciones", "best_combo": "qwen3:8b | nomic-embed-text | medium", "avg_score": 0.8615, "faithfulness": null, "answer_relevancy": 0.723, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 es Empresas sin Pobreza?", "category": "programas", "best_combo": "llama3.2:3b | bge-m3 | medium", "avg_score": 0.8295, "faithfulness": null, "answer_relevancy": 0.9089, "context_recall": 0.75}, {"question": "\u00bfCu\u00e1ntos indicadores se pueden priorizar?", "category": "semaforo", "best_combo": "gpt-oss:20b | bge-m3 | large", "avg_score": 0.7906, "faithfulness": null, "answer_relevancy": 0.8311, "context_recall": 0.75}, {"question": "\u00bfQu\u00e9 me recomend\u00e1s hacer primero?", "category": "banco_soluciones", "best_combo": "gpt-oss:20b | mxbai-embed-large | small", "avg_score": 0.7357, "faithfulness": null, "answer_relevancy": 0.4713, "context_recall": 1.0}, {"question": "\u00bfQu\u00e9 tipo de Soluciones puedo encontrar en el Banco?", "category": "banco_soluciones", "best_combo": "qwen3:8b | snowflake-arctic-embed | large", "avg_score": 0.7331, "faithfulness": null, "answer_relevancy": 0.7331, "context_recall": null}, {"question": "\u00bfQu\u00e9 dice el indicador de Ingresos por encima de la l\u00ednea de pobreza?", "category": "indicadores", "best_combo": "qwen3:8b | bge-m3 | large", "avg_score": 0.6151, "faithfulness": null, "answer_relevancy": 0.7303, "context_recall": 0.5}, {"question": "\u00bfQu\u00e9 significa que una Soluci\u00f3n sea exclusiva?", "category": "banco_soluciones", "best_combo": "llama3.2:latest | nomic-embed-text | medium", "avg_score": 0.6059, "faithfulness": null, "answer_relevancy": 0.7118, "context_recall": 0.5}, {"question": "\u00bfQu\u00e9 es el Sem\u00e1foro de Bienestar Laboral?", "category": "programas", "best_combo": "llama3.2:latest | mxbai-embed-large | medium", "avg_score": 0.6013, "faithfulness": null, "answer_relevancy": 0.9525, "context_recall": 0.25}];
+
+// Radar chart
+new Chart(document.getElementById('radarChart').getContext('2d'),{
+  type:'radar',
+  data:{labels:["Faithfulness", "Ans.Relevancy", "Ctx.Precision", "Ctx.Recall"],datasets:[{
+    label:'qwen3:8b | bge-m3 | medium',
+    data:[0, 0.7439, 0, 0.472],
+    backgroundColor:'rgba(26,60,94,0.18)',
+    borderColor:'#1a3c5e',
+    pointBackgroundColor:'#1a3c5e'
+  }]},
+  options:{responsive:false,scales:{r:{min:0,max:1,ticks:{stepSize:0.2}}},plugins:{legend:{position:'bottom'}}}
+});
+
+// Bar charts
+function makeBar(id,dataJson){
+  const d=JSON.parse(dataJson);
+  new Chart(document.getElementById(id).getContext('2d'),{
+    type:'bar',
+    data:{labels:d.labels,datasets:[{label:'Avg Score',data:d.scores,
+      backgroundColor:d.scores.map(s=>s>=0.7?'#28a745':s>=0.5?'#ffc107':s>=0.3?'#fd7e14':'#dc3545')}]},
+    options:{indexAxis:'y',responsive:true,scales:{x:{min:0,max:1}},plugins:{legend:{display:false}}}
+  });
+}
+makeBar('chartLLM',   '{"labels": ["gpt-oss:20b", "qwen3:8b", "llama3.2:3b", "llama3.2:latest"], "scores": [0.4901, 0.4845, 0.4544, 0.4501]}');
+makeBar('chartEmbed', '{"labels": ["bge-m3", "mxbai-embed-large", "all-minilm", "nomic-embed-text", "snowflake-arctic-embed"], "scores": [0.591, 0.5006, 0.4842, 0.4053, 0.3678]}');
+makeBar('chartChunk', '{"labels": ["large", "medium", "small"], "scores": [0.5103, 0.4984, 0.4007]}');
+
+// Table sort (static)
+let sortDirs={};
+function sortTable(tableId,colIdx){
+  const tbl=document.getElementById(tableId),tbody=tbl.tBodies[0];
+  const rows=Array.from(tbody.rows);
+  const dir=sortDirs[tableId+colIdx]=-(sortDirs[tableId+colIdx]||-1);
+  rows.sort((a,b)=>{
+    const va=a.cells[colIdx].innerText.replace('—',''),vb=b.cells[colIdx].innerText.replace('—','');
+    const fa=parseFloat(va),fb=parseFloat(vb);
+    return(!isNaN(fa)&&!isNaN(fb))?dir*(fa-fb):dir*va.localeCompare(vb);
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+}
+
+// Dynamic combos table
+let comboSortKey='avg_score',comboSortDir=-1;
+function populateFilters(){
+  const llms=[...new Set(ALL_COMBOS.map(c=>c.llm))].sort();
+  const embeds=[...new Set(ALL_COMBOS.map(c=>c.embed))].sort();
+  const chunks=[...new Set(ALL_COMBOS.map(c=>c.chunk))].sort();
+  llms.forEach(v=>filterLLM.add(new Option(v,v)));
+  embeds.forEach(v=>filterEmbed.add(new Option(v,v)));
+  chunks.forEach(v=>filterChunk.add(new Option(v,v)));
+  const cats=[...new Set(ALL_PERQ.map(r=>r.category).filter(Boolean))].sort();
+  cats.forEach(v=>filterCat.add(new Option(v,v)));
+}
+function badge(v){
+  if(v===null||v===undefined||v==='')return'—';
+  const f=parseFloat(v);
+  const cls=f>=0.7?'badge-high':f>=0.5?'badge-mid':f>=0.3?'badge-low':'badge-poor';
+  return`<span class="badge ${cls}">${f.toFixed(4)}</span>`;
+}
+function renderCombos(){
+  const llmF=filterLLM.value,embedF=filterEmbed.value,chunkF=filterChunk.value;
+  let data=ALL_COMBOS.filter(c=>(!llmF||c.llm===llmF)&&(!embedF||c.embed===embedF)&&(!chunkF||c.chunk===chunkF));
+  data.sort((a,b)=>comboSortDir*((b[comboSortKey]||0)-(a[comboSortKey]||0)));
+  document.getElementById('combosBody').innerHTML=data.map(c=>`
+    <tr>
+      <td>${c.combo}</td>
+      <td>${badge(c.answer_relevancy)}</td>
+      <td>${badge(c.context_recall)}</td>
+      <td><strong>${badge(c.avg_score)}</strong></td>
+      <td style="text-align:center">${c.retrieval_time_ms?c.retrieval_time_ms.toFixed(0):'—'}</td>
+      <td style="text-align:center">${c.generation_time_ms?c.generation_time_ms.toFixed(0):'—'}</td>
+      <td style="text-align:center">${c.n_questions}</td>
+    </tr>`).join('');
+}
+function sortDynTable(key){
+  if(comboSortKey===key)comboSortDir*=-1;else{comboSortKey=key;comboSortDir=-1;}
+  renderCombos();
+}
+
+// Per-question table
+let perQSortKey='avg_score',perQSortDir=-1;
+function renderPerQ(){
+  const q=document.getElementById('searchQ').value.toLowerCase();
+  const cat=document.getElementById('filterCat').value;
+  let data=ALL_PERQ.filter(r=>(!q||r.question.toLowerCase().includes(q))&&(!cat||r.category===cat));
+  data.sort((a,b)=>perQSortDir*((b[perQSortKey]||0)-(a[perQSortKey]||0)));
+  document.getElementById('perQBody').innerHTML=data.map(r=>`
+    <tr>
+      <td style="max-width:320px;white-space:normal;font-size:.82rem">${r.question}</td>
+      <td><span style="font-size:.8rem">${r.category}</span></td>
+      <td style="font-size:.8rem">${r.best_combo}</td>
+      <td>${badge(r.avg_score)}</td>
+      <td>${badge(r.answer_relevancy)}</td>
+      <td>${badge(r.context_recall)}</td>
+    </tr>`).join('');
+}
+function sortPerQ(key){
+  if(perQSortKey===key)perQSortDir*=-1;else{perQSortKey=key;perQSortDir=-1;}
+  renderPerQ();
+}
+
+populateFilters();renderCombos();renderPerQ();
+</script>
+</body>
+</html>
