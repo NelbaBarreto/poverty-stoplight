@@ -8,7 +8,7 @@
 -- ============================================================
 
 UPDATE admin_users
-SET password_hash = 'c6761286e7fe5812e6fb73f22d84d7487e77dda565159cb382c4a576702fbfbc',
-    salt          = 'c4848c28f98f009699e36765ff4199f6'
+SET password_hash = 'efc1b94352c2fa1b2b3d6b73ad8230d08b70dfc1d262b4f784066ef7df8590b6',
+    salt          = '124c3e08123b3b2ba233175c1128a3d7'
 WHERE username = 'admin'
   AND password_hash = 'placeholder_change_on_first_run';
