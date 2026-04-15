@@ -19,3 +19,6 @@ tqdm
 tabulate
 ragas
 datasets
+fastapi
+uvicorn[standard]
+httpx
