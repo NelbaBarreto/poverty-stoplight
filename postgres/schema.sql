@@ -32,6 +32,7 @@ CREATE TABLE documents (
     filename VARCHAR(255) NOT NULL UNIQUE,
     file_type VARCHAR(50) NOT NULL,  -- pdf / csv / md
     file_path TEXT NOT NULL,
+    titulo VARCHAR(500),             -- human-readable title shown in chat (nullable)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -124,3 +125,22 @@ INSERT INTO chunk_configs (name, chunk_size, overlap) VALUES
     ('small',  512,  64),
     ('medium', 1024, 128),
     ('large',  2048, 256);
+
+-- ============================================================
+-- ADMIN USERS (panel de administración — port 8502)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS admin_users (
+    id            SERIAL PRIMARY KEY,
+    username      VARCHAR(80)  NOT NULL UNIQUE,
+    email         VARCHAR(200),
+    password_hash VARCHAR(64)  NOT NULL,
+    salt          VARCHAR(32)  NOT NULL,
+    role          VARCHAR(20)  NOT NULL DEFAULT 'viewer'
+                      CHECK (role IN ('admin', 'viewer')),
+    is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+-- Default admin is seeded automatically by admin/app.py on first startup.

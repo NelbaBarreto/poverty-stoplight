@@ -76,9 +76,10 @@ def create_search_tool(document_id: Optional[int] = None):
 
                 metadata = doc.metadata or {}
 
-                source = metadata.get(
-                    "filename",
-                    metadata.get("source", "Unknown source")
+                source = (
+                    metadata.get("titulo")
+                    or metadata.get("filename")
+                    or metadata.get("source", "Unknown source")
                 )
 
                 # página

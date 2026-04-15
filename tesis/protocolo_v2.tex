@@ -1,0 +1,1212 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{amsbsy}
+\usepackage{pifont}
+\usepackage{epsfig}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{alltt}
+
+\begin{document}
+
+\hyphenation{}
+
+\title{Aplicación de Inteligencia Artificial para la Interacción y Análisis de Datos del Proyecto “Semáforo de Pobreza” en Paraguay}
+
+\author{
+  Carlos Bustamante \\
+  Universidad Comunera \\
+  \texttt{cbustamantem@gmail.com}
+  \and
+  Nelba Barreto \\
+  Universidad Comunera \\
+  \texttt{barretonelba@gmail.com}
+}
+
+\date{Noviembre 2025}
+\maketitle
+
+\section{Introducción}\label{sec:introduccion}
+La pobreza es un fenómeno complejo que afecta a millones de personas en todo el mundo, y Paraguay no es la excepción. Según las estimaciones de la Encuesta Permanente de Hogares Continua 2024, el 20,1 \% de la población paraguaya vive en situación de pobreza, con una mayor incidencia en áreas rurales (25,9 \%) que en las urbanas (16,6 \%). Es importante destacar, que estas cifras se calculan usando la línea de pobreza monetaria, que clasifica como pobres a los hogares cuyos ingresos no cubren el costo mensual de una canasta básica de bienes y servicios que satisfacen requerimientos mínimos alimentarios y no alimentarios \cite{INE2024_pobreza}.
+
+En contraste con este enfoque limitado a los ingresos, el proyecto Semáforo de Pobreza (\textit{Poverty Stoplight}), desarrollado por la Fundación Paraguaya, propone una perspectiva multidimensional que sitúa a las personas como agentes centrales para mejorar su calidad de vida. Su metodología combina una encuesta de autoevaluación y un modelo de intervención guiado que permiten a las familias identificar sus propias necesidades y desarrollar soluciones específicas a su situación particular. Se implementa mediante un software compatible con ordenadores, tabletas o teléfonos móviles, a través del cual los participantes completan una autoevaluación basada en 50 indicadores organizados en seis dimensiones básicas que pueden ajustarse al contexto local \cite{ManualSemaforo2023}.
+
+Esta metodología ha experimentado un crecimiento exponencial desde su creación, pasando de trabajar con clientes de microfinanzas en Paraguay a escala global. Ha acumulado más de 708.000 evaluaciones en 59 países con la participación de más de 1.080 organizaciones \cite{povertyStoplightStats}. Este crecimiento ha dado origen a la \textit{Comunidad del Semáforo}, definida como el grupo de actores que implementan o usan el Semáforo y sus datos para ampliar su comprensión de los desafíos relacionados con la pobreza o crear soluciones para abordarlos \cite[p.~14]{ManualSemaforo2023}.
+
+El manual metodológico del Semáforo establece que esta comunidad debe centrarse en tres actividades interrelacionadas: (1) mantener una base de datos de acciones que se pueden tomar contra la pobreza, (2) facilitar el intercambio de mejores prácticas y aprendizaje continuo, y (3) promover alianzas basadas en sinergias entre organizaciones \cite[p.~14-15]{ManualSemaforo2023}. Estas actividades responden al Resultado Intermedio 5 de la Teoría de Cambio del Semáforo, que enfatiza la importancia de ``compartir información entre todas las partes interesadas a fin de promover el aprendizaje para una mayor comprensión, compromiso y acción'', buscando ``fomentar una cultura de aprendizaje y desarrollar una base de conocimientos colectivos que sustente un debate sobre la pobreza e innove continuamente las medidas establecidas'' \cite[p.~11]{ManualSemaforo2023}.
+
+Los resultados y conocimientos derivados de estos datos pueden potenciarse mediante técnicas de inteligencia artificial basadas en Retrieval-Augmented Generation (RAG). Este enfoque surge como respuesta a las limitaciones de los modelos de lenguaje de gran escala (LLMs), los cuales, si bien han demostrado un desempeño sobresaliente, presentan dificultades en tareas intensivas en conocimiento y tienden a generar información incorrecta o no verificable cuando operan fuera de los datos contenidos en sus parámetros \cite{Lewis2020RAG}. 
+
+RAG combina modelos de lenguaje con mecanismos de recuperación de información desde fuentes externas, permitiendo que las respuestas generadas se basen en documentos relevantes obtenidos mediante similitud semántica, lo que reduce el riesgo de alucinaciones y mejora la precisión factual \cite{Lewis2020RAG}. En el contexto del Semáforo de Pobreza, este enfoque resulta especialmente pertinente para fortalecer el Resultado Intermedio 5 de su Teoría de Cambio, al facilitar un acceso estructurado, contextualizado y conversacional a la base de conocimientos colectivos, potenciando así el aprendizaje, el intercambio de experiencias y la generación de soluciones basadas en evidencia acumulada por la comunidad global del Semáforo.
+
+\section{Estado del arte}\label{sec:estadoArte}
+A nivel global, diferentes proyectos han explorado el uso de inteligencia artificial para apoyar iniciativas de desarrollo social. Iniciativas como AI for Good (ONU) \cite{itu_aiforgood} y plataformas de RAG orientadas a la gestión del conocimiento en temas sociales, como IDR Answers en India \cite{idr_answers}, han demostrado que los modelos de lenguaje pueden facilitar el acceso a evidencia, experiencias y análisis relevantes para organizaciones y actores del sector social.
+
+%RAG en sector social
+No obstante, la mayoría de estos esfuerzos se desarrollan en contextos con infraestructura de datos consolidada. En contraste, el Semáforo de Pobreza dispone de una base de conocimientos amplia, pero heterogénea. Esta diversidad y dispersión dificultan su uso para generar conocimiento aplicable.
+
+Hasta la fecha, no existe un modelo de inteligencia artificial entrenado específicamente con los datos y soluciones del Semáforo de Pobreza, ni un agente conversacional que facilite la transferencia de estas experiencias a nuevas comunidades u organizaciones. Por ello, esta investigación propone el diseño de una base de conocimientos estructurada y un modelo conversacional que permitan acceder, recuperar y contextualizar la información existente mediante técnicas de ciencia de datos, procesamiento de lenguaje natural y aprendizaje automático, orientado a unificar, indexar y hacer accesible el conocimiento acumulado del Semáforo de Pobreza.
+
+\section{Descripción de la propuesta}
+
+La propuesta consiste en diseñar y desarrollar un agente social inteligente basado en técnicas de Retrieval-Augmented Generation (RAG), capaz de integrar la base de conocimientos del Semáforo de Pobreza y permitir una interacción conversacional con usuarios y organizaciones.
+
+El sistema utilizará modelos de lenguaje (LLM) combinados con mecanismos de recuperación de información para generar respuestas contextualizadas basadas en datos reales del Semáforo, incluyendo indicadores, planes de acción, casos de éxito y estadísticas.
+
+El agente permitirá responder consultas como: ``¿Cuáles fueron los resultados del Semáforo en una organización específica?'' proporcionando información relevante y basada en evidencia.
+
+Este enfoque busca mejorar la accesibilidad, comprensión y utilización del conocimiento acumulado, facilitando la toma de decisiones y el diseño de estrategias de intervención.
+
+% Un RAG bien implementado puede convertirse en el "cerebro colectivo" de la Comunidad del Semáforo, democratizando el acceso a décadas de conocimiento acumulado y acelerando el impacto de nuevas implementaciones. Este RAG operacionaliza el principio del Semáforo de que "el conocimiento compartido entre implementadores debe adaptarse al contexto local" y cumple la visión de la Comunidad del Semáforo de "aprendizaje continuo para mayor impacto social".
+% como vamos a implementar nosotros? ETL sobre la bd de sql (preliminarmente), segmentar en chunks, vectorizar, guardar en un vector store. 
+% ver indexings
+% metricas ????
+\section{Objetivos}
+
+\subsection{Objetivo general}
+
+Desarrollar un agente social basado en inteligencia artificial que integre la base de conocimientos del proyecto Semáforo de Pobreza, utilizando técnicas de ciencia de datos y modelos de lenguaje para facilitar la interacción y difusión de experiencias exitosas.
+
+\subsection{Objetivos específicos}
+
+\begin{itemize}
+\item Estructurar e integrar la base de conocimientos del Semáforo de Pobreza.
+\item Desarrollar un modelo de lenguaje basado en técnicas RAG.
+\item Implementar una interfaz web interactiva.
+\item Evaluar la precisión y relevancia del sistema.
+\item Analizar su utilidad en distintos escenarios de uso.
+\end{itemize}
+
+\section{Metas}
+
+\begin{enumerate}
+\item Integrar la base de conocimientos en un repositorio estructurado.
+\item Entrenar un modelo de lenguaje especializado.
+\item Desarrollar un prototipo funcional del sistema.
+\item Validar el sistema con usuarios reales.
+\item Publicar los resultados obtenidos.
+\end{enumerate}
+\section{Aportación científica esperada}
+
+\begin{enumerate}
+\item Un repositorio en Hugging Face con la base de conocimientos utilizada.
+\item Un método estructurado para el aprovechamiento de datos sociales.
+\item Un agente conversacional funcional accesible en línea.
+\item Un aporte en el uso de IA aplicada a proyectos sociales.
+\end{enumerate}
+
+\section{Metodología científica}
+
+La investigación se desarrollará en tres etapas principales:
+
+\begin{itemize}
+\item Recolección, limpieza y estructuración de datos.
+\item Entrenamiento del modelo utilizando técnicas RAG.
+\item Desarrollo de la interfaz y evaluación del sistema.
+\end{itemize}
+
+Se utilizarán métricas como precisión, relevancia y satisfacción del usuario para validar el desempeño del sistema.
+
+\section{Calendario de actividades}
+
+El proyecto se divide en cuatro fases:
+
+\begin{itemize}
+\item Fase 1: Preparación y estructuración de datos (1 mes)
+\item Fase 2: Entrenamiento del modelo (1 mes)
+\item Fase 3: Desarrollo del sistema (1 mes)
+\item Fase 4: Evaluación y ajustes (1 mes)
+\end{itemize}
+
+Se incluirá un diagrama de Gantt para visualizar la planificación temporal del proyecto.
+
+% ============================================================
+\section{Resultados y Discusión}
+% ============================================================
+
+\subsection{Configuración experimental}
+
+El experimento se diseñó como un pipeline de cinco fases encadenadas.
+Las Figuras~\ref{fig:flujo_a} y~\ref{fig:flujo_b} presentan el flujo
+completo dividido en dos partes.
+
+% ── Flujo ASCII — parte 1 (Fases 0, 1, 2) ───────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{alltt}\small
++------------------------------------------------------------+
+| FASE 0: PREPARACION DE DOCUMENTOS                         |
+|                                                           |
+|  11 PDFs --[Docling]--> Markdown + Texto plano           |
+|   1 CSV  --[pandas] --> Texto plano (1 fila = 1 chunk)   |
+|   2 MDs  --[directo]--> Markdown + Texto plano           |
+|                                                           |
+|  El CSV (Banco de Soluciones) fue traducido al espanol   |
+|  y reformateado antes de la ingestion.                   |
++-----------------------------+------------------------------+
+                              |
+                              v
++------------------------------------------------------------+
+| FASE 1: INDEXACION EN BASE VECTORIAL (ingest_all.py)      |
+|                                                           |
+|  Por cada documento x 2 formatos x 3 chunk sizes:        |
+|    small (512 chars), medium (1024), large (2048)         |
+|  Por cada fragmento x 5 modelos de embedding:            |
+|    bge-m3, mxbai-embed-large, all-minilm,                |
+|    nomic-embed-text, snowflake-arctic-embed               |
+|                                                           |
+|  -> ~12.855 fragmentos x 5 tablas pgvector               |
+|  -> Indice IVFFlat (lists=113) por tabla                 |
++-----------------------------+------------------------------+
+                              |
+                              v
++------------------------------------------------------------+
+| FASE 2: BASE DE CONOCIMIENTOS (knowledge_base)            |
+|                                                           |
+|  110 preguntas elaboradas por el equipo Semaforo          |
+|  con sus respuestas ideales (ground truth):               |
+|                                                           |
+|    30 preguntas -- fase_1     --> usadas en experimento  |
+|    80 preguntas -- fase_futura --> reservadas            |
+|                                                           |
+|  Cada par pregunta/respuesta cargado en knowledge_base.  |
++-----------------------------+------------------------------+
+                              |
+                          (continua en
+                          Figura 2)
+\end{alltt}
+\caption{Flujo metodológico — Parte 1: preparación, indexación y base de conocimientos}
+\label{fig:flujo_a}
+\end{figure}
+
+% ── Flujo ASCII — parte 2 (Fases 3, 4, 5) ───────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{alltt}\small
+                      (viene de Figura 1)
+                              |
+                              v
++------------------------------------------------------------+
+| FASE 3: GENERACION DE RESPUESTAS (run_eval.py)            |
+|                                                           |
+|  Por cada combinacion (60 total):                        |
+|    4 LLMs x 5 embeddings x 3 chunk sizes                |
+|  Por cada una de las 30 preguntas de fase_1:             |
+|    1. Vectorizar pregunta con el embedding               |
+|    2. Recuperar 8 fragmentos mas similares (coseno)      |
+|    3. LLM genera respuesta (temperatura=0)               |
+|    4. Guardar resultado en tabla eval_runs               |
+|                                                           |
+|  -> 1.798 ejecuciones almacenadas en PostgreSQL          |
++---------------+-----------------------------+-------------+
+                |                             |
+                v                             v
++---------------------------+   +---------------------------+
+| FASE 4a: EVAL. LOCAL      |   | FASE 4b: EVAL. OPENAI     |
+|                           |   |                           |
+| Juez: gpt-oss:20b         |   | Juez: gpt-4o-mini         |
+|       + bge-m3            |   |   + text-embed-3-small    |
+| Metricas:                 |   | Metricas:                 |
+|   Answer Relevancy        |   |   Faithfulness            |
+|   Context Recall          |   |   Context Precision       |
+| Lotes: 50, secuencial     |   | Lotes: 20, 4 paralelos   |
++-------------+-------------+   +-------------+-------------+
+              |                               |
+              +---------------+---------------+
+                              |
+                              v
++------------------------------------------------------------+
+| FASE 5: ANALISIS Y REPORTE (generate_rag_report.py)       |
+|                                                           |
+|  Agregar metricas por: LLM / embedding / chunk /         |
+|  categoria de pregunta                                    |
+|  -> Reportes HTML + Documento de tesis                   |
++------------------------------------------------------------+
+\end{alltt}
+\caption{Flujo metodológico — Parte 2: generación de respuestas, evaluación RAGAS y análisis}
+\label{fig:flujo_b}
+\end{figure}
+
+% ── Descripción de fases ─────────────────────────────────────────────────────
+
+\subsubsection*{Fase 0 — Preparación de documentos}
+
+Los 14 documentos de la base de conocimientos fueron procesados con
+estrategias diferenciadas según su tipo. Los 11 PDFs se convirtieron con
+Docling, que produce automáticamente dos representaciones del mismo contenido:
+\textbf{Markdown} (con estructura de encabezados, tablas y listas) y
+\textbf{texto plano} (sin marcado). Los 2 archivos Markdown se leyeron
+directamente, generando la misma dualidad. El único CSV —el Banco de
+Soluciones, previamente traducido al español y reformateado— se procesó con
+pandas: cada fila de datos se convirtió en un fragmento individual en formato
+texto plano, con la estructura \texttt{campo: valor}. Los dos formatos
+(Markdown y texto plano) fueron indexados de forma independiente para
+evaluar si la representación del documento influye en la calidad del
+retrieval.
+
+\subsubsection*{Fase 1 — Indexación}
+
+Cada fragmento fue vectorizado con los 5 modelos de embedding y almacenado
+en tablas separadas de pgvector. El espacio de indexación fue:
+14 documentos $\times$ 2 formatos $\times$ 3 tamaños de fragmento $\times$ 5
+embeddings, produciendo aproximadamente 12.855 vectores por tabla de embedding.
+Los índices IVFFlat se crearon \textit{después} de la carga completa de datos,
+ya que el algoritmo de clustering requiere conocer la distribución real de los
+vectores para construir las particiones de forma efectiva.
+
+\subsubsection*{Fase 2 — Base de conocimientos y ground truth}
+
+El equipo del Semáforo de Pobreza elaboró un documento de
+\textbf{110 preguntas} junto con sus \textbf{respuestas ideales}: el texto
+exacto que el agente conversacional debería producir en cada caso. Estas
+respuestas ideales son lo que en aprendizaje automático se denomina
+\textit{ground truth}\footnote{\textit{Ground truth} (``verdad de terreno'')
+es el estándar de referencia definido por expertos humanos. En este
+experimento, cada pregunta tiene una respuesta redactada por el equipo
+Semáforo que representa qué se espera que diga el agente. RAGAS compara la
+respuesta generada automáticamente contra este patrón para calcular las
+métricas de evaluación.} —la respuesta correcta definida de antemano por
+expertos—. Las 110 preguntas se organizaron en dos grupos: \textbf{30
+preguntas (fase\_1)}, utilizadas en este experimento y cubiertas por los
+documentos actualmente indexados; y \textbf{80 preguntas (fase\_futura)},
+reservadas para cuando el corpus se amplíe. Tanto preguntas como respuestas
+de referencia se cargaron en la tabla \texttt{knowledge\_base} de PostgreSQL.
+
+\subsubsection*{Fase 3 — Generación de respuestas}
+
+Para cada una de las 60 combinaciones (4 LLMs $\times$ 5 embeddings $\times$
+3 tamaños de fragmento) y para cada una de las 30 preguntas de fase\_1,
+el sistema: (1) convirtió la pregunta en un vector numérico con el embedding
+correspondiente; (2) consultó pgvector para obtener los 8 fragmentos con
+menor distancia coseno a ese vector; (3) concatenó esos 8 fragmentos como
+contexto y los entregó al LLM con temperatura=0 para que generara una
+respuesta determinista. Cada ejecución quedó registrada en la tabla
+\texttt{eval\_runs}: 1.798 filas en total (60 $\times$ 30, con 2 fallas).
+
+\subsubsection*{Fases 4a y 4b — Evaluación con RAGAS}
+
+Las 1.798 respuestas generadas fueron evaluadas con RAGAS en dos pasadas
+paralelas. La \textbf{Fase 4a} (juez local: \texttt{gpt-oss:20b} +
+\texttt{bge-m3}) calculó Answer Relevancy y Context Recall en lotes de 50
+de forma secuencial (\texttt{max\_workers=1}), ya que Ollama no soporta
+concurrencia. La \textbf{Fase 4b} (juez externo: \texttt{gpt-4o-mini} +
+\texttt{text-embedding-3-small}) calculó Faithfulness y Context Precision en
+lotes de 20 con 4 trabajadores paralelos; estas dos métricas requieren que el
+juez produzca JSON estructurado con campos \texttt{statement}, \texttt{reason}
+y \texttt{verdict}, un formato que los modelos locales no generan de forma
+confiable. Los cuatro puntajes se almacenaron en la tabla \texttt{eval\_scores}.
+
+% ── Tabla de componentes ─────────────────────────────────────────────────────
+
+El espacio experimental cubrió \textbf{4 modelos LLM} $\times$ \textbf{5
+modelos de embedding} $\times$ \textbf{3 tamaños de fragmento}, totalizando
+\textbf{60 combinaciones} evaluadas sobre \textbf{30 preguntas} con
+respuesta de referencia (\textit{ground truth}) redactada por el equipo
+Semáforo. Se produjeron \textbf{1.798 ejecuciones} y \textbf{1.797}
+completaron la evaluación de las cuatro métricas ($\approx$100\%).
+La Tabla~\ref{tab:modelos} detalla los componentes del experimento.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Componente} & \textbf{Valores evaluados} & \textbf{Parámetros fijos} \\
+\hline
+LLM                & qwen3:8b, gpt-oss:20b,       & Temperatura de generación: 0$^{a}$ \\
+                   & llama3.2:3b, llama3.2:latest & Fragmentos recuperados por consulta: 8$^{b}$ \\
+\hline
+Embedding          & bge-m3 (1024 dims)           & Motor de inferencia: Ollama local \\
+                   & mxbai-embed-large (1024)     & Base de datos vectorial: PostgreSQL/pgvector \\
+                   & all-minilm (384)             & Índice de búsqueda aproximada: IVFFlat$^{c}$ \\
+                   & nomic-embed-text (768)       & (lists = 113, métrica: coseno) \\
+                   & snowflake-arctic-embed (1024) & \\
+\hline
+Chunk size         & small: 512 chars, overlap 64  & Procesamiento de documentos: \\
+                   & medium: 1024 chars, overlap 128 & Docling $\rightarrow$ Markdown \\
+                   & large: 2048 chars, overlap 256 & \\
+\hline
+Juez local         & gpt-oss:20b + bge-m3         & Answer Relevancy + Context Recall \\
+Juez OpenAI        & gpt-4o-mini + text-embed-3-small & Faithfulness + Context Precision \\
+\hline
+\end{tabular}
+\caption{Componentes del experimento de evaluación RAG}
+\label{tab:modelos}
+\end{table}
+
+\noindent\textbf{Notas sobre los parámetros fijos:}
+
+\medskip
+\noindent $^{a}$\textbf{Temperatura de generación = 0.} La temperatura es un
+parámetro que controla el grado de aleatoriedad en las respuestas de un modelo
+de lenguaje. Con temperatura alta (cercana a 1 o superior), el modelo elige
+entre muchas palabras posibles con probabilidades similares, produciendo
+respuestas variadas y creativas pero menos predecibles. Con temperatura = 0, el
+modelo selecciona siempre la palabra de mayor probabilidad en cada paso
+(\textit{decodificación greedy}), haciendo la respuesta completamente
+determinista: ante la misma pregunta y el mismo contexto, el modelo producirá
+exactamente la misma respuesta en cada ejecución. Esto es un requisito
+fundamental en experimentos de evaluación comparativa, ya que garantiza que las
+diferencias de rendimiento entre configuraciones se deban al LLM o al embedding
+evaluado, y no a la variabilidad aleatoria de la generación.
+
+\medskip
+\noindent $^{b}$\textbf{Fragmentos recuperados por consulta = 8.} Cuando el
+usuario formula una pregunta, el sistema la convierte en un vector numérico
+mediante el modelo de embedding y busca en la base de datos los fragmentos de
+texto cuyo vector es más cercano al de la pregunta (medido por distancia
+coseno). El parámetro 8 indica cuántos fragmentos se toman como contexto para
+que el LLM genere su respuesta: ni uno más, ni uno menos, en todas las 60
+combinaciones evaluadas. Un valor bajo (por ejemplo, 3) entrega poco contexto y
+puede omitir información relevante; un valor alto (por ejemplo, 20) puede
+introducir fragmentos irrelevantes que confunden al modelo. El valor 8 es una
+elección de diseño estándar en sistemas RAG y no fue variado como factor
+experimental, lo que constituye una de las limitaciones del estudio: su efecto
+independiente no fue medido.
+
+\medskip
+\noindent $^{c}$\textbf{Índice IVFFlat.} Para encontrar los 8 fragmentos más
+similares a una consulta, la opción más directa sería calcular la distancia
+entre el vector de la consulta y los más de 12.000 vectores almacenados, uno
+por uno. Esto se denomina búsqueda exacta y garantiza el resultado correcto,
+pero se vuelve lento a medida que crece la base de datos. IVFFlat
+(\textit{Inverted File Flat}) es un tipo de índice de búsqueda aproximada que
+divide el espacio vectorial en grupos (llamados \textit{listas} o
+\textit{celdas de Voronoi}) durante la indexación. Al momento de una consulta,
+en lugar de comparar contra todos los vectores, el sistema identifica
+primero en qué grupos es más probable encontrar los vecinos más cercanos y
+busca solo dentro de ellos, reduciendo enormemente el tiempo de respuesta con
+una pérdida mínima de precisión. El parámetro \texttt{lists = 113} fue
+calculado automáticamente como la raíz cuadrada del total de fragmentos
+indexados ($\sqrt{12.855} \approx 113$), que es la fórmula recomendada por la
+documentación de pgvector para balancear velocidad y precisión. El índice se
+creó después de cargar todos los datos (no antes), ya que IVFFlat necesita
+conocer la distribución real de los vectores para construir los grupos de
+manera efectiva.
+
+La base de conocimientos comprendió 14 documentos (11 PDFs, 1 CSV, 2 Markdown)
+procesados mediante Docling, produciendo 12.855 fragmentos indexados con los
+cinco modelos de embedding en PostgreSQL/pgvector.
+
+% ── DER ──────────────────────────────────────────────────────────────────────
+\subsubsection*{Esquema de la base de datos (DER)}
+
+La Figura~\ref{fig:der} presenta el Diagrama Entidad-Relación simplificado
+de las tablas de PostgreSQL utilizadas en el experimento, agrupadas en dos
+áreas: el \textbf{corpus indexado} (izquierda) y el \textbf{ciclo de
+evaluación} (derecha).
+
+\tikzset{
+  tabla/.style={rectangle, draw=black, thick, fill=blue!8,
+                text width=3.8cm, align=left, font=\small,
+                inner sep=4pt, rounded corners=2pt},
+  rel/.style={-{Latex[length=3pt]}, thick, gray}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.1cm and 1.6cm]
+
+% ── Corpus lado izquierdo ────────────────────────────────────────────────────
+\node[tabla] (docs) {
+  \textbf{documents}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  filename\\
+  file\_type\\
+  file\_path
+};
+
+\node[tabla, below=of docs] (cc) {
+  \textbf{chunk\_configs}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  name (small/medium/large)\\
+  chunk\_size\\
+  overlap
+};
+
+\node[tabla, right=of docs, yshift=-1.2cm] (chunks) {
+  \textbf{chunks}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  document\_id $\rightarrow$ documents\\
+  chunk\_config\_id $\rightarrow$ chunk\_configs\\
+  format (markdown / plaintext)\\
+  chunk\_index\\
+  chunk\_text
+};
+
+\node[tabla, below=of chunks] (emtab) {
+  \textbf{embeddings\_*} (×5)\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  chunk\_id $\rightarrow$ chunks\\
+  embedding\_model\_id\\
+  embedding vector(N)
+};
+
+\node[tabla, below=of emtab] (em) {
+  \textbf{embedding\_models}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  model\_name\\
+  table\_name\\
+  dimensions
+};
+
+% ── Evaluación lado derecho ──────────────────────────────────────────────────
+\node[tabla, right=3.6cm of chunks] (kb) {
+  \textbf{knowledge\_base}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  question\\
+  answer (ground truth)\\
+  category\\
+  phase (fase\_1 / futura)
+};
+
+\node[tabla, below=of kb] (llm) {
+  \textbf{llm\_models}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  model\_name
+};
+
+\node[tabla, below=of llm] (er) {
+  \textbf{eval\_runs}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  llm\_model\_id $\rightarrow$ llm\_models\\
+  embedding\_model\_id\\
+  chunk\_config\_id\\
+  knowledge\_base\_id\\
+  retrieved\_contexts (JSONB)\\
+  k\_retrieved\\
+  generated\_answer\\
+  retrieval\_time\_ms\\
+  generation\_time\_ms
+};
+
+\node[tabla, below=of er] (es) {
+  \textbf{eval\_scores}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  eval\_run\_id $\rightarrow$ eval\_runs\\
+  faithfulness\\
+  answer\_relevancy\\
+  context\_precision\\
+  context\_recall\\
+  judge\_llm
+};
+
+% ── Relaciones ───────────────────────────────────────────────────────────────
+\draw[rel] (docs.east) -- ++(0.3,0) |- (chunks.west);
+\draw[rel] (cc.east)   -- ++(0.3,0) |- (chunks.west);
+\draw[rel] (chunks.south) -- (emtab.north);
+\draw[rel] (em.north)     -- (emtab.south);
+\draw[rel] (kb.south)     -- (llm.north);
+\draw[rel] (llm.south)    -- (er.north);
+\draw[rel] (er.south)     -- (es.north);
+
+% ── Etiquetas de área ────────────────────────────────────────────────────────
+\begin{scope}[on background layer]
+  \node[draw=blue!40, fill=blue!4, thick, dashed, rounded corners,
+        fit=(docs)(cc)(chunks)(emtab)(em), inner sep=8pt,
+        label={[blue!60, font=\small\bfseries]above:Corpus indexado}] {};
+  \node[draw=orange!50, fill=orange!4, thick, dashed, rounded corners,
+        fit=(kb)(llm)(er)(es), inner sep=8pt,
+        label={[orange!70, font=\small\bfseries]above:Ciclo de evaluación}] {};
+\end{scope}
+
+\end{tikzpicture}
+\caption{Diagrama Entidad-Relación simplificado de la base de datos experimental}
+\label{fig:der}
+\end{figure}
+
+% ============================================================
+\subsection{Marco de evaluación: métricas RAGAS}
+% ============================================================
+
+La evaluación se realizó con el framework RAGAS \cite{Aarthick2024RAGAS}%
+\footnote{RAGAS (\textit{Retrieval Augmented Generation Assessment}). Guía de referencia:
+\url{https://dkaarthick.medium.com/ragas-for-rag-in-llms-a-comprehensive-guide-to-evaluation-metrics-3aca142d6e38}}, que permite
+analizar el desempeño de un sistema RAG separando sus dos componentes
+principales: el \textit{retriever} (recuperación) y el LLM (generación). Las
+cuatro métricas utilizadas se describen a continuación.
+
+\begin{itemize}
+\item \textbf{Faithfulness (Fidelidad):} mide la proporción de afirmaciones de
+  la respuesta que están respaldadas por el contexto recuperado. Un valor bajo
+  indica alucinaciones. Calculado por \texttt{gpt-4o-mini} + \texttt{text-embedding-3-small}.
+
+\item \textbf{Answer Relevancy (Relevancia de respuesta):} mide si la
+  respuesta aborda la pregunta de forma completa y sin información superflua.
+  Se calcula generando preguntas artificiales desde la respuesta y midiendo su
+  similitud coseno con la pregunta original. Calculado por \texttt{gpt-oss:20b}
+  + \texttt{bge-m3}.
+
+\item \textbf{Context Precision (Precisión de contexto):} evalúa si los
+  fragmentos recuperados son relevantes para la respuesta correcta, penalizando
+  los recuperados en posiciones bajas del ranking. Calculado por
+  \texttt{gpt-4o-mini} + \texttt{text-embedding-3-small}.
+
+\item \textbf{Context Recall (Cobertura de contexto):} mide qué proporción de
+  las oraciones de la respuesta de referencia (\textit{ground truth}) puede
+  atribuirse a los fragmentos recuperados, es decir, cuánta información
+  correcta logró recuperar el sistema. Calculado por \texttt{gpt-oss:20b} + \texttt{bge-m3}.
+\end{itemize}
+
+La Tabla~\ref{tab:escalas} presenta la escala de interpretación de cada métrica
+utilizada en este estudio.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Nivel} & \textbf{Faithfulness} & \textbf{Ans.Rel.} & \textbf{Ctx.Prec.} & \textbf{Ctx.Rec.} \\
+\hline
+Excelente  & $\geq 0.80$ & $\geq 0.80$ & $\geq 0.80$ & $\geq 0.80$ \\
+Bueno      & $0.60$--$0.79$ & $0.60$--$0.79$ & $0.50$--$0.79$ & $0.50$--$0.79$ \\
+Moderado   & $0.40$--$0.59$ & $0.40$--$0.59$ & $0.30$--$0.49$ & $0.30$--$0.49$ \\
+Insuficiente & $< 0.40$ & $< 0.40$ & $< 0.30$ & $< 0.30$ \\
+\hline
+\end{tabular}
+\caption{Escala de interpretación de métricas RAGAS}
+\label{tab:escalas}
+\end{table}
+
+% ============================================================
+\subsection{Resultados globales}
+% ============================================================
+
+La Tabla~\ref{tab:global} presenta los valores promedio de las cuatro métricas
+calculados sobre las 1,798 ejecuciones válidas. Aplicando la escala de la
+Tabla~\ref{tab:escalas}, el sistema obtiene nivel \textit{Bueno} en
+Faithfulness y Answer Relevancy, nivel \textit{Moderado} en Context Precision e
+\textit{Insuficiente} en Context Recall.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Promedio global} & \textbf{Nivel} \\
+\hline
+Faithfulness      & 0.6329 & Bueno \\
+Answer Relevancy  & 0.7066 & Bueno \\
+Context Precision & 0.5424 & Moderado \\
+Context Recall    & 0.2383 & Insuficiente \\
+\hline
+\end{tabular}
+\caption{Resultados promedio globales del sistema RAG (60 combinaciones, 30 preguntas)}
+\label{tab:global}
+\end{table}
+
+El Context Recall (0.2383) es el principal cuello de botella del sistema: el
+retriever recupera, en promedio, menos de la cuarta parte de la información de
+referencia necesaria para responder correctamente. En términos de distribución
+de las 60 combinaciones según su puntuación media:
+
+\begin{itemize}
+\item \textbf{8 combinaciones} alcanzaron promedio $\geq 0.70$ (nivel Bueno--Excelente).
+\item \textbf{32 combinaciones} obtuvieron entre $0.50$ y $0.70$ (nivel Moderado).
+\item \textbf{11 combinaciones} quedaron por debajo de $0.40$ (nivel Insuficiente).
+\end{itemize}
+
+El rango total de puntuaciones fue de \textbf{0.3229} (peor: \texttt{llama3.2:latest}
++ \texttt{snowflake-arctic-embed} + \textit{small}) a \textbf{0.7658} (mejor:
+\texttt{qwen3:8b} + \texttt{bge-m3} + \textit{medium}), una diferencia de 0.44
+puntos entre los extremos del espacio experimental.
+
+% ============================================================
+\subsection{Mejor configuración identificada}
+% ============================================================
+
+La configuración con mayor puntuación promedio fue \textbf{qwen3:8b} como
+modelo generador, \textbf{bge-m3} como modelo de embedding y fragmentos de
+tamaño \textbf{medium} (1024 caracteres). La Tabla~\ref{tab:mejor} detalla sus
+resultados y tiempos de respuesta.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Valor} & \textbf{Nivel} \\
+\hline
+Faithfulness      & 0.9035 & Excelente \\
+Answer Relevancy  & 0.7970 & Bueno \\
+Context Precision & 0.8308 & Excelente \\
+Context Recall    & 0.5057 & Bueno \\
+\textbf{Promedio} & \textbf{0.7658} & \textbf{Bueno} \\
+\hline
+Tiempo recuperación (ms) & 259.5 & -- \\
+Tiempo generación (ms)   & 5{,}255.2 & -- \\
+Preguntas respondidas    & 30/30 & -- \\
+\hline
+\end{tabular}
+\caption{Resultados de la mejor configuración: qwen3:8b + bge-m3 + medium}
+\label{tab:mejor}
+\end{table}
+
+Esta configuración mejora todos los promedios globales de forma notable:
+Faithfulness sube de 0.6329 a 0.9035 (+0.27), Context Precision de 0.5424 a
+0.8308 (+0.29) y Context Recall de 0.2383 a 0.5057 (+0.27). La brecha entre
+Answer Relevancy y Context Recall, que a nivel global es de 0.47 puntos, se
+reduce a 0.29 en esta configuración.
+
+% ============================================================
+\subsection{Top 10 configuraciones}
+% ============================================================
+
+La Tabla~\ref{tab:top10} presenta las 10 mejores configuraciones ordenadas por
+puntuación promedio. Ocho de las diez utilizan \texttt{bge-m3} como embedding,
+y ninguna configuración con fragmento \textit{small} aparece en el ranking.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|c|l|l|c|c|c|c|c|}
+\hline
+\textbf{Rk} & \textbf{LLM} & \textbf{Embedding} & \textbf{Chunk} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+1  & qwen3:8b        & bge-m3            & medium & 0.9035 & 0.7970 & 0.8308 & 0.5057 \\
+2  & gpt-oss:20b     & bge-m3            & medium & 0.8119 & 0.7927 & 0.8480 & 0.5057 \\
+3  & qwen3:8b        & bge-m3            & large  & 0.8346 & 0.7830 & 0.8181 & 0.4741 \\
+4  & llama3.2:latest & bge-m3            & medium & 0.7893 & 0.7154 & 0.8578 & 0.5343 \\
+5  & llama3.2:3b     & bge-m3            & medium & 0.7771 & 0.7486 & 0.8418 & 0.5225 \\
+6  & llama3.2:3b     & bge-m3            & large  & 0.7835 & 0.7324 & 0.7910 & 0.5271 \\
+7  & gpt-oss:20b     & bge-m3            & large  & 0.7882 & 0.7923 & 0.7804 & 0.4879 \\
+8  & llama3.2:latest & bge-m3            & large  & 0.7343 & 0.7264 & 0.8040 & 0.4805 \\
+9  & qwen3:8b        & mxbai-embed-large & large  & 0.7611 & 0.7809 & 0.7102 & 0.3990 \\
+10 & gpt-oss:20b     & all-minilm        & large  & 0.6936 & 0.7543 & 0.7235 & 0.4602 \\
+\hline
+\end{tabular}
+\caption{Top 10 configuraciones RAG (Faith.=Faithfulness, AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:top10}
+\end{table}
+
+La posición 9, con \texttt{mxbai-embed-large}, es la única del top 10 que no
+usa \texttt{bge-m3}, y lo hace solo con \texttt{qwen3:8b} y fragmento
+\textit{large}. La posición 10 es notable porque \texttt{all-minilm}, con
+apenas 384 dimensiones, supera a \texttt{nomic-embed-text} (768 dims) y
+\texttt{snowflake-arctic-embed} (1024 dims) al combinarse con un LLM de mayor
+capacidad y fragmentos grandes.
+
+% ============================================================
+\subsection{Análisis por modelo de embedding}
+% ============================================================
+
+La Tabla~\ref{tab:por_embedding} resume el desempeño promedio de cada modelo de
+embedding agregando todas las combinaciones de LLM y tamaño de fragmento
+(entre 359 y 360 evaluaciones por embedding).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Embedding} & \textbf{Dims} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+bge-m3                 & 1024 & 360 & 0.7860 & 0.7616 & 0.7904 & 0.4225 \\
+mxbai-embed-large      & 1024 & 359 & 0.6941 & 0.7192 & 0.6519 & 0.3140 \\
+all-minilm             &  384 & 360 & 0.6614 & 0.6917 & 0.5794 & 0.2792 \\
+nomic-embed-text       &  768 & 359 & 0.5349 & 0.7021 & 0.3796 & 0.1125 \\
+snowflake-arctic-embed & 1024 & 360 & 0.4871 & 0.6559 & 0.3099 & 0.0742 \\
+\hline
+\end{tabular}
+\caption{Resultados promedio por modelo de embedding (AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:por_embedding}
+\end{table}
+
+\textbf{bge-m3} domina en todas las métricas. Su Context Recall promedio
+(0.4225) es 5.7× superior al de \texttt{snowflake-arctic-embed} (0.0742), a
+pesar de que ambos generan vectores de 1024 dimensiones. Esto demuestra que la
+dimensionalidad del vector no determina la calidad del espacio semántico: el
+factor crítico es el corpus y la metodología de entrenamiento del modelo.
+
+La Tabla~\ref{tab:heatmap} descompone el Context Recall de cada embedding por
+tamaño de fragmento, revelando patrones de interacción importantes.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\multirow{2}{*}{\textbf{Embedding}} & \multicolumn{2}{c|}{\textbf{small}} & \multicolumn{2}{c|}{\textbf{medium}} & \multicolumn{2}{c|}{\textbf{large}} \\
+\cline{2-7}
+ & AR & CR & AR & CR & AR & CR \\
+\hline
+bge-m3                 & 0.7644 & 0.2703 & 0.7626 & 0.5173 & 0.7578 & 0.4906 \\
+mxbai-embed-large      & 0.6829 & 0.2047 & 0.7634 & 0.3457 & 0.7125 & 0.3963 \\
+all-minilm             & 0.6797 & 0.1457 & 0.6823 & 0.3169 & 0.7131 & 0.3790 \\
+nomic-embed-text       & 0.6857 & 0.0431 & 0.6745 & 0.1199 & 0.7491 & 0.1767 \\
+snowflake-arctic-embed & 0.6222 & 0.0381 & 0.6896 & 0.1063 & 0.6549 & 0.0787 \\
+\hline
+\end{tabular}
+\caption{Interacción embedding $\times$ chunk: Answer Relevancy (AR) y Context Recall (CR) promedio}
+\label{tab:heatmap}
+\end{table}
+
+La Tabla~\ref{tab:heatmap} revela que el pico de Context Recall para
+\texttt{bge-m3} se produce con fragmentos \textit{medium} (CR=0.5173), no con
+\textit{large}, lo que indica que existe un tamaño óptimo de fragmento
+específico por embedding. Para los embeddings más débiles
+(\texttt{nomic-embed-text}, \texttt{snowflake-arctic-embed}), ningún tamaño de
+fragmento logra superar CR=0.18, confirmando que la debilidad es estructural del
+modelo y no solucionable con ajustes de chunking.
+
+% ============================================================
+\subsection{Análisis por modelo de lenguaje (LLM)}
+% ============================================================
+
+La Tabla~\ref{tab:por_llm} presenta los promedios por LLM agregando los cinco
+embeddings y los tres tamaños de fragmento.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{LLM} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+qwen3:8b         & 448 & 0.7390 & 0.7650 & 0.5420 & 0.2315 \\
+gpt-oss:20b      & 450 & 0.5917 & 0.7465 & 0.5406 & 0.2361 \\
+llama3.2:3b      & 450 & 0.6063 & 0.6581 & 0.5452 & 0.2432 \\
+llama3.2:latest  & 450 & 0.5947 & 0.6567 & 0.5417 & 0.2424 \\
+\hline
+\end{tabular}
+\caption{Resultados promedio por modelo LLM (AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:por_llm}
+\end{table}
+
+\textbf{qwen3:8b} lidera ampliamente en Faithfulness (0.7390 vs 0.5917--0.6063
+de los demás), lo que indica que su respuesta se mantiene mejor anclada al
+contexto entregado. En Answer Relevancy también es superior (0.7650). La
+familia \texttt{llama3.2} logra el mejor Context Recall (0.2432), posiblemente
+porque sus respuestas son más concisas y coinciden mejor con las oraciones
+de la respuesta de referencia (\textit{ground truth}) elaborada por el experto. Las diferencias en Context Precision son
+menores entre LLMs (0.5406--0.5452), lo que confirma que esta métrica depende
+principalmente del retriever, no del generador.
+
+% ============================================================
+\subsection{Análisis por tamaño de fragmento}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Chunk} & \textbf{Chars} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+large  & 2048 & 599 & 0.6679 & 0.7168 & 0.5975 & 0.3005 \\
+medium & 1024 & 600 & 0.6505 & 0.7133 & 0.5557 & 0.2790 \\
+small  &  512 & 599 & 0.5799 & 0.6865 & 0.4737 & 0.1395 \\
+\hline
+\end{tabular}
+\caption{Resultados promedio por tamaño de fragmento (AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:por_chunk}
+\end{table}
+
+Los fragmentos \textit{large} obtienen el mejor Context Recall global (0.3005)
+al contener más información por unidad recuperada. Los fragmentos \textit{small}
+son los peores en todas las métricas: al dividir el texto en unidades de 512
+caracteres, el contexto semántico queda incompleto y el sistema recupera
+fragmentos parciales que no cubren la respuesta completa. Sin embargo, la
+configuración ganadora usa fragmentos \textit{medium}, evidenciando que el
+tamaño óptimo es dependiente del embedding: \texttt{bge-m3} alcanza su máximo
+Context Recall con \textit{medium} (0.5173), mientras que para otros embeddings
+el tamaño \textit{large} puede ser más beneficioso.
+
+% ============================================================
+\subsection{Análisis por categoría temática de pregunta}
+% ============================================================
+
+Las 30 preguntas del experimento se clasificaron en cinco categorías temáticas
+correspondientes a los documentos de la base de conocimientos. La
+Tabla~\ref{tab:por_categoria} muestra que el rendimiento varía
+significativamente entre categorías.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Categoría} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+semaforo             & 479 & 0.7063 & 0.6849 & 0.6180 & 0.3386 \\
+banco\_soluciones    & 659 & 0.6220 & 0.7021 & 0.5593 & 0.2157 \\
+programas            & 180 & 0.6538 & 0.7204 & 0.4818 & 0.1940 \\
+indicadores          & 420 & 0.5588 & 0.7079 & 0.4159 & 0.1916 \\
+fundacion\_paraguaya &  60 & 0.6209 & 0.8584 & 0.8185 & 0.1687 \\
+\hline
+\end{tabular}
+\caption{Resultados promedio por categoría temática (AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:por_categoria}
+\end{table}
+
+Las preguntas sobre \textbf{semaforo} obtienen el mayor Context Recall (0.3386)
+y Faithfulness (0.7063), ya que el manual metodológico del Semáforo está bien
+estructurado y sus fragmentos son semánticamente cohesivos. Por el contrario,
+las preguntas sobre \textbf{fundacion\_paraguaya} presentan el Answer Relevancy
+más alto (0.8584) pero el Context Recall más bajo (0.1687): el LLM genera
+respuestas relevantes aunque el retriever no recupera toda la información de
+referencia, lo que sugiere que el LLM usa conocimiento paramétrico para
+complementar el contexto incompleto.
+
+Las preguntas sobre \textbf{indicadores} exhiben la menor Faithfulness (0.5588)
+y el segundo Context Recall más bajo (0.1916), lo que indica que los fragmentos
+sobre indicadores específicos están dispersos en múltiples documentos y el
+sistema tiene dificultades para recuperarlos de forma completa.
+
+% ============================================================
+\subsection{Análisis por pregunta}
+% ============================================================
+
+La Tabla~\ref{tab:por_pregunta} resume las preguntas con los mejores y peores
+desempeños máximos alcanzados en el experimento, junto con la configuración que
+los produjo.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{5.2cm}|l|l|c|c|}
+\hline
+\textbf{Pregunta} & \textbf{LLM} & \textbf{Embed.} & \textbf{Chunk} & \textbf{Mejor score} \\
+\hline
+\multicolumn{5}{|c|}{\textit{Preguntas con mayor puntaje máximo}} \\
+\hline
+¿Por qué priorizar indicadores? & llama3.2:3b & nomic-embed-text & large & 1.0000 \\
+¿Qué significan los colores rojo, amarillo y verde? & gpt-oss:20b & mxbai-embed-large & small & 1.0000 \\
+¿Qué es la Fundación Paraguaya? & qwen3:8b & mxbai-embed-large & large & 0.9898 \\
+¿Qué es un indicador del Semáforo? & llama3.2:latest & nomic-embed-text & large & 0.9859 \\
+¿Qué relación tiene el Banco de Soluciones con el Semáforo? & llama3.2:latest & mxbai-embed-large & medium & 0.9793 \\
+¿Qué indica el indicador de Cédula de identidad vigente? & gpt-oss:20b & bge-m3 & medium & 0.9760 \\
+\hline
+\multicolumn{5}{|c|}{\textit{Preguntas con menor puntaje máximo}} \\
+\hline
+¿Qué significa que una solución sea exclusiva? & gpt-oss:20b & nomic-embed-text & medium & 0.5145 \\
+¿Qué dice el indicador de Ingresos por encima de la línea de pobreza? & qwen3:8b & bge-m3 & large & 0.7921 \\
+¿Qué significa el indicador de Acceso a crédito? & llama3.2:3b & bge-m3 & medium & 0.7866 \\
+\hline
+\end{tabular}
+\caption{Preguntas con mejor y peor desempeño máximo en el experimento}
+\label{tab:por_pregunta}
+\end{table}
+
+Dos preguntas alcanzaron puntuación perfecta (1.0000) con configuraciones
+distintas, lo que confirma que la combinación óptima es dependiente de la
+pregunta. La pregunta más difícil del experimento, ``¿Qué significa que una
+solución sea exclusiva?'', alcanzó un máximo de solo 0.5145 incluso con su
+mejor configuración, con Context Precision de 0.0, lo que indica que el concepto
+de ``exclusividad'' de una solución no está suficientemente representado en la
+base de conocimientos indexada.
+
+% ============================================================
+\subsection{Casos ilustrativos}
+% ============================================================
+
+Los siguientes tres casos extraídos del experimento ilustran los escenarios
+típicos de comportamiento del sistema.
+
+\subsubsection*{Caso 1: Alta puntuación — respuesta fiel y precisa}
+
+\noindent \textbf{Configuración:} \texttt{gpt-oss:20b} + \texttt{bge-m3} + \textit{small} \\
+\textbf{Pregunta:} ¿Qué es la Fundación Paraguaya? \\
+\textbf{Resultados:} Faithfulness: 1.000 $|$ AR: 0.937 $|$ CP: 1.000 $|$ CR: 0.625
+
+\noindent El sistema recuperó fragmentos precisos del documento de la
+Fundación Paraguaya. Todas las afirmaciones de la respuesta estaban respaldadas
+por el contexto (Faithfulness=1.0). El Context Recall de 0.625 indica que se
+cubrieron aproximadamente 5 de 8 oraciones de la respuesta de referencia
+(\textit{ground truth}); las no cubiertas correspondían a la fecha de fundación
+(1985) y al nombre del fundador
+(Martín Burt), datos que se encontraban en fragmentos no recuperados.
+
+\subsubsection*{Caso 2: Alucinación detectada — alta relevancia, baja fidelidad}
+
+\noindent \textbf{Configuración:} \texttt{llama3.2:latest} + \texttt{nomic-embed-text} + \textit{large} \\
+\textbf{Pregunta:} ¿Qué es el Banco de Soluciones? \\
+\textbf{Resultados:} Faithfulness: 0.100 $|$ AR: 0.913 $|$ CP: 0.000 $|$ CR: 0.000
+
+\noindent Este caso ilustra el peligro de evaluar únicamente Answer Relevancy.
+El LLM generó una respuesta aparentemente relevante (AR=0.913) pero
+completamente fabricada: confundió el Banco de Soluciones con un asistente
+conversacional llamado ``Luz'' y describió características inventadas
+(``asistente educativo y tecnológico''). Solo 1 de 10 afirmaciones tenía
+respaldo en el contexto (Faithfulness=0.100). El retriever recuperó fragmentos
+del manual metodológico en lugar de los del Banco de Soluciones (CP=0.0,
+CR=0.0). Este caso demuestra que Faithfulness es imprescindible para detectar
+alucinaciones que Answer Relevancy no puede revelar.
+
+\subsubsection*{Caso 3: Fallo total del retriever}
+
+\noindent \textbf{Configuración:} \texttt{gpt-oss:20b} + \texttt{snowflake-arctic-embed} + \textit{small} \\
+\textbf{Pregunta:} ¿Necesito estar vinculado a una organización para usar el Banco? \\
+\textbf{Resultados:} Faithfulness: 0.000 $|$ AR: 0.000 $|$ CP: 0.000 $|$ CR: 0.000
+
+\noindent La combinación de \texttt{snowflake-arctic-embed} con fragmentos
+\textit{small} produjo un fallo total: el retriever trajo fragmentos del manual
+metodológico del Semáforo en lugar de los documentos del Banco de Soluciones.
+El LLM respondió ``No se encuentra la respuesta en el contexto'', lo que es
+fiel al contexto entregado (correcto al no alucinar), pero resulta en AR=0.000
+porque no responde la pregunta. Este caso representa el escenario donde el fallo
+del retriever arrastra a cero todas las métricas.
+
+% ============================================================
+\subsection{Visualización de resultados}
+% ============================================================
+
+La Figura~\ref{fig:scatter} presenta un gráfico de dispersión de las 10
+mejores configuraciones, con Context Recall en el eje horizontal y
+Faithfulness en el eje vertical. El color de cada punto indica el modelo de
+embedding utilizado; el tamaño es proporcional a la puntuación promedio de
+la configuración. La cruz negra representa el promedio global de las 60
+combinaciones.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  xlabel={Context Recall},
+  ylabel={Faithfulness},
+  xmin=0.05, xmax=0.60,
+  ymin=0.60, ymax=0.95,
+  xtick={0.1,0.2,0.3,0.4,0.5,0.6},
+  ytick={0.60,0.65,0.70,0.75,0.80,0.85,0.90,0.95},
+  xticklabel style={font=\small},
+  yticklabel style={font=\small},
+  xlabel style={font=\small},
+  ylabel style={font=\small},
+  grid=both,
+  grid style={line width=0.3pt, draw=gray!30},
+  major grid style={line width=0.5pt, draw=gray!50},
+  width=12cm, height=9cm,
+  legend style={at={(1.02,1)}, anchor=north west, font=\small,
+                draw=gray, fill=white, inner sep=4pt},
+  clip=false,
+]
+
+% ── Líneas de referencia (promedio global) ───────────────────────────────────
+\addplot[dashed, gray!70, thick, forget plot]
+  coordinates {(0.2383,0.60) (0.2383,0.95)};
+\addplot[dashed, gray!70, thick, forget plot]
+  coordinates {(0.05,0.6329) (0.60,0.6329)};
+\node[font=\tiny, gray, anchor=west] at (axis cs:0.242,0.615)
+  {CR prom.=0.238};
+\node[font=\tiny, gray, anchor=south] at (axis cs:0.08,0.638)
+  {F prom.=0.633};
+
+% ── bge-m3 (azul) ────────────────────────────────────────────────────────────
+% (CR, Faith, label)
+% 1: qwen3:8b medium
+\addplot[only marks, mark=*, blue, mark size=4pt] coordinates {
+  (0.5057, 0.9035)
+  (0.5057, 0.8119)
+  (0.4741, 0.8346)
+  (0.5343, 0.7893)
+  (0.5225, 0.7771)
+  (0.5271, 0.7835)
+  (0.4879, 0.7882)
+  (0.4805, 0.7343)
+};
+\addlegendentry{bge-m3}
+
+% ── mxbai-embed-large (rojo) ─────────────────────────────────────────────────
+\addplot[only marks, mark=square*, red!80!black, mark size=4pt] coordinates {
+  (0.3990, 0.7611)
+};
+\addlegendentry{mxbai-embed-large}
+
+% ── all-minilm (verde) ───────────────────────────────────────────────────────
+\addplot[only marks, mark=triangle*, green!60!black, mark size=5pt] coordinates {
+  (0.4602, 0.6936)
+};
+\addlegendentry{all-minilm}
+
+% ── Promedio global (cruz) ───────────────────────────────────────────────────
+\addplot[only marks, mark=x, black, mark size=7pt, line width=2pt] coordinates {
+  (0.2383, 0.6329)
+};
+\addlegendentry{Promedio global}
+
+% ── Etiquetas de puntos clave ────────────────────────────────────────────────
+\node[font=\tiny, blue, anchor=south west] at (axis cs:0.508,0.906)
+  {\#1 qwen3:8b};
+\node[font=\tiny, blue, anchor=north west] at (axis cs:0.508,0.810)
+  {\#2 gpt-oss:20b};
+\node[font=\tiny, blue, anchor=south east] at (axis cs:0.472,0.836)
+  {\#3 qwen3:8b};
+\node[font=\tiny, red!80!black, anchor=north east] at (axis cs:0.397,0.759)
+  {\#9 mxbai};
+\node[font=\tiny, green!60!black, anchor=north west] at (axis cs:0.462,0.691)
+  {\#10 all-minilm};
+
+\end{axis}
+\end{tikzpicture}
+\caption{Dispersión de las 10 mejores configuraciones: Context Recall vs.\ Faithfulness.
+  El color indica el modelo de embedding. La cruz negra es el promedio global
+  (60 combinaciones). Las líneas punteadas marcan los promedios globales de
+  cada métrica.}
+\label{fig:scatter}
+\end{figure}
+
+El gráfico permite observar visualmente tres patrones: (1) las 8
+configuraciones con \texttt{bge-m3} se agrupan en la región superior-derecha
+(alto Faithfulness y alto Context Recall), alejadas del promedio global; (2)
+la única configuración con \texttt{mxbai-embed-large} en el top 10 (\#9) tiene
+menor Context Recall que todas las de \texttt{bge-m3}; (3) la configuración
+con \texttt{all-minilm} (\#10), a pesar de tener el Faithfulness más bajo del
+grupo, supera al promedio global en ambas dimensiones. La cruz que representa
+el promedio global (CR=0.238, F=0.633) se ubica significativamente por debajo
+y a la izquierda del cluster principal, evidenciando que las configuraciones
+mal elegidas (con \texttt{nomic-embed-text} o \texttt{snowflake-arctic-embed})
+arrastran considerablemente las métricas promedio.
+
+% ============================================================
+\subsection{Discusión de resultados}
+% ============================================================
+
+El análisis conjunto de los resultados permite identificar cuatro hallazgos
+principales sobre el comportamiento del sistema RAG para el Semáforo de Pobreza.
+
+\textbf{1. El modelo de embedding es el factor más determinante.} La diferencia
+entre el mejor embedding (\texttt{bge-m3}, CR=0.4225) y el peor
+(\texttt{snowflake-arctic-embed}, CR=0.0742) es de 5.7×. Esta brecha supera
+con creces la variación entre LLMs (cuyo Context Recall oscila solo entre 0.2315
+y 0.2432). Ningún ajuste de LLM o de tamaño de fragmento puede compensar un
+embedding deficiente: el Caso 3 demuestra que \texttt{snowflake-arctic-embed}
+produce fallos totales independientemente de la capacidad del LLM.
+
+\textbf{2. El Context Recall es el cuello de botella sistémico.} El promedio
+global de CR (0.2383) indica que el retriever recupera menos de una cuarta parte
+de la información necesaria. La configuración ganadora lo mejora a 0.5057, pero
+esto requiere la combinación específica de \texttt{bge-m3} + \textit{medium}: la
+Tabla~\ref{tab:heatmap} muestra que ningún otro embedding supera CR=0.41 con
+ningún tamaño de fragmento. El bajo CR implica que el LLM debe compensar con
+conocimiento paramétrico, aumentando el riesgo de alucinaciones
+(ilustrado en el Caso 2).
+
+\textbf{3. Answer Relevancy por sí sola no detecta alucinaciones.} La métrica
+AR global (0.7066) es considerablemente más alta que Faithfulness (0.6329), lo
+que significa que hay configuraciones donde el LLM genera respuestas que
+``parecen'' relevantes pero no están fundamentadas en el contexto. En el Caso 2,
+AR fue 0.913 con Faithfulness de apenas 0.100. Para aplicaciones de impacto
+social, donde la información incorrecta puede orientar mal decisiones de
+política pública, la evaluación de Faithfulness es imprescindible.
+
+\textbf{4. El tamaño de fragmento óptimo depende del embedding.} No existe un
+tamaño de fragmento universalmente superior: para \texttt{bge-m3} el óptimo es
+\textit{medium} (CR=0.5173), mientras que para \texttt{mxbai-embed-large} y
+\texttt{all-minilm} el tamaño \textit{large} produce mayor recall. Los
+fragmentos \textit{small} (512 caracteres) son los peores en todos los
+embeddings sin excepción.
+
+En síntesis, el análisis confirma que el rendimiento de un sistema RAG depende
+de la interacción entre tres variables clave:
+
+\begin{enumerate}
+\item La calidad del espacio vectorial generado por el modelo de embedding
+\item La granularidad semántica de la estrategia de chunking, ajustada al embedding
+\item La capacidad del LLM para mantenerse fiel al contexto recuperado
+\end{enumerate}
+
+La configuración \texttt{qwen3:8b} + \texttt{bge-m3} + \textit{medium} alcanza
+el mejor equilibrio entre estas tres variables, con puntuaciones de nivel
+\textit{Excelente} en Faithfulness y Context Precision, y nivel \textit{Bueno}
+en Answer Relevancy y Context Recall.
+
+\subsection{Limitaciones y trabajo futuro}
+
+Los resultados identifican tres áreas prioritarias de mejora:
+
+\begin{itemize}
+\item \textbf{Incrementar el Context Recall:} el principal cuello de botella.
+  Estrategias prometedoras incluyen aumentar el número de fragmentos recuperados
+  ($k > 8$), implementar re-ranking neural post-retrieval, o incorporar
+  búsqueda híbrida (densa + BM25 léxico).
+
+\item \textbf{Cubrir la pregunta más difícil:} la pregunta sobre ``soluciones
+  exclusivas'' alcanzó un máximo de 0.5145, lo que indica que la base de
+  conocimientos carece de documentación suficiente sobre este concepto. La
+  solución requiere enriquecer el corpus, no ajustar el modelo.
+
+\item \textbf{Evaluar con preguntas reales de usuarios:} el conjunto de 30
+  preguntas fue construido por expertos. Una evaluación con usuarios reales de
+  la comunidad Semáforo permitiría validar si las categorías temáticas y los
+  niveles de dificultad reflejan el uso real del sistema.
+\end{itemize}
+
+\subsection{Implicaciones del estudio}
+
+Este trabajo demuestra que es posible construir un sistema RAG completamente
+local —sin dependencia de APIs propietarias para la generación— que alcance
+niveles de desempeño \textit{Bueno} en Faithfulness y Answer Relevancy, usando
+únicamente modelos de código abierto ejecutados en hardware accesible. Las
+implicaciones principales son:
+
+\begin{itemize}
+\item \textbf{Soberanía de datos:} al operar íntegramente en infraestructura
+  local, el sistema protege la confidencialidad de los datos del Semáforo de
+  Pobreza, relevante para organizaciones que trabajan con información sensible
+  de familias en situación de vulnerabilidad.
+
+\item \textbf{Democratización del conocimiento:} el agente conversacional
+  propuesto puede facilitar que implementadores de nuevas organizaciones accedan
+  a más de 708.000 evaluaciones y las experiencias acumuladas de más de 1.080
+  organizaciones en 59 países, sin requerir expertise técnico.
+
+\item \textbf{Transferibilidad metodológica:} el framework de evaluación
+  experimental (60 combinaciones $\times$ 30 preguntas $\times$ 4 métricas RAGAS)
+  es replicable para cualquier dominio de conocimiento social, y la metodología
+  de separar evaluación local de evaluación con juez externo es una contribución
+  práctica para contextos con recursos computacionales limitados.
+
+\item \textbf{Evidencia empírica para la selección de componentes:} los datos
+  presentados permiten a futuros implementadores tomar decisiones informadas
+  sobre embedding y tamaño de fragmento antes de incurrir en el costo de
+  indexación completa, priorizando \texttt{bge-m3} con fragmentos de 1024
+  caracteres como punto de partida.
+\end{itemize}
+
+El sistema propuesto puede servir como base para futuras aplicaciones de IA
+aplicada a programas de desarrollo social, políticas públicas basadas en
+evidencia y gestión del conocimiento en organizaciones de la sociedad civil.
+
+%\begin{figure}
+%\includegraphics[width=13cm, height=7cm]{diagramaGant}
+%\caption{Calendario de Actividades}\label{fig:calendario}
+%\end{figure}
+
+
+\bibliographystyle{plain}
+\bibliography{protocolo}
+
+\clearpage
+% Visto bueno
+\vfill
+\Large{Vo. Bo.}
+\\    \\    \\    \\    \\  \\    \\    \\    \\    \\   
+ 
+\begin{tabular}{@{}p{6cm}p{7cm}@{}}
+    \Large{Firma del Alumno:} & \hrulefill \\
+                         & \large{Alumno} \par \\
+    \\    \\    \\    \\    \\    
+    \Large{Directora de tesis:} & \hrulefill \\
+                         & \large{Dra. Helena Gómez Adorno} \\
+    \Large{} & \\
+                         & \large{Investigadora Titular A} \\
+    \Large{} &  \\
+                         & \large{IIMAS-UNAM} \\
+    
+\end{tabular}
+
+
+\end{document}

@@ -1,0 +1,133 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{amsbsy}
+\usepackage{pifont}
+\usepackage{epsfig}
+
+\begin{document}
+
+\hyphenation{}
+
+\title{Aplicación de Inteligencia Artificial para la Interacción y Análisis de Datos del Proyecto “Semáforo de Pobreza” en Paraguay}
+
+\author{
+  Carlos Bustamante \\
+  Universidad Comunera \\
+  \texttt{cbustamantem@gmail.com}
+  \and
+  Nelba Barreto \\
+  Universidad Comunera \\
+  \texttt{barretonelba@gmail.com}
+}
+
+\date{Noviembre 2025}
+\maketitle
+
+\section{Introducción}\label{sec:introduccion}
+La pobreza es un fenómeno complejo que afecta a millones de personas alrededor del mundo, y Paraguay no es la excepción. En este contexto, el proyecto Semáforo de Pobreza (Poverty Stoplight), desarrollado por la Fundación Paraguaya, se presenta como una herramienta innovadora que permite a las familias autoevaluar su situación en diversas dimensiones y construir un plan de acción personalizado para superar sus limitaciones.
+
+Actualmente, el Semáforo de Pobreza cuenta con más de 708.000 evaluaciones realizadas en 59 países y una base de conocimientos de más de 1.000 soluciones prácticas implementadas por distintas comunidades. Sin embargo, el acceso y aprovechamiento de esta vasta información sigue siendo limitado, tanto para nuevas organizaciones interesadas como para las personas interesadas en participar en el programa.
+
+En este sentido, surge la necesidad de construir un agente social basado en inteligencia artificial, capaz de interactuar con personas y organizaciones de manera natural y ofrecer respuestas informadas, ejemplos de casos de éxito, estadísticas y estrategias efectivas extraídas de la base de conocimientos del Semáforo. La aplicación de técnicas modernas de Retrieval Augmented Generation (RAG) y fine tunning de modelos de lenguaje (LLM) permitirá estructurar, comprender y comunicar esta información de forma accesible, confiable y contextualizada.
+
+\section{Estado del arte}\label{sec:estadoArte}
+A nivel global, diferentes proyectos han buscado aplicar inteligencia artificial en el ámbito del desarrollo social y la reducción de la pobreza. Iniciativas como AI for Good (ONU) y plataformas de análisis de datos sociales han demostrado el potencial de los modelos de lenguaje para sintetizar conocimiento, generar reportes y apoyar intervenciones sociales.
+
+Sin embargo, la mayoría de los esfuerzos se concentran en países desarrollados o se basan en datos estructurados limitados. En el caso del Semáforo de Pobreza, la información disponible es vasta, pero heterogénea y distribuida entre múltiples bases de datos, lo que dificulta su uso para generar conocimiento aplicable.
+
+Hasta la fecha, no existe un modelo de inteligencia artificial entrenado específicamente con los datos y soluciones del Semáforo de Pobreza, ni un agente conversacional que facilite la transferencia de estas experiencias a nuevas comunidades y organizaciones. Por tanto, esta investigación busca cubrir esa brecha mediante un enfoque integral que combine ciencia de datos, procesamiento de lenguaje natural y aprendizaje automático.
+
+\section{Descripción de la propuesta}\label{sec:descripcion}
+La propuesta consiste en diseñar y desarrollar un agente social inteligente basado en técnicas de RAG (Retrieval-Augmented Generation), que integre toda la base de conocimientos del Semáforo de Pobreza y permita interactuar de manera conversacional con usuarios y organizaciones interesadas en aplicar el semáforo de pobreza.
+
+La idea principal es aplicar modelos de lenguaje (LLM) entrenados con datos reales del Semáforo —incluyendo indicadores, planes de acción, casos de éxito, estadísticas por país, y la base de conocimientos la cual consiste en más de 1000 casos de exitos, información actualmente registrada en su plataforma interna. — para ofrecer respuestas útiles y contextualizadas. Este agente podrá responder preguntas como:
+“¿Cuáles fueron los resultados del Semáforo en una cadena de supermercados en Paraguay?”
+y mostrar, por ejemplo, que durante el proceso se detectaron un alto porcentaje de sus funcionarios tenían carencias en vivienda, acceso a energía y transporte, junto con las soluciones implementadas y los resultados luego de la asistencia.
+
+Este sistema contribuirá a facilitar el conocimiento social acumulado por el Semáforo y fortalecer la toma de la interacción con organizaciones y personas interesadas.
+
+\section{Objetivos}\label{sec:objetivos}
+\begin{itemize}
+ \item \textbf{Objetivo general}
+   \begin{itemize}
+     \item Desarrollar un agente social basado en inteligencia artificial que integre la base de conocimientos del proyecto Semáforo de Pobreza, utilizando técnicas de ciencia de datos y modelos de lenguaje para facilitar la interacción y difusión de experiencias exitosas.
+   \end{itemize}
+ \item \textbf{Objetivos Específicos}
+   \begin{itemize}
+    \item Desarrollar y estructurar la base de conocimientos del Semáforo de Pobreza consolidando sus diversas fuentes de datos.
+    \item Construir un modelo de lenguaje (LLM) entrenado con información del Semáforo y técnicas RAG.
+    \item Implementar una interfaz web interactiva que permita la comunicación con el agente social inteligente en español e inglés.
+    \item Demostrar la precisión y relevancia de las respuestas generadas por el modelo.
+    \item Evaluar la utilidad del sistema en distintos escenarios de uso por parte de organizaciones y usuarios.
+   \end{itemize}
+\end{itemize}
+
+\section{Metas}\label{sec:metas}
+Las metas de la propuesta se pueden enumerar de la siguiente manera:
+\begin{enumerate}
+    \item Integrar en un único repositorio estructurado la base de conocimientos actual del Semáforo.
+    \item Entrenar un modelo de lenguaje de dominio específico.
+    \item Desarrollar un prototipo funcional del agente social.
+    \item Validar el sistema mediante pruebas con usuarios reales y organizaciones asociadas.
+    \item Publicar los resultados obtenidos y su impacto social.
+\end{enumerate}
+
+\section{Aportación científica esperada}\label{sec:aporte}
+Al finalizar el proyecto se contará con:
+\begin{enumerate}
+\item Un repositorio en Hugging Face con la base de conocimientos utilizada para realizar el fine tuning del modelo de lenguaje (LLM) especializado en datos de desarrollo social y pobreza.
+\item Un método estructurado para integrar y aprovechar grandes bases de conocimiento sociales.
+\item Un agente conversacional funcional, accesible desde el portal del Semáforo de Pobreza povertystoplight.org.
+\item Un avance científico y tecnológico en el uso de IA aplicada a políticas públicas y proyectos de impacto social.
+\end{enumerate}
+
+\section{Metodología científica}\label{metodologia}
+En la etapa inicial, se realizará un trabajo de ciencia de datos enfocado en recopilar, limpiar y estructurar la base de conocimientos del Semáforo de Pobreza.
+
+Seguidamente, se entrenará un modelo LLM con técnicas de RAG, utilizando los datos estructurados y textos descriptivos de las soluciones históricas.
+
+Finalmente, se desarrollará una interfaz web que permitirá la interacción con el agente, validando su rendimiento con métricas de precisión, relevancia y satisfacción del usuario.
+
+\section{Calendario de actividades}\label{sec:calendario}
+El calendario de actividades se divide en las siguientes fases es y están detalladas en la Figura xx:\\
+
+Fase 1: Preparación y estructuración de la base de conocimiento (1 mes)
+Fase 2: Entrenamiento del modelo LLM con la base de conocimiento (1 mes)\\
+Fase 3: Implementación del agente virtual en el sitio web Poverty Stoplight (1 mes)\\
+Fase 4: Pruebas piloto, evaluación de resultados y ajustes finales (1 mes)\\
+
+Aquí introducir diagrama de gantt con el calendario por fases o por actividades.
+%\begin{figure}
+%\includegraphics[width=13cm, height=7cm]{diagramaGant}
+%\caption{Calendario de Actividades}\label{fig:calendario}
+%\end{figure}
+
+
+\bibliographystyle{plain}
+\bibliography{protocolo}
+
+\clearpage
+% Visto bueno
+\vfill
+\Large{Vo. Bo.}
+\\    \\    \\    \\    \\  \\    \\    \\    \\    \\   
+ 
+\begin{tabular}{@{}p{6cm}p{7cm}@{}}
+    \Large{Firma del Alumno:} & \hrulefill \\
+                         & \large{Alumno} \par \\
+    \\    \\    \\    \\    \\    
+    \Large{Directora de tesis:} & \hrulefill \\
+                         & \large{Dra. Helena Gómez Adorno} \\
+    \Large{} & \\
+                         & \large{Investigadora Titular A} \\
+    \Large{} &  \\
+                         & \large{IIMAS-UNAM} \\
+    
+\end{tabular}
+
+
+\end{document}

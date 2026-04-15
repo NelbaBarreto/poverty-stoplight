@@ -12,3 +12,4 @@ db/*.sql
 db/*.sql.gz
 # Chroma
 chroma_db/
+postgres/db_rag*
