@@ -55,6 +55,8 @@ echo "Iniciando Webchat API en http://localhost:${API_PORT}"
     --host 0.0.0.0 \
     --port "$API_PORT" \
     --reload \
+    --reload-dir "$SCRIPT_DIR" \
+    --reload-dir "$PROJECT_ROOT/src" \
     --app-dir "$PROJECT_ROOT" &
 
 API_PID=$!
