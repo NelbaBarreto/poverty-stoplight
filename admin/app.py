@@ -1149,13 +1149,14 @@ if not db_status:
 # ---------------------------------------------------------------------------
 # TABS PRINCIPALES
 # ---------------------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "▸ Dashboard",
     "▸ Documentos",
     "▸ Chunks",
     "▸ Modelos & Embeddings",
     "▸ Subir Documentos",
     "▸ Usuarios",
+    "▸ Validación",
 ])
 
 # ===========================================================================
@@ -1994,7 +1995,7 @@ with tab6:
 
     st.divider()
 
-    # ── crear nuevo usuario ───────────────────────────────────────────────
+    # ── crear nuevo usuario ─────────────────────────────────────────────
     st.markdown("""
     <div class="ind-section">
         <div class="bar"></div>
@@ -2031,3 +2032,268 @@ with tab6:
             )
             st.success(f"Usuario '{nu_username.strip()}' creado con rol '{nu_role}'.")
             st.rerun()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAB 7 — Validación
+# ═══════════════════════════════════════════════════════════════════════════
+
+with tab7:
+    if "val_sel_run" not in st.session_state:
+        st.session_state.val_sel_run = None
+    if "val_category" not in st.session_state:
+        st.session_state.val_category = "Todas"
+
+    # ── versión activa ────────────────────────────────────────────────────
+    va = fetchone(
+        """SELECT va.id, va.numero, va.descripcion,
+                  lm.model_name AS llm, em.model_name AS embed, cc.name AS chunk
+           FROM version_agente va
+           JOIN llm_models lm       ON lm.id = va.llm_model_id
+           JOIN embedding_models em ON em.id = va.embed_model_id
+           JOIN chunk_configs cc    ON cc.id = va.chunk_config_id
+           WHERE va.activa = TRUE
+           ORDER BY va.numero DESC LIMIT 1"""
+    )
+
+    if not va:
+        st.error("No hay ninguna versión de agente activa. Ejecuta la migración 005.")
+        st.stop()
+
+    va_id, va_num, va_desc, va_llm, va_embed, va_chunk = va
+
+    st.markdown(f"""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Versión Activa: v{va_num}</div>
+        <div class="count">{va_desc}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption(f"LLM: `{va_llm}` · Embed: `{va_embed}` · Chunk: `{va_chunk}`")
+
+    st.divider()
+
+    # ── filtro categoría ──────────────────────────────────────────────────
+    cats_raw = query_df("SELECT DISTINCT category FROM knowledge_base WHERE category IS NOT NULL ORDER BY category")
+    cat_options = ["Todas"] + cats_raw["category"].tolist()
+    st.session_state.val_category = st.selectbox(
+        "Filtrar por categoría",
+        cat_options,
+        index=cat_options.index(st.session_state.val_category)
+        if st.session_state.val_category in cat_options else 0,
+        key="val_cat_select",
+    )
+    cat_filter = st.session_state.val_category
+
+    # ── cargar preguntas con estadísticas ─────────────────────────────────
+    cat_clause = "AND kb.category = %(cat)s" if cat_filter != "Todas" else ""
+    df_q = query_df(f"""
+        SELECT
+            kb.id                                          AS kb_id,
+            kb.question,
+            COALESCE(kb.category, '—')                    AS categoria,
+            er.id                                         AS eval_run_id,
+            COUNT(v.id)                                   AS evaluaciones,
+            ROUND(AVG(v.calificacion)::numeric, 1)        AS prom,
+            SUM(CASE WHEN v.alucinacion THEN 1 ELSE 0 END) AS alucinaciones,
+            MAX(CASE WHEN v.user_id = %(uid)s THEN v.calificacion END) AS mi_nota
+        FROM knowledge_base kb
+        JOIN eval_runs er
+          ON er.knowledge_base_id = kb.id
+         AND er.llm_model_id    = (SELECT llm_model_id    FROM version_agente WHERE id = %(va_id)s)
+         AND er.embedding_model_id = (SELECT embed_model_id FROM version_agente WHERE id = %(va_id)s)
+         AND er.chunk_config_id = (SELECT chunk_config_id FROM version_agente WHERE id = %(va_id)s)
+        LEFT JOIN validaciones v ON v.eval_run_id = er.id
+        WHERE 1=1 {cat_clause}
+        GROUP BY kb.id, kb.question, kb.category, er.id
+        ORDER BY kb.id
+    """, params={"uid": auth_user["id"], "va_id": va_id, "cat": cat_filter if cat_filter != "Todas" else None})
+
+    st.markdown(f"""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Preguntas</div>
+        <div class="count">{len(df_q)} preguntas · {int(df_q['evaluaciones'].sum())} evaluaciones</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── tabla resumen ─────────────────────────────────────────────────────
+    def render_val_table(df):
+        rows = ""
+        for _, r in df.iterrows():
+            nota = f"<span style='color:#00FF85;font-weight:700'>{int(r['mi_nota'])}/10</span>" if pd.notna(r["mi_nota"]) else "<span style='opacity:.4'>—</span>"
+            aluci = f"<span style='color:#ff4b4b;font-weight:600'>{int(r['alucinaciones'])}</span>" if r["alucinaciones"] > 0 else "<span style='opacity:.4'>0</span>"
+            prom  = f"{r['prom']}" if pd.notna(r["prom"]) else "—"
+            pregunta = str(r["question"])[:80] + ("…" if len(str(r["question"])) > 80 else "")
+            rows += (
+                f"<tr>"
+                f"<td style='color:#aaa'>{int(r['kb_id'])}</td>"
+                f"<td style='max-width:380px'>{pregunta}</td>"
+                f"<td style='text-align:center'>{r['categoria']}</td>"
+                f"<td style='text-align:center'>{int(r['evaluaciones'])}</td>"
+                f"<td style='text-align:center'>{prom}</td>"
+                f"<td style='text-align:center'>{aluci}</td>"
+                f"<td style='text-align:center'>{nota}</td>"
+                f"</tr>"
+            )
+        st.markdown(f"""
+        <div style='overflow-x:auto'>
+        <table style='width:100%;border-collapse:collapse;font-size:.82rem;font-family:monospace'>
+          <thead>
+            <tr style='border-bottom:1px solid #333;color:#888;text-transform:uppercase;font-size:.72rem'>
+              <th style='text-align:left;padding:6px 8px'>#</th>
+              <th style='text-align:left;padding:6px 8px'>Pregunta</th>
+              <th style='text-align:center;padding:6px 8px'>Categoría</th>
+              <th style='text-align:center;padding:6px 8px'>Evaluaciones</th>
+              <th style='text-align:center;padding:6px 8px'>Promedio</th>
+              <th style='text-align:center;padding:6px 8px'>Alucinaciones</th>
+              <th style='text-align:center;padding:6px 8px'>Mi nota</th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+    render_val_table(df_q)
+
+    st.divider()
+
+    # ── selector de pregunta ──────────────────────────────────────────────
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Seleccionar Pregunta para Evaluar</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    q_options = [
+        f"#{int(r['kb_id'])}  |  {str(r['question'])[:90]}"
+        for _, r in df_q.iterrows()
+    ]
+    run_by_opt = {q_options[i]: int(df_q.iloc[i]["eval_run_id"]) for i in range(len(df_q))}
+    kb_by_opt  = {q_options[i]: int(df_q.iloc[i]["kb_id"])      for i in range(len(df_q))}
+
+    st.markdown('<div class="doc-radio">', unsafe_allow_html=True)
+    sel_q_opt = st.radio(
+        "pregunta",
+        options=q_options,
+        index=0,
+        key="val_q_radio",
+        label_visibility="collapsed",
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    sel_run_id = run_by_opt[sel_q_opt]
+    sel_kb_id  = kb_by_opt[sel_q_opt]
+
+    # ── panel de evaluación ───────────────────────────────────────────────
+    st.divider()
+
+    kb_row = fetchone(
+        "SELECT question, answer FROM knowledge_base WHERE id = %s", (sel_kb_id,)
+    )
+    er_row = fetchone(
+        "SELECT generated_answer FROM eval_runs WHERE id = %s", (sel_run_id,)
+    )
+
+    if kb_row and er_row:
+        question_text, ground_truth = kb_row
+        agent_answer = er_row[0] or "—"
+
+        col_left, col_right = st.columns([3, 2])
+
+        with col_left:
+            st.markdown("**Pregunta**")
+            st.info(question_text)
+
+            st.markdown("**Respuesta esperada (Ground Truth)**")
+            st.markdown(
+                f"<div style='background:#111;border:1px solid #333;border-radius:6px;"
+                f"padding:10px 14px;font-size:.83rem;line-height:1.6'>{ground_truth}</div>",
+                unsafe_allow_html=True,
+            )
+
+            st.markdown("**Respuesta del Agente**")
+            st.markdown(
+                f"<div style='background:#0d1f17;border:1px solid #00FF8540;"
+                f"border-radius:6px;padding:10px 14px;font-size:.83rem;line-height:1.6'>"
+                f"{agent_answer}</div>",
+                unsafe_allow_html=True,
+            )
+
+        with col_right:
+            st.markdown("**Tu evaluación**")
+
+            # Cargar evaluación previa del usuario actual
+            existing = fetchone(
+                "SELECT id, calificacion, observacion, alucinacion FROM validaciones "
+                "WHERE eval_run_id = %s AND user_id = %s",
+                (sel_run_id, auth_user["id"]),
+            )
+            ex_id    = existing[0] if existing else None
+            ex_nota  = int(existing[1]) if existing else 5
+            ex_obs   = existing[2] or "" if existing else ""
+            ex_aluc  = bool(existing[3]) if existing else False
+
+            with st.form(key=f"form_val_{sel_run_id}"):
+                calificacion = st.slider(
+                    "Calificación (1 = muy mala · 10 = excelente)",
+                    min_value=1, max_value=10, value=ex_nota,
+                    key=f"slider_cal_{sel_run_id}",
+                )
+                alucinacion = st.toggle(
+                    "¿Alucinación? (respuesta inventada o incorrecta)",
+                    value=ex_aluc,
+                    key=f"toggle_aluc_{sel_run_id}",
+                )
+                observacion = st.text_area(
+                    "Observación",
+                    value=ex_obs,
+                    height=120,
+                    placeholder="Comentarios sobre la respuesta del agente...",
+                    key=f"obs_{sel_run_id}",
+                )
+                submitted = st.form_submit_button(
+                    "💾 Guardar evaluación", type="primary", use_container_width=True
+                )
+
+            if submitted:
+                if ex_id:
+                    execute_sql(
+                        "UPDATE validaciones SET calificacion=%s, observacion=%s, "
+                        "alucinacion=%s, updated_at=NOW() WHERE id=%s",
+                        (calificacion, observacion.strip() or None, alucinacion, ex_id),
+                    )
+                    st.success("Evaluación actualizada.")
+                else:
+                    execute_sql(
+                        "INSERT INTO validaciones "
+                        "(version_agente_id, eval_run_id, user_id, calificacion, observacion, alucinacion) "
+                        "VALUES (%s, %s, %s, %s, %s, %s)",
+                        (va_id, sel_run_id, auth_user["id"],
+                         calificacion, observacion.strip() or None, alucinacion),
+                    )
+                    st.success("Evaluación registrada.")
+                st.rerun()
+
+            if existing:
+                st.caption(f"Ya evaluaste esta respuesta: **{ex_nota}/10**")
+
+        # ── evaluaciones de otros usuarios ────────────────────────────────
+        df_other = query_df("""
+            SELECT au.username, v.calificacion, v.alucinacion,
+                   COALESCE(v.observacion, '—') AS observacion,
+                   v.updated_at::date AS fecha
+            FROM validaciones v
+            JOIN admin_users au ON au.id = v.user_id
+            WHERE v.eval_run_id = %s
+            ORDER BY v.updated_at DESC
+        """, params=(sel_run_id,))
+
+        if not df_other.empty:
+            st.divider()
+            st.markdown(f"**Evaluaciones registradas ({len(df_other)})**")
+            df_other["alucinacion"] = df_other["alucinacion"].apply(
+                lambda x: "⚠️ Sí" if x else "✅ No"
+            )
+            render_table(df_other)
