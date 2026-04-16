@@ -2227,40 +2227,113 @@ with tab7:
         question_text, ground_truth = kb_row
         agent_answer = er_row[0] or "—"
 
-        col_left, col_right = st.columns([3, 2])
+        # ── pregunta ──────────────────────────────────────────────────────
+        st.markdown("**Pregunta**")
+        st.info(question_text)
 
-        with col_left:
-            st.markdown("**Pregunta**")
-            st.info(question_text)
+        # ── fila 1: respuesta esperada | respuesta del agente ─────────────
+        col_gt, col_ag = st.columns(2)
 
+        with col_gt:
             st.markdown("**Respuesta esperada (Ground Truth)**")
             st.markdown(
                 f"<div style='background:#111;border:1px solid #333;border-radius:6px;"
-                f"padding:10px 14px;font-size:.83rem;line-height:1.6'>{ground_truth}</div>",
+                f"padding:10px 14px;font-size:.83rem;line-height:1.6;min-height:180px'>"
+                f"{ground_truth}</div>",
                 unsafe_allow_html=True,
             )
 
+        with col_ag:
             st.markdown("**Respuesta del Agente**")
             st.markdown(
                 f"<div style='background:#0d1f17;border:1px solid #00FF8540;"
-                f"border-radius:6px;padding:10px 14px;font-size:.83rem;line-height:1.6'>"
+                f"border-radius:6px;padding:10px 14px;font-size:.83rem;line-height:1.6;min-height:180px'>"
                 f"{agent_answer}</div>",
                 unsafe_allow_html=True,
             )
 
-        with col_right:
+        st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+
+        # ── fila 2: métricas RAGAS | formulario de evaluación ────────────
+        col_ragas, col_form = st.columns(2)
+
+        # RAGAS helper (defined once, used in col_ragas)
+        def ragas_label(value, metric):
+            if value is None:
+                return "—", "#555", "Sin datos"
+            v = float(value)
+            if metric in ("faithfulness", "answer_relevancy"):
+                if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                elif v >= 0.60: return f"{v:.2f}", "#a3e635", "Bueno"
+                elif v >= 0.40: return f"{v:.2f}", "#f59e0b", "Moderado"
+                else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+            elif metric == "context_precision":
+                if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
+                elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Moderado"
+                else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+            else:  # context_recall
+                if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
+                elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Aceptable"
+                else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+
+        with col_ragas:
+            st.markdown("**Métricas RAGAS**")
+            ragas_row = fetchone(
+                """SELECT faithfulness, answer_relevancy, context_precision, context_recall
+                   FROM eval_scores WHERE eval_run_id = %s AND status = 'success'""",
+                (sel_run_id,),
+            )
+            if ragas_row:
+                faith_v, faith_c, faith_l = ragas_label(ragas_row[0], "faithfulness")
+                rel_v,   rel_c,   rel_l   = ragas_label(ragas_row[1], "answer_relevancy")
+                prec_v,  prec_c,  prec_l  = ragas_label(ragas_row[2], "context_precision")
+                rec_v,   rec_c,   rec_l   = ragas_label(ragas_row[3], "context_recall")
+                vals = [float(x) for x in ragas_row if x is not None]
+                avg_num = sum(vals) / len(vals) if vals else None
+                avg_v, avg_c, avg_l = ragas_label(avg_num, "faithfulness")
+
+                def metric_card(label, val, color, nivel, subtitle=""):
+                    return (
+                        f"<div style='background:#111;border:1px solid #222;border-radius:8px;"
+                        f"padding:10px 12px;text-align:center'>"
+                        f"<div style='font-size:.68rem;color:#888;text-transform:uppercase;margin-bottom:3px'>{label}</div>"
+                        f"<div style='font-size:1.4rem;font-weight:700;color:{color}'>{val}</div>"
+                        f"<div style='font-size:.72rem;color:{color};margin-top:2px'>{nivel}</div>"
+                        f"<div style='font-size:.65rem;color:#555;margin-top:2px'>{subtitle}</div>"
+                        f"</div>"
+                    )
+
+                cards_row1 = (
+                    metric_card("Avg Score",      avg_v,   avg_c,   avg_l,   "") +
+                    metric_card("Faithfulness",   faith_v, faith_c, faith_l, "Sin alucinaciones") +
+                    metric_card("Ans. Relevancy", rel_v,   rel_c,   rel_l,   "Relevancia respuesta")
+                )
+                cards_row2 = (
+                    metric_card("Ctx Precision",  prec_v,  prec_c,  prec_l,  "Ranking contexto") +
+                    metric_card("Ctx Recall",     rec_v,   rec_c,   rec_l,   "Cobertura contexto")
+                )
+                st.markdown(
+                    f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px'>{cards_row1}</div>"
+                    f"<div style='display:grid;grid-template-columns:repeat(2,1fr);gap:8px'>{cards_row2}</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("Sin métricas RAGAS para esta pregunta.")
+
+        with col_form:
             st.markdown("**Tu evaluación**")
 
-            # Cargar evaluación previa del usuario actual
             existing = fetchone(
                 "SELECT id, calificacion, observacion, alucinacion FROM validaciones "
                 "WHERE eval_run_id = %s AND user_id = %s",
                 (sel_run_id, auth_user["id"]),
             )
-            ex_id    = existing[0] if existing else None
-            ex_nota  = int(existing[1]) if existing else 5
-            ex_obs   = existing[2] or "" if existing else ""
-            ex_aluc  = bool(existing[3]) if existing else False
+            ex_id   = existing[0] if existing else None
+            ex_nota = int(existing[1]) if existing else 5
+            ex_obs  = existing[2] or "" if existing else ""
+            ex_aluc = bool(existing[3]) if existing else False
 
             with st.form(key=f"form_val_{sel_run_id}"):
                 calificacion = st.slider(
@@ -2305,82 +2378,6 @@ with tab7:
 
             if existing:
                 st.caption(f"Ya evaluaste esta respuesta: **{ex_nota}/10**")
-
-        # ── métricas RAGAS ────────────────────────────────────────────────
-        ragas_row = fetchone(
-            """SELECT faithfulness, answer_relevancy, context_precision, context_recall
-               FROM eval_scores WHERE eval_run_id = %s AND status = 'success'""",
-            (sel_run_id,),
-        )
-
-        if ragas_row:
-            st.divider()
-            st.markdown("**Métricas RAGAS (evaluación automática)**")
-
-            def ragas_label(value, metric):
-                if value is None:
-                    return "—", "#555", "Sin datos"
-                v = float(value)
-                if metric in ("faithfulness", "answer_relevancy"):
-                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
-                    elif v >= 0.60: return f"{v:.2f}", "#a3e635", "Bueno"
-                    elif v >= 0.40: return f"{v:.2f}", "#f59e0b", "Moderado"
-                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
-                elif metric == "context_precision":
-                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
-                    elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
-                    elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Moderado"
-                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
-                else:  # context_recall
-                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
-                    elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
-                    elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Aceptable"
-                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
-
-            faith_v, faith_c, faith_l   = ragas_label(ragas_row[0], "faithfulness")
-            rel_v,   rel_c,   rel_l     = ragas_label(ragas_row[1], "answer_relevancy")
-            prec_v,  prec_c,  prec_l    = ragas_label(ragas_row[2], "context_precision")
-            rec_v,   rec_c,   rec_l     = ragas_label(ragas_row[3], "context_recall")
-
-            # Avg score
-            vals = [float(x) for x in ragas_row if x is not None]
-            avg_v_num = sum(vals) / len(vals) if vals else None
-            avg_v, avg_c, avg_l = ragas_label(avg_v_num, "faithfulness")
-
-            metrics_html = f"""
-            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:8px'>
-              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
-                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Avg Score</div>
-                <div style='font-size:1.5rem;font-weight:700;color:{avg_c}'>{avg_v}</div>
-                <div style='font-size:.72rem;color:{avg_c};margin-top:2px'>{avg_l}</div>
-              </div>
-              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
-                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Faithfulness</div>
-                <div style='font-size:1.5rem;font-weight:700;color:{faith_c}'>{faith_v}</div>
-                <div style='font-size:.72rem;color:{faith_c};margin-top:2px'>{faith_l}</div>
-                <div style='font-size:.65rem;color:#555;margin-top:3px'>Sin alucinaciones</div>
-              </div>
-              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
-                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ans. Relevancy</div>
-                <div style='font-size:1.5rem;font-weight:700;color:{rel_c}'>{rel_v}</div>
-                <div style='font-size:.72rem;color:{rel_c};margin-top:2px'>{rel_l}</div>
-                <div style='font-size:.65rem;color:#555;margin-top:3px'>Relevancia respuesta</div>
-              </div>
-              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
-                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ctx Precision</div>
-                <div style='font-size:1.5rem;font-weight:700;color:{prec_c}'>{prec_v}</div>
-                <div style='font-size:.72rem;color:{prec_c};margin-top:2px'>{prec_l}</div>
-                <div style='font-size:.65rem;color:#555;margin-top:3px'>Ranking contexto</div>
-              </div>
-              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
-                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ctx Recall</div>
-                <div style='font-size:1.5rem;font-weight:700;color:{rec_c}'>{rec_v}</div>
-                <div style='font-size:.72rem;color:{rec_c};margin-top:2px'>{rec_l}</div>
-                <div style='font-size:.65rem;color:#555;margin-top:3px'>Cobertura contexto</div>
-              </div>
-            </div>
-            """
-            st.markdown(metrics_html, unsafe_allow_html=True)
 
         # ── evaluaciones de otros usuarios ────────────────────────────────
         df_other = query_df("""
