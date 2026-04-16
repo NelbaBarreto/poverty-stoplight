@@ -1836,202 +1836,202 @@ with tab5:
 with tab6:
     if auth_user["role"] != "admin":
         st.warning("Solo los administradores pueden gestionar usuarios.")
-        st.stop()
-
-    if "usr_edit_id" not in st.session_state:
-        st.session_state.usr_edit_id = None
-    if "usr_confirm_del" not in st.session_state:
-        st.session_state.usr_confirm_del = None
-
-    col_ref, _ = st.columns([1, 5])
-    with col_ref:
-        if st.button("↺ Actualizar", key="refresh_users"):
-            st.session_state.usr_edit_id    = None
+        st.info("Contacta a un administrador para gestionar usuarios.")
+    else:
+        if "usr_edit_id" not in st.session_state:
+            st.session_state.usr_edit_id = None
+        if "usr_confirm_del" not in st.session_state:
             st.session_state.usr_confirm_del = None
-            st.rerun()
 
-    # ── tabla de usuarios ─────────────────────────────────────────────────
-    df_users = query_df("""
-        SELECT id,
-               username,
-               COALESCE(email, '—') AS email,
-               role,
-               CASE WHEN is_active THEN '✅' ELSE '❌' END AS activo,
-               created_at::date AS creado
-        FROM admin_users
-        ORDER BY id
-    """)
-
-    st.markdown(f"""
-    <div class="ind-section">
-        <div class="bar"></div>
-        <div class="label">Usuarios Registrados</div>
-        <div class="count">{len(df_users)} registros</div>
-    </div>
-    """, unsafe_allow_html=True)
-    render_table(df_users)
-
-    st.divider()
-
-    # ── selector + botones ────────────────────────────────────────────────
-    st.markdown("""
-    <div class="ind-section">
-        <div class="bar"></div>
-        <div class="label">Seleccionar Usuario</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    usr_options = [
-        f"#{int(r['id'])}  |  {r['username']}  [{r['role']}]"
-        for _, r in df_users.iterrows()
-    ]
-    uid_by_option = {
-        usr_options[i]: int(df_users.iloc[i]["id"])
-        for i in range(len(df_users))
-    }
-
-    st.markdown('<div class="doc-radio">', unsafe_allow_html=True)
-    selected_usr_opt = st.radio(
-        "usuario",
-        options=usr_options,
-        index=0,
-        key="usr_radio_selector",
-        label_visibility="collapsed",
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    sel_uid = uid_by_option[selected_usr_opt]
-
-    col_ue, col_ud, _sp = st.columns([1, 1, 5])
-    with col_ue:
-        if st.button("✎ Editar", type="primary", key="btn_usr_edit"):
-            st.session_state.usr_edit_id    = sel_uid
-            st.session_state.usr_confirm_del = None
-    with col_ud:
-        if st.button("✕ Eliminar", type="secondary", key="btn_usr_del"):
-            if sel_uid == auth_user["id"]:
-                st.error("No puedes eliminar tu propia cuenta.")
-            else:
-                st.session_state.usr_confirm_del = sel_uid
+        col_ref, _ = st.columns([1, 5])
+        with col_ref:
+            if st.button("↺ Actualizar", key="refresh_users"):
                 st.session_state.usr_edit_id    = None
+                st.session_state.usr_confirm_del = None
+                st.rerun()
 
-    # ── panel edición usuario ─────────────────────────────────────────────
-    uedit_id = st.session_state.usr_edit_id
-    if uedit_id:
-        st.divider()
+        # ── tabla de usuarios ─────────────────────────────────────────────
+        df_users = query_df("""
+            SELECT id,
+                   username,
+                   COALESCE(email, '—') AS email,
+                   role,
+                   CASE WHEN is_active THEN '✅' ELSE '❌' END AS activo,
+                   created_at::date AS creado
+            FROM admin_users
+            ORDER BY id
+        """)
+
         st.markdown(f"""
         <div class="ind-section">
             <div class="bar"></div>
-            <div class="label">Editar Usuario #{uedit_id}</div>
+            <div class="label">Usuarios Registrados</div>
+            <div class="count">{len(df_users)} registros</div>
+        </div>
+        """, unsafe_allow_html=True)
+        render_table(df_users)
+
+        st.divider()
+
+        # ── selector + botones ────────────────────────────────────────────
+        st.markdown("""
+        <div class="ind-section">
+            <div class="bar"></div>
+            <div class="label">Seleccionar Usuario</div>
         </div>
         """, unsafe_allow_html=True)
 
-        urow = fetchone(
-            "SELECT username, email, role, is_active FROM admin_users WHERE id = %s",
-            (uedit_id,),
+        usr_options = [
+            f"#{int(r['id'])}  |  {r['username']}  [{r['role']}]"
+            for _, r in df_users.iterrows()
+        ]
+        uid_by_option = {
+            usr_options[i]: int(df_users.iloc[i]["id"])
+            for i in range(len(df_users))
+        }
+
+        st.markdown('<div class="doc-radio">', unsafe_allow_html=True)
+        selected_usr_opt = st.radio(
+            "usuario",
+            options=usr_options,
+            index=0,
+            key="usr_radio_selector",
+            label_visibility="collapsed",
         )
-        cur_username, cur_email, cur_role, cur_active = urow if urow else ("", "", "viewer", True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        col_ef, col_ea = st.columns([3, 1])
-        with col_ef:
-            new_uname  = st.text_input("Usuario",  value=cur_username or "",  key=f"ue_name_{uedit_id}")
-            new_email  = st.text_input("Email",    value=cur_email or "",     key=f"ue_email_{uedit_id}")
-            new_role   = st.selectbox("Rol", ["admin", "viewer"],
-                                      index=0 if cur_role == "admin" else 1,
-                                      key=f"ue_role_{uedit_id}")
-            new_active = st.checkbox("Activo", value=bool(cur_active), key=f"ue_active_{uedit_id}")
-            st.markdown("**Cambiar contraseña** *(dejar vacío para no cambiar)*")
-            new_pw1 = st.text_input("Nueva contraseña",   type="password", key=f"ue_pw1_{uedit_id}")
-            new_pw2 = st.text_input("Repetir contraseña", type="password", key=f"ue_pw2_{uedit_id}")
+        sel_uid = uid_by_option[selected_usr_opt]
 
-        with col_ea:
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
-            if st.button("💾 Guardar", type="primary", key=f"ue_save_{uedit_id}"):
-                errors = []
-                if not new_uname.strip():
-                    errors.append("El nombre de usuario no puede estar vacío.")
-                if new_pw1 and new_pw1 != new_pw2:
-                    errors.append("Las contraseñas no coinciden.")
-                if errors:
-                    for e in errors:
-                        st.error(e)
+        col_ue, col_ud, _sp = st.columns([1, 1, 5])
+        with col_ue:
+            if st.button("✎ Editar", type="primary", key="btn_usr_edit"):
+                st.session_state.usr_edit_id    = sel_uid
+                st.session_state.usr_confirm_del = None
+        with col_ud:
+            if st.button("✕ Eliminar", type="secondary", key="btn_usr_del"):
+                if sel_uid == auth_user["id"]:
+                    st.error("No puedes eliminar tu propia cuenta.")
                 else:
-                    if new_pw1:
-                        ph, salt = hash_password(new_pw1)
-                        execute_sql(
-                            "UPDATE admin_users SET username=%s, email=%s, role=%s, "
-                            "is_active=%s, password_hash=%s, salt=%s WHERE id=%s",
-                            (new_uname.strip(), new_email.strip() or None,
-                             new_role, new_active, ph, salt, uedit_id),
-                        )
+                    st.session_state.usr_confirm_del = sel_uid
+                    st.session_state.usr_edit_id    = None
+
+        # ── panel edición usuario ─────────────────────────────────────────
+        uedit_id = st.session_state.usr_edit_id
+        if uedit_id:
+            st.divider()
+            st.markdown(f"""
+            <div class="ind-section">
+                <div class="bar"></div>
+                <div class="label">Editar Usuario #{uedit_id}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            urow = fetchone(
+                "SELECT username, email, role, is_active FROM admin_users WHERE id = %s",
+                (uedit_id,),
+            )
+            cur_username, cur_email, cur_role, cur_active = urow if urow else ("", "", "viewer", True)
+
+            col_ef, col_ea = st.columns([3, 1])
+            with col_ef:
+                new_uname  = st.text_input("Usuario",  value=cur_username or "",  key=f"ue_name_{uedit_id}")
+                new_email  = st.text_input("Email",    value=cur_email or "",     key=f"ue_email_{uedit_id}")
+                new_role   = st.selectbox("Rol", ["admin", "viewer"],
+                                          index=0 if cur_role == "admin" else 1,
+                                          key=f"ue_role_{uedit_id}")
+                new_active = st.checkbox("Activo", value=bool(cur_active), key=f"ue_active_{uedit_id}")
+                st.markdown("**Cambiar contraseña** *(dejar vacío para no cambiar)*")
+                new_pw1 = st.text_input("Nueva contraseña",   type="password", key=f"ue_pw1_{uedit_id}")
+                new_pw2 = st.text_input("Repetir contraseña", type="password", key=f"ue_pw2_{uedit_id}")
+
+            with col_ea:
+                st.markdown("<br><br><br>", unsafe_allow_html=True)
+                if st.button("💾 Guardar", type="primary", key=f"ue_save_{uedit_id}"):
+                    errors = []
+                    if not new_uname.strip():
+                        errors.append("El nombre de usuario no puede estar vacío.")
+                    if new_pw1 and new_pw1 != new_pw2:
+                        errors.append("Las contraseñas no coinciden.")
+                    if errors:
+                        for e in errors:
+                            st.error(e)
                     else:
-                        execute_sql(
-                            "UPDATE admin_users SET username=%s, email=%s, role=%s, is_active=%s WHERE id=%s",
-                            (new_uname.strip(), new_email.strip() or None, new_role, new_active, uedit_id),
-                        )
-                    st.success("Usuario actualizado correctamente.")
+                        if new_pw1:
+                            ph, salt = hash_password(new_pw1)
+                            execute_sql(
+                                "UPDATE admin_users SET username=%s, email=%s, role=%s, "
+                                "is_active=%s, password_hash=%s, salt=%s WHERE id=%s",
+                                (new_uname.strip(), new_email.strip() or None,
+                                 new_role, new_active, ph, salt, uedit_id),
+                            )
+                        else:
+                            execute_sql(
+                                "UPDATE admin_users SET username=%s, email=%s, role=%s, is_active=%s WHERE id=%s",
+                                (new_uname.strip(), new_email.strip() or None, new_role, new_active, uedit_id),
+                            )
+                        st.success("Usuario actualizado correctamente.")
+                        st.session_state.usr_edit_id = None
+                        st.rerun()
+                if st.button("✕ Cancelar", key=f"ue_cancel_{uedit_id}"):
                     st.session_state.usr_edit_id = None
                     st.rerun()
-            if st.button("✕ Cancelar", key=f"ue_cancel_{uedit_id}"):
-                st.session_state.usr_edit_id = None
-                st.rerun()
 
-    # ── confirmación eliminación ──────────────────────────────────────────
-    udel_id = st.session_state.usr_confirm_del
-    if udel_id:
+        # ── confirmación eliminación ──────────────────────────────────────
+        udel_id = st.session_state.usr_confirm_del
+        if udel_id:
+            st.divider()
+            st.warning(f"¿Eliminar usuario #{udel_id}? Esta acción no se puede deshacer.")
+            c1, c2 = st.columns([1, 5])
+            with c1:
+                if st.button("✓ Confirmar", type="primary", key="btn_udel_confirm"):
+                    execute_sql("DELETE FROM admin_users WHERE id = %s", (udel_id,))
+                    st.session_state.usr_confirm_del = None
+                    st.success(f"Usuario #{udel_id} eliminado.")
+                    st.rerun()
+            with c2:
+                if st.button("✕ Cancelar", key="btn_udel_cancel"):
+                    st.session_state.usr_confirm_del = None
+                    st.rerun()
+
         st.divider()
-        st.warning(f"¿Eliminar usuario #{udel_id}? Esta acción no se puede deshacer.")
-        c1, c2 = st.columns([1, 5])
-        with c1:
-            if st.button("✓ Confirmar", type="primary", key="btn_udel_confirm"):
-                execute_sql("DELETE FROM admin_users WHERE id = %s", (udel_id,))
-                st.session_state.usr_confirm_del = None
-                st.success(f"Usuario #{udel_id} eliminado.")
+
+        # ── crear nuevo usuario ───────────────────────────────────────────
+        st.markdown("""
+        <div class="ind-section">
+            <div class="bar"></div>
+            <div class="label">Crear Nuevo Usuario</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.form("form_new_user"):
+            col_n1, col_n2 = st.columns(2)
+            with col_n1:
+                nu_username = st.text_input("Usuario *", placeholder="nombre_usuario")
+                nu_password = st.text_input("Contraseña *", type="password")
+            with col_n2:
+                nu_email    = st.text_input("Email", placeholder="user@ejemplo.com")
+                nu_role     = st.selectbox("Rol", ["viewer", "admin"])
+            nu_submit = st.form_submit_button("▶ Crear Usuario", type="primary")
+
+        if nu_submit:
+            errors = []
+            if not nu_username.strip():
+                errors.append("El nombre de usuario es obligatorio.")
+            if not nu_password:
+                errors.append("La contraseña es obligatoria.")
+            if fetchone("SELECT 1 FROM admin_users WHERE username = %s", (nu_username.strip(),)):
+                errors.append(f"El usuario '{nu_username.strip()}' ya existe.")
+            if errors:
+                for e in errors:
+                    st.error(e)
+            else:
+                ph, salt = hash_password(nu_password)
+                execute_sql(
+                    "INSERT INTO admin_users (username, email, password_hash, salt, role) VALUES (%s,%s,%s,%s,%s)",
+                    (nu_username.strip(), nu_email.strip() or None, ph, salt, nu_role),
+                )
+                st.success(f"Usuario '{nu_username.strip()}' creado con rol '{nu_role}'.")
                 st.rerun()
-        with c2:
-            if st.button("✕ Cancelar", key="btn_udel_cancel"):
-                st.session_state.usr_confirm_del = None
-                st.rerun()
-
-    st.divider()
-
-    # ── crear nuevo usuario ─────────────────────────────────────────────
-    st.markdown("""
-    <div class="ind-section">
-        <div class="bar"></div>
-        <div class="label">Crear Nuevo Usuario</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.form("form_new_user"):
-        col_n1, col_n2 = st.columns(2)
-        with col_n1:
-            nu_username = st.text_input("Usuario *", placeholder="nombre_usuario")
-            nu_password = st.text_input("Contraseña *", type="password")
-        with col_n2:
-            nu_email    = st.text_input("Email", placeholder="user@ejemplo.com")
-            nu_role     = st.selectbox("Rol", ["viewer", "admin"])
-        nu_submit = st.form_submit_button("▶ Crear Usuario", type="primary")
-
-    if nu_submit:
-        errors = []
-        if not nu_username.strip():
-            errors.append("El nombre de usuario es obligatorio.")
-        if not nu_password:
-            errors.append("La contraseña es obligatoria.")
-        if fetchone("SELECT 1 FROM admin_users WHERE username = %s", (nu_username.strip(),)):
-            errors.append(f"El usuario '{nu_username.strip()}' ya existe.")
-        if errors:
-            for e in errors:
-                st.error(e)
-        else:
-            ph, salt = hash_password(nu_password)
-            execute_sql(
-                "INSERT INTO admin_users (username, email, password_hash, salt, role) VALUES (%s,%s,%s,%s,%s)",
-                (nu_username.strip(), nu_email.strip() or None, ph, salt, nu_role),
-            )
-            st.success(f"Usuario '{nu_username.strip()}' creado con rol '{nu_role}'.")
-            st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB 7 — Validación
