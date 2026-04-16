@@ -2306,6 +2306,82 @@ with tab7:
             if existing:
                 st.caption(f"Ya evaluaste esta respuesta: **{ex_nota}/10**")
 
+        # ── métricas RAGAS ────────────────────────────────────────────────
+        ragas_row = fetchone(
+            """SELECT faithfulness, answer_relevancy, context_precision, context_recall
+               FROM eval_scores WHERE eval_run_id = %s AND status = 'success'""",
+            (sel_run_id,),
+        )
+
+        if ragas_row:
+            st.divider()
+            st.markdown("**Métricas RAGAS (evaluación automática)**")
+
+            def ragas_label(value, metric):
+                if value is None:
+                    return "—", "#555", "Sin datos"
+                v = float(value)
+                if metric in ("faithfulness", "answer_relevancy"):
+                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                    elif v >= 0.60: return f"{v:.2f}", "#a3e635", "Bueno"
+                    elif v >= 0.40: return f"{v:.2f}", "#f59e0b", "Moderado"
+                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+                elif metric == "context_precision":
+                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                    elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
+                    elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Moderado"
+                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+                else:  # context_recall
+                    if v >= 0.80:   return f"{v:.2f}", "#00FF85", "Excelente"
+                    elif v >= 0.50: return f"{v:.2f}", "#a3e635", "Bueno"
+                    elif v >= 0.30: return f"{v:.2f}", "#f59e0b", "Aceptable"
+                    else:           return f"{v:.2f}", "#ff4b4b", "Deficiente"
+
+            faith_v, faith_c, faith_l   = ragas_label(ragas_row[0], "faithfulness")
+            rel_v,   rel_c,   rel_l     = ragas_label(ragas_row[1], "answer_relevancy")
+            prec_v,  prec_c,  prec_l    = ragas_label(ragas_row[2], "context_precision")
+            rec_v,   rec_c,   rec_l     = ragas_label(ragas_row[3], "context_recall")
+
+            # Avg score
+            vals = [float(x) for x in ragas_row if x is not None]
+            avg_v_num = sum(vals) / len(vals) if vals else None
+            avg_v, avg_c, avg_l = ragas_label(avg_v_num, "faithfulness")
+
+            metrics_html = f"""
+            <div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:8px'>
+              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
+                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Avg Score</div>
+                <div style='font-size:1.5rem;font-weight:700;color:{avg_c}'>{avg_v}</div>
+                <div style='font-size:.72rem;color:{avg_c};margin-top:2px'>{avg_l}</div>
+              </div>
+              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
+                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Faithfulness</div>
+                <div style='font-size:1.5rem;font-weight:700;color:{faith_c}'>{faith_v}</div>
+                <div style='font-size:.72rem;color:{faith_c};margin-top:2px'>{faith_l}</div>
+                <div style='font-size:.65rem;color:#555;margin-top:3px'>Sin alucinaciones</div>
+              </div>
+              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
+                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ans. Relevancy</div>
+                <div style='font-size:1.5rem;font-weight:700;color:{rel_c}'>{rel_v}</div>
+                <div style='font-size:.72rem;color:{rel_c};margin-top:2px'>{rel_l}</div>
+                <div style='font-size:.65rem;color:#555;margin-top:3px'>Relevancia respuesta</div>
+              </div>
+              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
+                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ctx Precision</div>
+                <div style='font-size:1.5rem;font-weight:700;color:{prec_c}'>{prec_v}</div>
+                <div style='font-size:.72rem;color:{prec_c};margin-top:2px'>{prec_l}</div>
+                <div style='font-size:.65rem;color:#555;margin-top:3px'>Ranking contexto</div>
+              </div>
+              <div style='flex:1;min-width:110px;background:#111;border:1px solid #222;border-radius:8px;padding:12px;text-align:center'>
+                <div style='font-size:.70rem;color:#888;text-transform:uppercase;margin-bottom:4px'>Ctx Recall</div>
+                <div style='font-size:1.5rem;font-weight:700;color:{rec_c}'>{rec_v}</div>
+                <div style='font-size:.72rem;color:{rec_c};margin-top:2px'>{rec_l}</div>
+                <div style='font-size:.65rem;color:#555;margin-top:3px'>Cobertura contexto</div>
+              </div>
+            </div>
+            """
+            st.markdown(metrics_html, unsafe_allow_html=True)
+
         # ── evaluaciones de otros usuarios ────────────────────────────────
         df_other = query_df("""
             SELECT au.username, v.calificacion, v.alucinacion,
