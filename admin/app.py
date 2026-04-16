@@ -2395,27 +2395,32 @@ with tab7:
             ex_obs  = existing[2] or "" if existing else ""
             ex_aluc = bool(existing[3]) if existing else False
 
+            # Toggle fuera del form para que la leyenda se actualice al instante
+            aluc_key = f"toggle_aluc_{sel_run_id}"
+            if aluc_key not in st.session_state:
+                st.session_state[aluc_key] = ex_aluc
+            alucinacion_live = st.toggle(
+                "¿Alucinación?",
+                value=st.session_state[aluc_key],
+                key=aluc_key,
+            )
+            if alucinacion_live:
+                st.markdown(
+                    "<span style='color:#ff4b4b;font-size:.82rem'>⚠️ <b>Sí</b> — la respuesta contiene información inventada o incorrecta</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<span style='color:#00FF85;font-size:.82rem'>✅ <b>No</b> — la respuesta está basada en el contexto</span>",
+                    unsafe_allow_html=True,
+                )
+
             with st.form(key=f"form_val_{sel_run_id}"):
                 calificacion = st.slider(
                     "Calificación (1 = muy mala · 10 = excelente)",
                     min_value=1, max_value=10, value=ex_nota,
                     key=f"slider_cal_{sel_run_id}",
                 )
-                alucinacion = st.toggle(
-                    "¿Alucinación?",
-                    value=ex_aluc,
-                    key=f"toggle_aluc_{sel_run_id}",
-                )
-                if alucinacion:
-                    st.markdown(
-                        "<span style='color:#ff4b4b;font-size:.82rem'>⚠️ <b>Sí</b> — la respuesta contiene información inventada o incorrecta</span>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown(
-                        "<span style='color:#00FF85;font-size:.82rem'>✅ <b>No</b> — la respuesta está basada en el contexto</span>",
-                        unsafe_allow_html=True,
-                    )
                 observacion = st.text_area(
                     "Observación",
                     value=ex_obs,
@@ -2432,7 +2437,7 @@ with tab7:
                     execute_sql(
                         "UPDATE validaciones SET calificacion=%s, observacion=%s, "
                         "alucinacion=%s, updated_at=NOW() WHERE id=%s",
-                        (calificacion, observacion.strip() or None, alucinacion, ex_id),
+                        (calificacion, observacion.strip() or None, alucinacion_live, ex_id),
                     )
                     st.success("Evaluación actualizada.")
                 else:
@@ -2441,7 +2446,7 @@ with tab7:
                         "(version_agente_id, eval_run_id, user_id, calificacion, observacion, alucinacion) "
                         "VALUES (%s, %s, %s, %s, %s, %s)",
                         (va_id, sel_run_id, auth_user["id"],
-                         calificacion, observacion.strip() or None, alucinacion),
+                         calificacion, observacion.strip() or None, alucinacion_live),
                     )
                     st.success("Evaluación registrada.")
                 st.rerun()
