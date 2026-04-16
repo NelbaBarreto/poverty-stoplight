@@ -2044,33 +2044,80 @@ with tab7:
         st.session_state.val_category = "Todas"
     if "val_page" not in st.session_state:
         st.session_state.val_page = 0
+    if "val_version_id" not in st.session_state:
+        st.session_state.val_version_id = None
 
-    # ── versión activa ────────────────────────────────────────────────────
-    va = fetchone(
-        """SELECT va.id, va.numero, va.descripcion,
+    # ── selector de versión ───────────────────────────────────────────────
+    df_versions = query_df(
+        """SELECT va.id, va.numero, va.descripcion, va.activa,
                   lm.model_name AS llm, em.model_name AS embed, cc.name AS chunk
            FROM version_agente va
            JOIN llm_models lm       ON lm.id = va.llm_model_id
            JOIN embedding_models em ON em.id = va.embed_model_id
            JOIN chunk_configs cc    ON cc.id = va.chunk_config_id
-           WHERE va.activa = TRUE
-           ORDER BY va.numero DESC LIMIT 1"""
+           ORDER BY va.numero"""
     )
 
-    if not va:
-        st.error("No hay ninguna versión de agente activa. Ejecuta la migración 005.")
+    if df_versions.empty:
+        st.error("No hay versiones de agente registradas. Ejecuta la migración 005.")
         st.stop()
 
-    va_id, va_num, va_desc, va_llm, va_embed, va_chunk = va
+    # Opciones del selector: "v1 — Versión inicial (activa)"
+    def ver_label(r):
+        tag = " ✦ activa" if r["activa"] else ""
+        return f"v{int(r['numero'])} — {r['descripcion']}{tag}"
 
-    st.markdown(f"""
-    <div class="ind-section">
-        <div class="bar"></div>
-        <div class="label">Versión Activa: v{va_num}</div>
-        <div class="count">{va_desc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.caption(f"LLM: `{va_llm}` · Embed: `{va_embed}` · Chunk: `{va_chunk}`")
+    ver_options = [ver_label(r) for _, r in df_versions.iterrows()]
+    ver_id_map  = {ver_options[i]: int(df_versions.iloc[i]["id"]) for i in range(len(df_versions))}
+
+    # Default: versión activa
+    default_idx = next(
+        (i for i, r in df_versions.iterrows() if r["activa"]), 0
+    )
+    if st.session_state.val_version_id is None:
+        st.session_state.val_version_id = int(df_versions.iloc[default_idx]["id"])
+
+    prev_ver_id = st.session_state.val_version_id
+    cur_ver_opt = next(
+        (o for o in ver_options if ver_id_map[o] == st.session_state.val_version_id),
+        ver_options[default_idx],
+    )
+
+    col_ver, col_ver_info = st.columns([2, 3])
+    with col_ver:
+        sel_ver_opt = st.selectbox(
+            "Versión del agente a validar",
+            options=ver_options,
+            index=ver_options.index(cur_ver_opt),
+            key="val_version_select",
+        )
+    st.session_state.val_version_id = ver_id_map[sel_ver_opt]
+    if st.session_state.val_version_id != prev_ver_id:
+        st.session_state.val_page = 0
+        st.rerun()
+
+    va_row = df_versions[df_versions["id"] == st.session_state.val_version_id].iloc[0]
+    va_id    = int(va_row["id"])
+    va_num   = int(va_row["numero"])
+    va_desc  = va_row["descripcion"]
+    va_llm   = va_row["llm"]
+    va_embed = va_row["embed"]
+    va_chunk = va_row["chunk"]
+    va_activa = bool(va_row["activa"])
+
+    with col_ver_info:
+        badge_color = "#00FF85" if va_activa else "#f59e0b"
+        badge_text  = "VERSIÓN POR DEFECTO" if va_activa else "VERSIÓN ANTERIOR"
+        st.markdown(
+            f"<div style='margin-top:28px;padding:8px 14px;background:#111;border:1px solid {badge_color}40;"
+            f"border-left:3px solid {badge_color};border-radius:6px;font-size:.82rem'>"
+            f"<span style='color:{badge_color};font-weight:700'>{badge_text}</span>"
+            f"&nbsp;&nbsp;·&nbsp;&nbsp;LLM: <code>{va_llm}</code>"
+            f"&nbsp;·&nbsp;Embed: <code>{va_embed}</code>"
+            f"&nbsp;·&nbsp;Chunk: <code>{va_chunk}</code>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 
@@ -2215,6 +2262,19 @@ with tab7:
 
     # ── panel de evaluación ───────────────────────────────────────────────
     st.divider()
+
+    badge_color2 = "#00FF85" if va_activa else "#f59e0b"
+    badge_text2  = "versión por defecto" if va_activa else "versión anterior"
+    st.markdown(
+        f"<div style='margin-bottom:12px;font-size:.80rem;color:#888'>"
+        f"Evaluando respuestas de "
+        f"<span style='color:{badge_color2};font-weight:700'>v{va_num} — {va_desc}</span>"
+        f"&nbsp;<span style='background:{badge_color2}22;color:{badge_color2};"
+        f"border:1px solid {badge_color2}55;border-radius:4px;padding:1px 7px;"
+        f"font-size:.72rem;font-weight:600'>{badge_text2}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     kb_row = fetchone(
         "SELECT question, answer FROM knowledge_base WHERE id = %s", (sel_kb_id,)
