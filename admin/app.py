@@ -2342,10 +2342,20 @@ with tab7:
                     key=f"slider_cal_{sel_run_id}",
                 )
                 alucinacion = st.toggle(
-                    "¿Alucinación? (respuesta inventada o incorrecta)",
+                    "¿Alucinación?",
                     value=ex_aluc,
                     key=f"toggle_aluc_{sel_run_id}",
                 )
+                if alucinacion:
+                    st.markdown(
+                        "<span style='color:#ff4b4b;font-size:.82rem'>⚠️ <b>Sí</b> — la respuesta contiene información inventada o incorrecta</span>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        "<span style='color:#00FF85;font-size:.82rem'>✅ <b>No</b> — la respuesta está basada en el contexto</span>",
+                        unsafe_allow_html=True,
+                    )
                 observacion = st.text_area(
                     "Observación",
                     value=ex_obs,
