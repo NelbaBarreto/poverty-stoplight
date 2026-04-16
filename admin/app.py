@@ -2042,6 +2042,8 @@ with tab7:
         st.session_state.val_sel_run = None
     if "val_category" not in st.session_state:
         st.session_state.val_category = "Todas"
+    if "val_page" not in st.session_state:
+        st.session_state.val_page = 0
 
     # ── versión activa ────────────────────────────────────────────────────
     va = fetchone(
@@ -2075,6 +2077,7 @@ with tab7:
     # ── filtro categoría ──────────────────────────────────────────────────
     cats_raw = query_df("SELECT DISTINCT category FROM knowledge_base WHERE category IS NOT NULL ORDER BY category")
     cat_options = ["Todas"] + cats_raw["category"].tolist()
+    prev_cat = st.session_state.val_category
     st.session_state.val_category = st.selectbox(
         "Filtrar por categoría",
         cat_options,
@@ -2082,6 +2085,8 @@ with tab7:
         if st.session_state.val_category in cat_options else 0,
         key="val_cat_select",
     )
+    if st.session_state.val_category != prev_cat:
+        st.session_state.val_page = 0
     cat_filter = st.session_state.val_category
 
     # ── cargar preguntas con estadísticas ─────────────────────────────────
@@ -2108,19 +2113,26 @@ with tab7:
         ORDER BY kb.id
     """, params={"uid": auth_user["id"], "va_id": va_id, "cat": cat_filter if cat_filter != "Todas" else None})
 
+    PAGE_SIZE = 20
+    total_q   = len(df_q)
+    total_pages = max(1, (total_q + PAGE_SIZE - 1) // PAGE_SIZE)
+    st.session_state.val_page = min(st.session_state.val_page, total_pages - 1)
+    page = st.session_state.val_page
+    df_page = df_q.iloc[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
+
     st.markdown(f"""
     <div class="ind-section">
         <div class="bar"></div>
         <div class="label">Preguntas</div>
-        <div class="count">{len(df_q)} preguntas · {int(df_q['evaluaciones'].sum())} evaluaciones</div>
+        <div class="count">{total_q} preguntas · {int(df_q['evaluaciones'].sum())} evaluaciones</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── tabla resumen ─────────────────────────────────────────────────────
+    # ── tabla resumen (página actual) ────────────────────────────────────
     def render_val_table(df):
         rows = ""
         for _, r in df.iterrows():
-            nota = f"<span style='color:#00FF85;font-weight:700'>{int(r['mi_nota'])}/10</span>" if pd.notna(r["mi_nota"]) else "<span style='opacity:.4'>—</span>"
+            nota  = f"<span style='color:#00FF85;font-weight:700'>{int(r['mi_nota'])}/10</span>" if pd.notna(r["mi_nota"]) else "<span style='opacity:.4'>—</span>"
             aluci = f"<span style='color:#ff4b4b;font-weight:600'>{int(r['alucinaciones'])}</span>" if r["alucinaciones"] > 0 else "<span style='opacity:.4'>0</span>"
             prom  = f"{r['prom']}" if pd.notna(r["prom"]) else "—"
             pregunta = str(r["question"])[:80] + ("…" if len(str(r["question"])) > 80 else "")
@@ -2154,11 +2166,28 @@ with tab7:
         </div>
         """, unsafe_allow_html=True)
 
-    render_val_table(df_q)
+    render_val_table(df_page)
+
+    # ── paginación ────────────────────────────────────────────────────────
+    col_prev, col_info, col_next = st.columns([1, 3, 1])
+    with col_prev:
+        if st.button("◀ Anterior", disabled=page == 0, key="val_prev"):
+            st.session_state.val_page -= 1
+            st.rerun()
+    with col_info:
+        st.markdown(
+            f"<div style='text-align:center;font-size:.82rem;padding-top:6px'>"
+            f"Página {page + 1} de {total_pages} · {total_q} preguntas</div>",
+            unsafe_allow_html=True,
+        )
+    with col_next:
+        if st.button("Siguiente ▶", disabled=page >= total_pages - 1, key="val_next"):
+            st.session_state.val_page += 1
+            st.rerun()
 
     st.divider()
 
-    # ── selector de pregunta ──────────────────────────────────────────────
+    # ── selector de pregunta (combobox) ───────────────────────────────────
     st.markdown("""
     <div class="ind-section">
         <div class="bar"></div>
@@ -2173,15 +2202,13 @@ with tab7:
     run_by_opt = {q_options[i]: int(df_q.iloc[i]["eval_run_id"]) for i in range(len(df_q))}
     kb_by_opt  = {q_options[i]: int(df_q.iloc[i]["kb_id"])      for i in range(len(df_q))}
 
-    st.markdown('<div class="doc-radio">', unsafe_allow_html=True)
-    sel_q_opt = st.radio(
-        "pregunta",
+    sel_q_opt = st.selectbox(
+        "Pregunta",
         options=q_options,
         index=0,
-        key="val_q_radio",
+        key="val_q_select",
         label_visibility="collapsed",
     )
-    st.markdown('</div>', unsafe_allow_html=True)
 
     sel_run_id = run_by_opt[sel_q_opt]
     sel_kb_id  = kb_by_opt[sel_q_opt]
