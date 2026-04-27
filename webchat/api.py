@@ -67,11 +67,12 @@ EMBED_TABLE = {
     "snowflake-arctic-embed": "embeddings_snowflake",
 }
 
-RAG_SYSTEM_PROMPT = """Eres Luz, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya.
-Responde ÚNICAMENTE con la información proporcionada en el CONTEXTO a continuación.
-Si la información no está en el contexto, dilo claramente.
-Cita siempre las fuentes (nombres de archivo o títulos) cuando respondas.
-No inventes datos. Sé concisa pero completa. Responde en español."""
+_PROMPT_FILE = PROJECT_ROOT / "prompt.txt"
+
+def load_system_prompt() -> str:
+    if _PROMPT_FILE.exists():
+        return _PROMPT_FILE.read_text(encoding="utf-8").strip()
+    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
 DB_CONFIG = dict(
     host=os.getenv("DB_HOST", "localhost"),
@@ -229,7 +230,7 @@ def build_messages(history: list, prompt: str, context: str):
             messages.append(AIMessage(content=msg["content"]))
 
     full_prompt = (
-        f"{RAG_SYSTEM_PROMPT}\n\n"
+        f"{load_system_prompt()}\n\n"
         f"## CONTEXTO:\n\n{context}\n\n"
         f"## PREGUNTA:\n{prompt}\n\n"
         f"## RESPUESTA:"

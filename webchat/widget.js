@@ -20,7 +20,7 @@
     document.querySelector("script[data-api-url]");
 
   const API_URL     = (scriptTag && scriptTag.getAttribute("data-api-url"))     || "http://localhost:8000";
-  const TITLE       = (scriptTag && scriptTag.getAttribute("data-title"))        || "Luz";
+  const TITLE       = (scriptTag && scriptTag.getAttribute("data-title"))        || "Rosa";
   const SUBTITLE    = (scriptTag && scriptTag.getAttribute("data-subtitle"))     || "Asistente del Banco de Soluciones";
   const PLACEHOLDER = (scriptTag && scriptTag.getAttribute("data-placeholder"))  || "Escribe tu pregunta...";
   const ACCENT      = (scriptTag && scriptTag.getAttribute("data-accent"))       || "#00C06B";
@@ -195,7 +195,7 @@
     sendBtn.disabled = true;
     appendMessage(msgContainer, "user", text);
 
-    const typing = appendMessage(msgContainer, "assistant typing", "Luz está pensando...");
+    const typing = appendMessage(msgContainer, "assistant typing", "Rosa está pensando...");
 
     try {
       const res = await fetch(API_URL + "/api/chat", {
@@ -252,7 +252,7 @@
           appendMessage(
             msgContainer,
             "assistant",
-            `¡Hola! Soy Luz, la asistente del Banco de Soluciones. ¿En qué puedo ayudarte hoy?`
+            `¡Hola! Soy Rosa, la asistente del Banco de Soluciones. ¿En qué puedo ayudarte hoy?`
           );
         }
         input.focus();

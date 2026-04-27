@@ -23,7 +23,7 @@ API_BASE = os.getenv("WEBCHAT_API_URL", "http://localhost:8000")
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Luz — Webchat Test",
+    page_title="Rosa — Webchat Test",
     page_icon="💡",
     layout="centered",
 )
@@ -73,7 +73,7 @@ def load_history_from_api():
 
 init_session()
 
-st.title("💡 Luz — Webchat (Test Client)")
+st.title("💡 Rosa — Webchat (Test Client)")
 st.caption(
     f"API: `{API_BASE}` | "
     f"Session: `{st.session_state.get('session_id', 'sin sesión')}`"
@@ -123,7 +123,7 @@ if prompt and st.session_state.get("session_id"):
 
     # Call API
     with st.chat_message("assistant"):
-        with st.spinner("Luz está pensando..."):
+        with st.spinner("Rosa está pensando..."):
             try:
                 t0 = time.monotonic()
                 resp = requests.post(

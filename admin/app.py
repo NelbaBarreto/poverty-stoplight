@@ -1149,7 +1149,7 @@ if not db_status:
 # ---------------------------------------------------------------------------
 # TABS PRINCIPALES
 # ---------------------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt = st.tabs([
     "▸ Dashboard",
     "▸ Documentos",
     "▸ Chunks",
@@ -1157,6 +1157,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "▸ Subir Documentos",
     "▸ Usuarios",
     "▸ Validación",
+    "▸ Prompt del Agente",
 ])
 
 # ===========================================================================
@@ -2472,3 +2473,179 @@ with tab7:
                 lambda x: "⚠️ Sí" if x else "✅ No"
             )
             render_table(df_other)
+
+
+# ===========================================================================
+# TAB PROMPT — EDITOR DEL SYSTEM PROMPT DEL AGENTE
+# ===========================================================================
+PROMPT_FILE = PROJECT_ROOT / "prompt.txt"
+
+def save_prompt(new_text: str, user: str) -> None:
+    """Guarda el prompt en prompt.txt y registra en historial BD."""
+    PROMPT_FILE.write_text(new_text, encoding="utf-8")
+    execute_sql(
+        "INSERT INTO prompt_history (prompt_text, edited_by) VALUES (%s, %s)",
+        (new_text, user),
+    )
+
+with tab_prompt:
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">System Prompt del Agente Rosa</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="display:flex;gap:10px;margin-bottom:1.2rem;">
+        <span class="tag tag-green">prompt.txt</span>
+        <span class="tag tag-ice">BD: prompt_history</span>
+        <span style="font-size:0.72rem;color:var(--text-muted,#4ADE80);margin-left:4px;align-self:center;">
+            El prompt se aplica inmediatamente en chat.py y webchat/api.py sin reiniciar.
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Prompt actual ──────────────────────────────────────────────────────
+    current_prompt = PROMPT_FILE.read_text(encoding="utf-8") if PROMPT_FILE.exists() else ""
+
+    col_editor, col_info = st.columns([3, 1])
+
+    with col_editor:
+        new_prompt = st.text_area(
+            "Prompt vigente",
+            value=current_prompt,
+            height=300,
+            key="prompt_editor",
+            label_visibility="collapsed",
+        )
+
+    with col_info:
+        # Último registro en historial
+        last = fetchone(
+            "SELECT edited_by, created_at FROM prompt_history ORDER BY id DESC LIMIT 1"
+        )
+        if last:
+            st.markdown(f"""
+            <div style="background:var(--bg-panel,#083D1C);border:1px solid rgba(0,255,133,0.2);
+                        border-left:3px solid var(--accent-neon,#00FF85);
+                        border-radius:4px;padding:14px 16px;font-size:0.75rem;">
+                <div style="color:var(--accent-neon,#00FF85);font-weight:700;
+                            letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px;">
+                    Última edición
+                </div>
+                <div style="color:#F0FFF4;font-weight:600;">{last[0]}</div>
+                <div style="color:#86EFAC;font-size:0.68rem;margin-top:4px;
+                            font-family:'Share Tech Mono',monospace;">
+                    {last[1].strftime('%Y-%m-%d %H:%M UTC')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<div style="margin-top:12px;">', unsafe_allow_html=True)
+        chars = len(new_prompt)
+        words = len(new_prompt.split())
+        st.markdown(f"""
+        <div style="font-size:0.65rem;color:var(--text-muted,#4ADE80);
+                    font-family:'Share Tech Mono',monospace;line-height:1.8;">
+            <div>{chars:,} caracteres</div>
+            <div>{words:,} palabras</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="margin-top:12px;">', unsafe_allow_html=True)
+    col_user, col_btn, col_reset = st.columns([2, 1, 1])
+
+    with col_user:
+        editor_user = st.text_input(
+            "Usuario que edita",
+            value="admin",
+            key="prompt_editor_user",
+            placeholder="nombre del editor",
+        )
+
+    with col_btn:
+        st.markdown('<div style="padding-top:24px;">', unsafe_allow_html=True)
+        if st.button("▶ Guardar prompt", type="primary", key="btn_save_prompt"):
+            stripped = new_prompt.strip()
+            if not stripped:
+                st.error("El prompt no puede estar vacío.")
+            elif stripped == current_prompt.strip():
+                st.info("Sin cambios respecto al prompt vigente.")
+            else:
+                try:
+                    save_prompt(stripped, editor_user.strip() or "admin")
+                    st.success("Prompt guardado y registrado en historial.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al guardar: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_reset:
+        st.markdown('<div style="padding-top:24px;">', unsafe_allow_html=True)
+        if st.button("↺ Recargar", key="btn_reload_prompt"):
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Historial de versiones ─────────────────────────────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Historial de Versiones</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    df_hist = query_df("""
+        SELECT id,
+               edited_by                   AS usuario,
+               created_at AT TIME ZONE 'UTC' AS fecha_hora,
+               LEFT(prompt_text, 120)       AS preview
+        FROM prompt_history
+        ORDER BY id DESC
+        LIMIT 30
+    """)
+
+    if df_hist.empty:
+        st.info("No hay historial de versiones aún.")
+    else:
+        render_table(df_hist)
+
+    # ── Ver versión completa ───────────────────────────────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Ver Versión Completa</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not df_hist.empty:
+        version_ids = df_hist["id"].tolist()
+        sel_ver = st.selectbox(
+            "Seleccionar versión por ID",
+            version_ids,
+            format_func=lambda x: f"Versión #{x}",
+            key="sel_prompt_version",
+        )
+        row_ver = fetchone("SELECT prompt_text, edited_by, created_at FROM prompt_history WHERE id = %s", (sel_ver,))
+        if row_ver:
+            st.markdown(f"""
+            <div style="display:flex;gap:10px;margin-bottom:8px;">
+                <span class="tag tag-green">#{sel_ver}</span>
+                <span class="tag tag-ice">{row_ver[1]}</span>
+                <span class="tag tag-amber">{row_ver[2].strftime('%Y-%m-%d %H:%M UTC')}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            st.text_area("Texto completo", value=row_ver[0], height=260, key="ver_prompt_text")
+
+            if st.button("⬆ Restaurar esta versión", key="btn_restore_prompt"):
+                try:
+                    save_prompt(row_ver[0], f"{editor_user.strip() or 'admin'} (restauró #{sel_ver})")
+                    st.success(f"Versión #{sel_ver} restaurada como prompt vigente.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al restaurar: {e}")

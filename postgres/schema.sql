@@ -144,3 +144,16 @@ CREATE TABLE IF NOT EXISTS admin_users (
 
 CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
 -- Default admin is seeded automatically by admin/app.py on first startup.
+
+-- ============================================================
+-- PROMPT HISTORY (historial del system prompt del agente Rosa)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS prompt_history (
+    id          SERIAL       PRIMARY KEY,
+    prompt_text TEXT         NOT NULL,
+    edited_by   VARCHAR(100) NOT NULL DEFAULT 'admin',
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE prompt_history IS 'Historial de versiones del system prompt del agente Rosa';

@@ -25,24 +25,15 @@ from langgraph.checkpoint.memory import MemorySaver
 # 4. Only search again if absolutely necessary
 # """
 
-SYSTEM_PROMPT = """Eres Luz, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya. Tienes acceso a documentos que han sido subidos y procesados (PDFs, documentos de Word, presentaciones, archivos HTML, etc.). No eres una experta humana, sino una asistente basada en información documentada.
+from pathlib import Path as _Path
 
-GUÍAS:
-- Usa la herramienta search_documents cuando necesites información específica de documentos.
-- Sé eficiente: una búsqueda bien formulada suele ser suficiente
-- Solo vuelve a buscar si los primeros resultados son claramente incompletos
-- Proporciona respuestas claras y precisas basadas en el contenido de los documentos
-- Cita siempre tus fuentes con nombres de archivo o títulos de documentos
-- Si la información no se encuentra, dilo claramente
-- Sé conciso pero completo
-- No inventes datos.
+def _load_agent_prompt() -> str:
+    f = _Path(__file__).parent.parent / "prompt.txt"
+    if f.exists():
+        return f.read_text(encoding="utf-8").strip()
+    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
-Al responder:
-1. Busca en los documentos con una consulta enfocada
-2. Sintetiza una respuesta clara a partir de los resultados
-3. Incluye citas de las fuentes (nombres de archivo)
-4. Solo vuelve a buscar si es absolutamente necesario
-"""
+SYSTEM_PROMPT = _load_agent_prompt()
 
 def create_documentation_agent(tools: List[BaseTool], model_name: str = "gpt-oss:20b"):
     """

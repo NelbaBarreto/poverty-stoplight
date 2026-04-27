@@ -5,14 +5,23 @@ Supports two modes: RAG (direct context injection) and Agent (tool-calling).
 """
 
 import streamlit as st
+from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
 from src.tools import create_search_tool, get_query_embedding, EMBED_MODEL_TABLE
 from src.agent import create_documentation_agent
 from src.pgvector_manager import PGVectorManager
 
+_PROMPT_FILE = Path(__file__).parent / "prompt.txt"
+
+def load_system_prompt() -> str:
+    """Lee el system prompt desde prompt.txt; usa fallback si no existe."""
+    if _PROMPT_FILE.exists():
+        return _PROMPT_FILE.read_text(encoding="utf-8").strip()
+    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
+
 st.set_page_config(
-    page_title="Luz - Asistente del Semaforo de Pobreza",
+    page_title="Rosa - Asistente del Semaforo de Pobreza",
     page_icon="💡",
     layout="centered",
 )
@@ -53,11 +62,7 @@ CHUNK_CONFIG_OPTIONS = {
     "large  (2048 chars)":  "large",
 }
 
-RAG_SYSTEM_PROMPT = """Eres Luz, la asistente conversacional del Banco de Soluciones de la Fundacion Paraguaya.
-Responde UNICAMENTE con la informacion proporcionada en el CONTEXTO a continuacion.
-Si la informacion no esta en el contexto, dilo claramente.
-Cita siempre las fuentes (nombres de archivo) cuando respondas.
-No inventes datos. Se concisa pero completa. Responde en espanol."""
+RAG_SYSTEM_PROMPT = load_system_prompt()
 
 
 def initialize():
@@ -136,7 +141,7 @@ def get_agent(llm_name: str, embed_model: str, chunk_config: str):
 def render_sidebar():
     """Sidebar: LLM selector, embedding model, chunk size, mode, documents."""
     with st.sidebar:
-        st.title("💡 Luz")
+        st.title("💡 Rosa")
         st.caption("Asistente del Banco de Soluciones")
 
         # ── LLM ──────────────────────────────────────────────
@@ -299,7 +304,7 @@ def stream_agent_response(prompt: str, llm_name: str, embed_model: str, chunk_co
 
 def render_chat(llm_name: str, embed_model: str, chunk_config: str):
     """Main chat interface."""
-    st.title("💡 Luz - Asistente del Semaforo de Pobreza")
+    st.title("💡 Rosa - Asistente del Semaforo de Pobreza")
     mode_label = "Agente" if st.session_state.use_agent_mode else "RAG directo"
     st.caption(
         f"LLM: **{llm_name}** | Embedding: **{embed_model}** | "
