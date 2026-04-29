@@ -2152,12 +2152,9 @@ with tab7:
             MAX(CASE WHEN v.user_id = %(uid)s THEN v.calificacion END) AS mi_nota
         FROM knowledge_base kb
         JOIN eval_runs er
-          ON er.knowledge_base_id  = kb.id
-         AND er.version_agente_id  = %(va_id)s
-         AND er.llm_model_id       = (SELECT llm_model_id    FROM version_agente WHERE id = %(va_id)s)
-         AND er.embedding_model_id = (SELECT embed_model_id  FROM version_agente WHERE id = %(va_id)s)
-         AND er.chunk_config_id    = (SELECT chunk_config_id FROM version_agente WHERE id = %(va_id)s)
-         AND er.status             = 'success'
+          ON er.knowledge_base_id = kb.id
+         AND er.version_agente_id = %(va_id)s
+         AND er.status            = 'success'
         LEFT JOIN validaciones v ON v.eval_run_id = er.id
         WHERE 1=1 {cat_clause}
         GROUP BY kb.id, kb.question, kb.category, er.id
