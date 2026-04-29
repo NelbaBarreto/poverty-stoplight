@@ -2162,6 +2162,8 @@ with tab7:
         ORDER BY kb.id
     """, params={"uid": auth_user["id"], "va_id": va_id, "cat": cat_filter if cat_filter != "Todas" else None})
 
+    _has_runs = not df_q.empty
+
     PAGE_SIZE = 20
     total_q   = len(df_q)
     total_pages = max(1, (total_q + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -2248,19 +2250,24 @@ with tab7:
         f"#{int(r['kb_id'])}  |  {str(r['question'])[:90]}"
         for _, r in df_q.iterrows()
     ]
-    run_by_opt = {q_options[i]: int(df_q.iloc[i]["eval_run_id"]) for i in range(len(df_q))}
-    kb_by_opt  = {q_options[i]: int(df_q.iloc[i]["kb_id"])      for i in range(len(df_q))}
 
-    sel_q_opt = st.selectbox(
-        "Pregunta",
-        options=q_options,
-        index=0,
-        key="val_q_select",
-        label_visibility="collapsed",
-    )
+    if not q_options:
+        _has_runs = False
+    else:
+        _has_runs = True
+        run_by_opt = {q_options[i]: int(df_q.iloc[i]["eval_run_id"]) for i in range(len(df_q))}
+        kb_by_opt  = {q_options[i]: int(df_q.iloc[i]["kb_id"])      for i in range(len(df_q))}
 
-    sel_run_id = run_by_opt[sel_q_opt]
-    sel_kb_id  = kb_by_opt[sel_q_opt]
+        sel_q_opt = st.selectbox(
+            "Pregunta",
+            options=q_options,
+            index=0,
+            key="val_q_select",
+            label_visibility="collapsed",
+        )
+
+        sel_run_id = run_by_opt[sel_q_opt]
+        sel_kb_id  = kb_by_opt[sel_q_opt]
 
     # ── panel de evaluación ───────────────────────────────────────────────
     st.divider()
@@ -2280,12 +2287,12 @@ with tab7:
 
     kb_row = fetchone(
         "SELECT question, answer FROM knowledge_base WHERE id = %s", (sel_kb_id,)
-    )
+    ) if _has_runs else None
     er_row = fetchone(
         "SELECT generated_answer FROM eval_runs WHERE id = %s", (sel_run_id,)
-    )
+    ) if _has_runs else None
 
-    if kb_row and er_row:
+    if _has_runs and kb_row and er_row:
         question_text, ground_truth = kb_row
         agent_answer = er_row[0] or "—"
 
@@ -2468,7 +2475,7 @@ with tab7:
             JOIN version_agente va ON va.id = v.version_agente_id
             WHERE v.eval_run_id = %s
             ORDER BY v.updated_at DESC
-        """, params=(sel_run_id,))
+        """, params=(sel_run_id,)) if _has_runs else pd.DataFrame()
 
         if not df_other.empty:
             st.divider()
