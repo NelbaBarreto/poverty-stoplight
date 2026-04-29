@@ -1149,7 +1149,7 @@ if not db_status:
 # ---------------------------------------------------------------------------
 # TABS PRINCIPALES
 # ---------------------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt, tab_eval = st.tabs([
     "▸ Dashboard",
     "▸ Documentos",
     "▸ Chunks",
@@ -1158,6 +1158,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt = st.tabs([
     "▸ Usuarios",
     "▸ Validación",
     "▸ Prompt del Agente",
+    "▸ Nueva Evaluación",
 ])
 
 # ===========================================================================
@@ -2649,3 +2650,294 @@ with tab_prompt:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al restaurar: {e}")
+
+
+# ===========================================================================
+# TAB NUEVA EVALUACIÓN — Lanzar eval_run + RAGAS scoring
+# ===========================================================================
+with tab_eval:
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Nueva Evaluación — 108 Preguntas</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="display:flex;gap:10px;margin-bottom:1.2rem;flex-wrap:wrap;">
+        <span class="tag tag-green">108 preguntas</span>
+        <span class="tag tag-ice">run_eval.py</span>
+        <span class="tag tag-amber">RAGAS scoring</span>
+        <span style="font-size:0.72rem;color:var(--text-muted,#4ADE80);margin-left:4px;align-self:center;">
+            Usa el prompt vigente de prompt.txt. Los resultados se guardan en eval_runs y eval_scores.
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Configuración ──────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Configuración de la evaluación</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Cargar opciones desde BD
+    df_llms_eval   = query_df("SELECT model_name FROM llm_models ORDER BY id")
+    df_embeds_eval = query_df("SELECT model_name FROM embedding_models ORDER BY id")
+    df_chunks_eval = query_df("SELECT name FROM chunk_configs ORDER BY chunk_size")
+
+    llm_options   = df_llms_eval["model_name"].tolist()   if not df_llms_eval.empty   else ["qwen3:8b"]
+    embed_options = df_embeds_eval["model_name"].tolist() if not df_embeds_eval.empty else ["bge-m3"]
+    chunk_options = df_chunks_eval["name"].tolist()       if not df_chunks_eval.empty else ["medium"]
+
+    col_llm, col_embed, col_chunk, col_k = st.columns(4)
+
+    with col_llm:
+        default_llm = llm_options.index("qwen3:8b") if "qwen3:8b" in llm_options else 0
+        sel_eval_llm = st.selectbox("Modelo LLM", llm_options, index=default_llm, key="eval_llm")
+
+    with col_embed:
+        default_emb = embed_options.index("bge-m3") if "bge-m3" in embed_options else 0
+        sel_eval_embed = st.selectbox("Embedding", embed_options, index=default_emb, key="eval_embed")
+
+    with col_chunk:
+        default_chunk = chunk_options.index("medium") if "medium" in chunk_options else 0
+        sel_eval_chunk = st.selectbox("Chunk config", chunk_options, index=default_chunk, key="eval_chunk")
+
+    with col_k:
+        sel_k = st.number_input("k (chunks retrieval)", min_value=1, max_value=20, value=8, key="eval_k")
+
+    # Prompt vigente
+    prompt_preview = (PROJECT_ROOT / "prompt.txt").read_text(encoding="utf-8").strip() if (PROJECT_ROOT / "prompt.txt").exists() else "—"
+    with st.expander("Ver prompt vigente (prompt.txt)", expanded=False):
+        st.text_area("Prompt", value=prompt_preview, height=140, disabled=True, key="eval_prompt_preview")
+
+    # Resumen de preguntas
+    n_kb = fetchone("SELECT COUNT(*) FROM knowledge_base")[0]
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;margin:12px 0;">
+        <div class="stat-row"><span class="stat-val">{n_kb}</span> preguntas en knowledge_base</div>
+        <span class="tag tag-green">{sel_eval_llm}</span>
+        <span class="tag tag-ice">{sel_eval_embed}</span>
+        <span class="tag tag-amber">{sel_eval_chunk}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Fase 1: Generación de respuestas (run_eval.py) ─────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Fase 1 — Generación de Respuestas RAG</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption("Ejecuta run_eval.py con la configuración seleccionada. Reanudable: omite combinaciones ya completadas.")
+
+    if st.button("▶ Lanzar evaluación RAG", type="primary", key="btn_run_eval"):
+        eval_script = PROJECT_ROOT / "scripts" / "run_eval.py"
+        cmd = [
+            sys.executable, str(eval_script),
+            "--llm",   sel_eval_llm,
+            "--embed", sel_eval_embed,
+            "--chunk", sel_eval_chunk,
+        ]
+        with st.spinner(f"Ejecutando run_eval.py — {sel_eval_llm} | {sel_eval_embed} | {sel_eval_chunk} …"):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=str(PROJECT_ROOT), env=os.environ.copy(),
+                    timeout=7200,
+                )
+                log_out = result.stdout + ("\n\n--- STDERR ---\n" + result.stderr if result.stderr else "")
+                st.text_area("Log — run_eval.py", value=log_out, height=400, key="log_eval")
+                if result.returncode == 0:
+                    st.success("Evaluación RAG completada.")
+                else:
+                    st.error(f"Terminó con código {result.returncode}.")
+            except subprocess.TimeoutExpired:
+                st.error("Tiempo límite (2 h) excedido.")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    # Conteo de runs existentes para la config seleccionada
+    n_runs_ok = fetchone("""
+        SELECT COUNT(*) FROM eval_runs er
+        JOIN llm_models lm       ON er.llm_model_id       = lm.id
+        JOIN embedding_models em ON er.embedding_model_id = em.id
+        JOIN chunk_configs cc    ON er.chunk_config_id    = cc.id
+        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s AND er.status = 'success'
+    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk))[0]
+
+    n_runs_err = fetchone("""
+        SELECT COUNT(*) FROM eval_runs er
+        JOIN llm_models lm       ON er.llm_model_id       = lm.id
+        JOIN embedding_models em ON er.embedding_model_id = em.id
+        JOIN chunk_configs cc    ON er.chunk_config_id    = cc.id
+        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s AND er.status = 'error'
+    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk))[0]
+
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;margin-top:10px;">
+        <div class="stat-row"><span class="stat-val">{n_runs_ok}</span> runs exitosos</div>
+        <div class="stat-row"><span class="stat-val" style="color:var(--accent-red,#FF3B3B)">{n_runs_err}</span> errores</div>
+        <div class="stat-row"><span class="stat-val">{n_kb - n_runs_ok}</span> pendientes</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Fase 2: Scoring RAGAS (Ollama) ─────────────────────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Fase 2 — RAGAS Scoring (Ollama local)</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption("Calcula Answer Relevancy + Context Recall usando el judge LLM local (gpt-oss:20b + bge-m3).")
+
+    col_ragas1, col_ragas2 = st.columns([1, 2])
+    with col_ragas1:
+        ragas_batch = st.number_input("Batch size", min_value=1, max_value=100, value=10, key="ragas_batch")
+    with col_ragas2:
+        st.markdown('<div style="padding-top:24px;font-size:0.72rem;color:var(--text-muted,#4ADE80);">Recomendado: 10 por batch con Ollama local. Proceso largo (~1-2 min/pregunta).</div>', unsafe_allow_html=True)
+
+    if st.button("▶ Lanzar RAGAS scoring (Ollama)", key="btn_run_ragas"):
+        ragas_script = PROJECT_ROOT / "scripts" / "run_ragas.py"
+        cmd = [
+            sys.executable, str(ragas_script),
+            "--llm",        sel_eval_llm,
+            "--embed",      sel_eval_embed,
+            "--chunk",      sel_eval_chunk,
+            "--batch-size", str(ragas_batch),
+        ]
+        with st.spinner("Ejecutando run_ragas.py (Ollama) …"):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=str(PROJECT_ROOT), env=os.environ.copy(),
+                    timeout=14400,
+                )
+                log_out = result.stdout + ("\n\n--- STDERR ---\n" + result.stderr if result.stderr else "")
+                st.text_area("Log — run_ragas.py (Ollama)", value=log_out, height=350, key="log_ragas_ollama")
+                if result.returncode == 0:
+                    st.success("RAGAS scoring (Ollama) completado.")
+                else:
+                    st.error(f"Terminó con código {result.returncode}.")
+            except subprocess.TimeoutExpired:
+                st.error("Tiempo límite (4 h) excedido.")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    # ── Fase 3: Scoring RAGAS (OpenAI) ────────────────────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Fase 3 — RAGAS Scoring (OpenAI gpt-4o-mini)</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption("Calcula Faithfulness + Context Precision usando gpt-4o-mini como juez. Requiere OPENAI_API_KEY en .env.")
+
+    openai_key_set = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    if openai_key_set:
+        st.markdown('<span class="tag tag-green">OPENAI_API_KEY configurado</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<span class="tag tag-red">OPENAI_API_KEY no encontrado en .env</span>', unsafe_allow_html=True)
+
+    col_oai1, col_oai2 = st.columns([1, 2])
+    with col_oai1:
+        openai_batch = st.number_input("Batch size OpenAI", min_value=1, max_value=100, value=20, key="openai_batch")
+
+    if st.button("▶ Lanzar RAGAS scoring (OpenAI)", key="btn_run_ragas_openai", disabled=not openai_key_set):
+        ragas_script = PROJECT_ROOT / "scripts" / "run_ragas.py"
+        cmd = [
+            sys.executable, str(ragas_script),
+            "--llm",        sel_eval_llm,
+            "--embed",      sel_eval_embed,
+            "--chunk",      sel_eval_chunk,
+            "--batch-size", str(openai_batch),
+            "--openai",
+        ]
+        with st.spinner("Ejecutando run_ragas.py --openai …"):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=str(PROJECT_ROOT), env=os.environ.copy(),
+                    timeout=7200,
+                )
+                log_out = result.stdout + ("\n\n--- STDERR ---\n" + result.stderr if result.stderr else "")
+                st.text_area("Log — run_ragas.py (OpenAI)", value=log_out, height=350, key="log_ragas_openai")
+                if result.returncode == 0:
+                    st.success("RAGAS scoring (OpenAI) completado.")
+                else:
+                    st.error(f"Terminó con código {result.returncode}.")
+            except subprocess.TimeoutExpired:
+                st.error("Tiempo límite (2 h) excedido.")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    # ── Resultados comparativos ─────────────────────────────────────────────
+    st.divider()
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Resultados de la Evaluación</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("↺ Actualizar resultados", key="btn_refresh_eval"):
+        st.rerun()
+
+    df_results = query_df("""
+        SELECT
+            kb.category                                  AS categoria,
+            kb.question                                  AS pregunta,
+            LEFT(er.generated_answer, 180)               AS respuesta_preview,
+            ROUND(es.answer_relevancy::numeric, 3)       AS answer_relevancy,
+            ROUND(es.context_recall::numeric, 3)         AS context_recall,
+            ROUND(es.faithfulness::numeric, 3)           AS faithfulness,
+            ROUND(es.context_precision::numeric, 3)      AS context_precision,
+            er.retrieval_time_ms,
+            er.generation_time_ms,
+            er.total_time_ms,
+            es.status                                    AS ragas_status
+        FROM eval_runs er
+        JOIN knowledge_base   kb ON er.knowledge_base_id   = kb.id
+        JOIN llm_models       lm ON er.llm_model_id        = lm.id
+        JOIN embedding_models em ON er.embedding_model_id  = em.id
+        JOIN chunk_configs    cc ON er.chunk_config_id     = cc.id
+        LEFT JOIN eval_scores es ON es.eval_run_id         = er.id
+        WHERE lm.model_name = %s
+          AND em.model_name = %s
+          AND cc.name       = %s
+          AND er.status     = 'success'
+        ORDER BY kb.id
+    """, params=(sel_eval_llm, sel_eval_embed, sel_eval_chunk))
+
+    if df_results.empty:
+        st.markdown('<div class="ind-empty">Sin resultados para la configuración seleccionada.</div>', unsafe_allow_html=True)
+    else:
+        # Métricas resumen
+        scored = df_results[df_results["ragas_status"] == "success"]
+        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+        with col_m1:
+            st.metric("Preguntas evaluadas", len(df_results))
+        with col_m2:
+            val = f"{scored['answer_relevancy'].mean():.3f}" if not scored.empty and scored['answer_relevancy'].notna().any() else "—"
+            st.metric("Avg Answer Relevancy", val)
+        with col_m3:
+            val = f"{scored['context_recall'].mean():.3f}" if not scored.empty and scored['context_recall'].notna().any() else "—"
+            st.metric("Avg Context Recall", val)
+        with col_m4:
+            val = f"{scored['faithfulness'].mean():.3f}" if not scored.empty and scored['faithfulness'].notna().any() else "—"
+            st.metric("Avg Faithfulness", val)
+        with col_m5:
+            val = f"{scored['context_precision'].mean():.3f}" if not scored.empty and scored['context_precision'].notna().any() else "—"
+            st.metric("Avg Context Precision", val)
+
+        st.markdown('<div style="margin-top:1rem;">', unsafe_allow_html=True)
+        render_table(df_results)
+        st.markdown('</div>', unsafe_allow_html=True)

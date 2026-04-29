@@ -39,11 +39,13 @@ from dotenv import load_dotenv
 OLLAMA_BASE_URL_DEFAULT = "http://localhost:11434"
 K_RETRIEVED = 8
 
-RAG_SYSTEM_PROMPT = """Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundacion Paraguaya.
-Responde UNICAMENTE con la informacion proporcionada en el CONTEXTO a continuacion.
-Si la informacion no esta en el contexto, dilo claramente.
-Cita siempre las fuentes (nombres de archivo) cuando respondas.
-No inventes datos. Se concisa pero completa. Responde en espanol."""
+def _load_prompt() -> str:
+    f = Path(__file__).parent.parent / "prompt.txt"
+    if f.exists():
+        return f.read_text(encoding="utf-8").strip()
+    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
+
+RAG_SYSTEM_PROMPT = _load_prompt()
 
 # ---------------------------------------------------------------------------
 # Database helpers  (same pattern as scripts/ingest_all.py)
