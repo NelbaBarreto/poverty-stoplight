@@ -2382,7 +2382,7 @@ with tab7:
                     unsafe_allow_html=True,
                 )
             else:
-                st.caption("Sin métricas RAGAS para esta pregunta.")
+                pass  # sin métricas — no mostrar nada
 
         with col_form:
             st.markdown("**Tu evaluación**")
@@ -2458,11 +2458,14 @@ with tab7:
 
         # ── evaluaciones de otros usuarios ────────────────────────────────
         df_other = query_df("""
-            SELECT au.username, v.calificacion, v.alucinacion,
+            SELECT au.username,
+                   'v' || va.numero || ' — ' || va.descripcion AS version,
+                   v.calificacion, v.alucinacion,
                    COALESCE(v.observacion, '—') AS observacion,
                    v.updated_at::date AS fecha
             FROM validaciones v
-            JOIN admin_users au ON au.id = v.user_id
+            JOIN admin_users au  ON au.id = v.user_id
+            JOIN version_agente va ON va.id = v.version_agente_id
             WHERE v.eval_run_id = %s
             ORDER BY v.updated_at DESC
         """, params=(sel_run_id,))
