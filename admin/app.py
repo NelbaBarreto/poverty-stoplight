@@ -2152,10 +2152,8 @@ with tab7:
             MAX(CASE WHEN v.user_id = %(uid)s THEN v.calificacion END) AS mi_nota
         FROM knowledge_base kb
         JOIN eval_runs er
-          ON er.knowledge_base_id = kb.id
-         AND er.llm_model_id    = (SELECT llm_model_id    FROM version_agente WHERE id = %(va_id)s)
-         AND er.embedding_model_id = (SELECT embed_model_id FROM version_agente WHERE id = %(va_id)s)
-         AND er.chunk_config_id = (SELECT chunk_config_id FROM version_agente WHERE id = %(va_id)s)
+          ON er.knowledge_base_id  = kb.id
+         AND er.version_agente_id  = %(va_id)s
         LEFT JOIN validaciones v ON v.eval_run_id = er.id
         WHERE 1=1 {cat_clause}
         GROUP BY kb.id, kb.question, kb.category, er.id
@@ -2696,12 +2694,28 @@ with tab_eval:
     df_llms_eval   = query_df("SELECT model_name FROM llm_models ORDER BY id")
     df_embeds_eval = query_df("SELECT model_name FROM embedding_models ORDER BY id")
     df_chunks_eval = query_df("SELECT name FROM chunk_configs ORDER BY chunk_size")
+    df_versions_eval = query_df("""
+        SELECT va.id, va.numero, va.descripcion, va.activa
+        FROM version_agente va ORDER BY va.numero
+    """)
 
     llm_options   = df_llms_eval["model_name"].tolist()   if not df_llms_eval.empty   else ["qwen3:8b"]
     embed_options = df_embeds_eval["model_name"].tolist() if not df_embeds_eval.empty else ["bge-m3"]
     chunk_options = df_chunks_eval["name"].tolist()       if not df_chunks_eval.empty else ["medium"]
 
-    col_llm, col_embed, col_chunk, col_k = st.columns(4)
+    def _eval_ver_label(r):
+        tag = " ✦ activa" if r["activa"] else ""
+        return f"v{int(r['numero'])} — {r['descripcion']}{tag}"
+
+    ver_eval_options = [_eval_ver_label(r) for _, r in df_versions_eval.iterrows()] if not df_versions_eval.empty else ["v2"]
+    ver_eval_id_map  = {ver_eval_options[i]: int(df_versions_eval.iloc[i]["id"]) for i in range(len(df_versions_eval))} if not df_versions_eval.empty else {}
+    default_ver_eval_idx = next((i for i, r in df_versions_eval.iterrows() if r["activa"]), 0) if not df_versions_eval.empty else 0
+
+    col_ver_eval, col_llm, col_embed, col_chunk, col_k = st.columns(5)
+
+    with col_ver_eval:
+        sel_eval_ver_opt = st.selectbox("Versión del agente", ver_eval_options, index=default_ver_eval_idx, key="eval_version")
+        sel_eval_version_id = ver_eval_id_map.get(sel_eval_ver_opt, 2)
 
     with col_llm:
         default_llm = llm_options.index("qwen3:8b") if "qwen3:8b" in llm_options else 0
@@ -2748,11 +2762,12 @@ with tab_eval:
         eval_script = PROJECT_ROOT / "scripts" / "run_eval.py"
         cmd = [
             sys.executable, str(eval_script),
-            "--llm",   sel_eval_llm,
-            "--embed", sel_eval_embed,
-            "--chunk", sel_eval_chunk,
+            "--llm",        sel_eval_llm,
+            "--embed",      sel_eval_embed,
+            "--chunk",      sel_eval_chunk,
+            "--version-id", str(sel_eval_version_id),
         ]
-        with st.spinner(f"Ejecutando run_eval.py — {sel_eval_llm} | {sel_eval_embed} | {sel_eval_chunk} …"):
+        with st.spinner(f"Ejecutando run_eval.py — v{sel_eval_version_id} | {sel_eval_llm} | {sel_eval_embed} | {sel_eval_chunk} …"):
             try:
                 result = subprocess.run(
                     cmd,
@@ -2771,22 +2786,24 @@ with tab_eval:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # Conteo de runs existentes para la config seleccionada
+    # Conteo de runs existentes para la config + versión seleccionada
     n_runs_ok = fetchone("""
         SELECT COUNT(*) FROM eval_runs er
         JOIN llm_models lm       ON er.llm_model_id       = lm.id
         JOIN embedding_models em ON er.embedding_model_id = em.id
         JOIN chunk_configs cc    ON er.chunk_config_id    = cc.id
-        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s AND er.status = 'success'
-    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk))[0]
+        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s
+          AND er.version_agente_id = %s AND er.status = 'success'
+    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk, sel_eval_version_id))[0]
 
     n_runs_err = fetchone("""
         SELECT COUNT(*) FROM eval_runs er
         JOIN llm_models lm       ON er.llm_model_id       = lm.id
         JOIN embedding_models em ON er.embedding_model_id = em.id
         JOIN chunk_configs cc    ON er.chunk_config_id    = cc.id
-        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s AND er.status = 'error'
-    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk))[0]
+        WHERE lm.model_name = %s AND em.model_name = %s AND cc.name = %s
+          AND er.version_agente_id = %s AND er.status = 'error'
+    """, (sel_eval_llm, sel_eval_embed, sel_eval_chunk, sel_eval_version_id))[0]
 
     st.markdown(f"""
     <div style="display:flex;gap:12px;margin-top:10px;">
@@ -2820,6 +2837,7 @@ with tab_eval:
             "--embed",      sel_eval_embed,
             "--chunk",      sel_eval_chunk,
             "--batch-size", str(ragas_batch),
+            "--version-id", str(sel_eval_version_id),
         ]
         with st.spinner("Ejecutando run_ragas.py (Ollama) …"):
             try:
@@ -2868,6 +2886,7 @@ with tab_eval:
             "--embed",      sel_eval_embed,
             "--chunk",      sel_eval_chunk,
             "--batch-size", str(openai_batch),
+            "--version-id", str(sel_eval_version_id),
             "--openai",
         ]
         with st.spinner("Ejecutando run_ragas.py --openai …"):
@@ -2923,9 +2942,10 @@ with tab_eval:
         WHERE lm.model_name = %s
           AND em.model_name = %s
           AND cc.name       = %s
+          AND er.version_agente_id = %s
           AND er.status     = 'success'
         ORDER BY kb.id
-    """, params=(sel_eval_llm, sel_eval_embed, sel_eval_chunk))
+    """, params=(sel_eval_llm, sel_eval_embed, sel_eval_chunk, sel_eval_version_id))
 
     if df_results.empty:
         st.markdown('<div class="ind-empty">Sin resultados para la configuración seleccionada.</div>', unsafe_allow_html=True)

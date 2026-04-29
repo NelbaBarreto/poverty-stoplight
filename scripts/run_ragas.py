@@ -50,7 +50,7 @@ def get_db_connection():
     )
 
 
-def fetch_pending(conn, llm_filter, embed_filter, chunk_filter, questions_limit=None) -> list[dict]:
+def fetch_pending(conn, llm_filter, embed_filter, chunk_filter, questions_limit=None, version_id=None) -> list[dict]:
     """Return all eval_runs that still need RAGAS scoring."""
     where_clauses = [
         "er.status = 'success'",
@@ -67,6 +67,9 @@ def fetch_pending(conn, llm_filter, embed_filter, chunk_filter, questions_limit=
     if chunk_filter:
         where_clauses.append("cc.name = ANY(%s)")
         params.append(chunk_filter)
+    if version_id is not None:
+        where_clauses.append("er.version_agente_id = %s")
+        params.append(version_id)
     if questions_limit:
         where_clauses.append(
             "er.knowledge_base_id IN (SELECT id FROM knowledge_base ORDER BY id LIMIT %s)"
@@ -136,7 +139,7 @@ def upsert_score(conn, eval_run_id: int, payload: dict) -> None:
 # OpenAI mode — fetch rows that need faithfulness / context precision
 # ---------------------------------------------------------------------------
 
-def fetch_pending_faithfulness(conn, llm_filter, embed_filter, chunk_filter, questions_limit=None) -> list[dict]:
+def fetch_pending_faithfulness(conn, llm_filter, embed_filter, chunk_filter, questions_limit=None, version_id=None) -> list[dict]:
     """Return scored eval_runs that still have NULL faithfulness OR NULL context_precision."""
     where_clauses = [
         "er.status = 'success'",
@@ -154,6 +157,9 @@ def fetch_pending_faithfulness(conn, llm_filter, embed_filter, chunk_filter, que
     if chunk_filter:
         where_clauses.append("cc.name = ANY(%s)")
         params.append(chunk_filter)
+    if version_id is not None:
+        where_clauses.append("er.version_agente_id = %s")
+        params.append(version_id)
     if questions_limit:
         where_clauses.append(
             "er.knowledge_base_id IN (SELECT id FROM knowledge_base ORDER BY id LIMIT %s)"
@@ -444,6 +450,13 @@ def parse_args():
         help="Count pending rows only; do not score or write to DB.",
     )
     parser.add_argument(
+        "--version-id",
+        metavar="ID",
+        type=int,
+        default=None,
+        help="Filter eval_runs by version_agente.id. Default: all versions.",
+    )
+    parser.add_argument(
         "--openai",
         action="store_true",
         help="Use OpenAI (gpt-4o-mini) to score Faithfulness + Context Precision "
@@ -478,6 +491,7 @@ def main():
                 embed_filter=args.embed_filter,
                 chunk_filter=args.chunk_filter,
                 questions_limit=args.questions,
+                version_id=args.version_id,
             )
 
             logging.info(f"{len(pending):,} rows pending faithfulness scoring.")
@@ -549,6 +563,7 @@ def main():
                 embed_filter=args.embed_filter,
                 chunk_filter=args.chunk_filter,
                 questions_limit=args.questions,
+                version_id=args.version_id,
             )
 
             logging.info(f"{len(pending):,} rows pending scoring.")

@@ -84,8 +84,18 @@ def load_catalog(conn) -> dict:
     }
 
 
-def already_done(conn, llm_id: int, embed_id: int, chunk_id: int, kb_id: int) -> bool:
-    """Check if a successful run already exists for this combination."""
+def get_active_version_id(conn) -> int:
+    """Return the id of the currently active version_agente."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM version_agente WHERE activa = TRUE ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("No hay ninguna version_agente activa en la BD.")
+        return row[0]
+
+
+def already_done(conn, llm_id: int, embed_id: int, chunk_id: int, kb_id: int, version_id: int) -> bool:
+    """Check if a successful run already exists for this combination + version."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -94,25 +104,27 @@ def already_done(conn, llm_id: int, embed_id: int, chunk_id: int, kb_id: int) ->
               AND embedding_model_id = %s
               AND chunk_config_id = %s
               AND knowledge_base_id = %s
+              AND version_agente_id = %s
               AND status = 'success'
             """,
-            (llm_id, embed_id, chunk_id, kb_id),
+            (llm_id, embed_id, chunk_id, kb_id, version_id),
         )
         return cur.fetchone() is not None
 
 
-def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, payload: dict) -> None:
+def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id: int, payload: dict) -> None:
     """Insert or update an eval_run row."""
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO eval_runs
                 (llm_model_id, embedding_model_id, chunk_config_id, knowledge_base_id,
+                 version_agente_id,
                  retrieved_contexts, k_retrieved, generated_answer,
                  status, error_message,
                  retrieval_time_ms, generation_time_ms, total_time_ms)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (llm_model_id, embedding_model_id, chunk_config_id, knowledge_base_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (llm_model_id, embedding_model_id, chunk_config_id, knowledge_base_id, version_agente_id)
             DO UPDATE SET
                 retrieved_contexts = EXCLUDED.retrieved_contexts,
                 k_retrieved        = EXCLUDED.k_retrieved,
@@ -125,7 +137,7 @@ def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, payload: dict) -> N
                 created_at         = CURRENT_TIMESTAMP
             """,
             (
-                llm_id, embed_id, chunk_id, kb_id,
+                llm_id, embed_id, chunk_id, kb_id, version_id,
                 json.dumps(payload.get("retrieved_contexts")),
                 payload.get("k_retrieved", K_RETRIEVED),
                 payload.get("generated_answer"),
@@ -299,6 +311,13 @@ def parse_args():
         help="Chunk config name(s) to include: small/medium/large (repeatable). Default: all.",
     )
     parser.add_argument(
+        "--version-id",
+        metavar="ID",
+        type=int,
+        default=None,
+        help="version_agente.id to tag runs with. Default: active version.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print combination counts only; do not write to DB.",
@@ -324,6 +343,9 @@ def main():
     conn = get_db_connection()
 
     try:
+        version_id = args.version_id if args.version_id is not None else get_active_version_id(conn)
+        logging.info(f"Using version_agente_id={version_id}")
+
         catalog = load_catalog(conn)
 
         # Apply CLI filters
@@ -385,7 +407,7 @@ def main():
                     continue
 
                 # Skip already-successful runs (resumability)
-                if already_done(conn, llm_id, embed_id, chunk_id, kb_id):
+                if already_done(conn, llm_id, embed_id, chunk_id, kb_id, version_id):
                     pbar.update(1)
                     skipped += 1
                     continue
@@ -403,7 +425,7 @@ def main():
 
                     total_ms = int((time.monotonic() - t_total_start) * 1000)
 
-                    upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, {
+                    upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id, {
                         "retrieved_contexts":  contexts,
                         "k_retrieved":         K_RETRIEVED,
                         "generated_answer":    answer,
@@ -422,7 +444,7 @@ def main():
                         f"kb_id={kb_id}: {exc}"
                     )
                     try:
-                        upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, {
+                        upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id, {
                             "retrieved_contexts":  None,
                             "k_retrieved":         K_RETRIEVED,
                             "generated_answer":    None,
