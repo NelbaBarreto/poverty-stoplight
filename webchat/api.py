@@ -384,7 +384,8 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
 
         # Build messages and call LLM
         messages = build_messages(history, req.message, context)
-        llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL)
+        llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
+                         num_ctx=4096, think=False)
         response_msg = llm.invoke(messages)
         response_text = response_msg.content.strip()
 
