@@ -18,18 +18,20 @@ Configuration (via .env):
   ALLOWED_ORIGINS  default: * (CORS)
 """
 
+import hashlib
 import os
 import sys
 import time
 import uuid
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import psycopg2
 import psycopg2.extras
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
@@ -53,11 +55,28 @@ log = logging.getLogger("webchat.api")
 # Config
 # ---------------------------------------------------------------------------
 
-LLM_MODEL     = os.getenv("LLM_MODEL",     "qwen3:8b")
-EMBED_MODEL   = os.getenv("EMBED_MODEL",   "bge-m3")
-CHUNK_CONFIG  = os.getenv("CHUNK_CONFIG",  "medium")
-OLLAMA_URL    = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+LLM_MODEL       = os.getenv("LLM_MODEL",       "qwen3:8b")
+EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
+CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
+OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
+
+# ---------------------------------------------------------------------------
+# Token rotativo diario — sha512(SECRET + DD/MM/YYYY)
+# ---------------------------------------------------------------------------
+
+def _daily_token(dt: datetime) -> str:
+    date_str = dt.strftime("%d/%m/%Y")
+    raw = f"{WEBCHAT_SECRET}{date_str}"
+    return hashlib.sha512(raw.encode()).hexdigest()
+
+
+def require_token(x_auth_token: str = Header(..., alias="X-Auth-Token")):
+    expected = _daily_token(datetime.now())
+    if x_auth_token != expected:
+        log.warning("Token inválido recibido: %s...", x_auth_token[:16])
+        raise HTTPException(status_code=403, detail="Token inválido o expirado")
 
 EMBED_TABLE = {
     "bge-m3":                 "embeddings_bge_m3",
@@ -194,7 +213,8 @@ def get_embedding(query: str) -> list:
     return resp.json()["embedding"]
 
 
-def search_context(query: str, k: int = 8) -> str:
+def search_context(query: str, k: int = 8) -> tuple:
+    """Return (context_str, sources_list) where sources_list is [{titulo, link}]."""
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.pgvector_manager import PGVectorManager
 
@@ -210,13 +230,19 @@ def search_context(query: str, k: int = 8) -> str:
     )
 
     parts = []
+    seen: set = set()
+    sources: list = []
     for doc in results:
         meta = doc.metadata or {}
-        source = meta.get("titulo") or meta.get("filename", "Desconocido")
+        titulo = meta.get("titulo") or meta.get("filename", "Desconocido")
+        link   = meta.get("link") or None
         content = doc.page_content.strip()
         if content:
-            parts.append(f"[Fuente: {source}]\n{content}")
-    return "\n\n---\n\n".join(parts)
+            parts.append(f"[Fuente: {titulo}]\n{content}")
+        if titulo not in seen:
+            seen.add(titulo)
+            sources.append({"titulo": titulo, "link": link})
+    return "\n\n---\n\n".join(parts), sources
 
 
 def build_messages(history: list, prompt: str, context: str):
@@ -252,9 +278,15 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class Source(BaseModel):
+    titulo: str
+    link: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     session_id: str
     response: str
+    sources: list[Source] = []
     response_time_ms: int
     llm_model: str
     embed_model: str
@@ -266,7 +298,7 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/health")
-def health():
+def health(_: None = Depends(require_token)):
     try:
         conn = get_conn()
         conn.close()
@@ -283,14 +315,14 @@ def health():
 
 
 @app.post("/api/session")
-def new_session(req: SessionCreateRequest):
+def new_session(req: SessionCreateRequest, _: None = Depends(require_token)):
     session_id = create_session(origin=req.origin)
     log.info(f"New session: {session_id} from {req.origin}")
     return {"session_id": session_id}
 
 
 @app.get("/api/session/{session_id}")
-def get_session(session_id: str):
+def get_session(session_id: str, _: None = Depends(require_token)):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
     history = get_history(session_id)
@@ -298,7 +330,7 @@ def get_session(session_id: str):
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, _: None = Depends(require_token)):
     # Validate / auto-create session
     if not req.session_id or not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found. POST /api/session first.")
@@ -310,10 +342,11 @@ def chat(req: ChatRequest):
 
     t0 = time.monotonic()
     try:
-        # Retrieve context
-        context = search_context(req.message)
+        # Retrieve context + sources
+        context, sources = search_context(req.message)
         if not context:
             context = "No se encontró contexto relevante en los documentos."
+            sources = []
 
         # Get conversation history for multi-turn context
         history = get_history(req.session_id, limit=20)
@@ -329,6 +362,7 @@ def chat(req: ChatRequest):
     except Exception as e:
         log.error(f"Chat error: {e}")
         response_text = f"Lo siento, ocurrió un error al procesar tu pregunta: {e}"
+        sources = []
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
@@ -344,6 +378,7 @@ def chat(req: ChatRequest):
     return ChatResponse(
         session_id=req.session_id,
         response=response_text,
+        sources=[Source(**s) for s in sources],
         response_time_ms=elapsed_ms,
         llm_model=LLM_MODEL,
         embed_model=EMBED_MODEL,

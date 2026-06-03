@@ -33,6 +33,7 @@ CREATE TABLE documents (
     file_type VARCHAR(50) NOT NULL,  -- pdf / csv / md
     file_path TEXT NOT NULL,
     titulo VARCHAR(500),             -- human-readable title shown in chat (nullable)
+    link TEXT,                       -- URL de referencia para el documento (nullable)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

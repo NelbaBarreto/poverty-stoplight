@@ -222,7 +222,7 @@ class PGVectorManager:
             embedding_str = "[" + ",".join(str(e) for e in embedding) + "]"
             query = f"""
                 SELECT c.id, c.chunk_text, c.format, c.chunk_index,
-                       d.filename, d.titulo, d.file_type,
+                       d.filename, d.titulo, d.file_type, d.link,
                        e.embedding <-> %s::vector AS distance
                 FROM {embed_table} e
                 JOIN chunks c         ON e.chunk_id        = c.id
@@ -243,6 +243,7 @@ class PGVectorManager:
                     "format":      row.get("format"),
                     "chunk_index": row.get("chunk_index"),
                     "distance":    float(row.get("distance", 0)),
+                    "link":        row.get("link"),
                 }
                 documents.append(Document(page_content=row.get("chunk_text", ""), metadata=metadata))
             return documents

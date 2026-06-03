@@ -1404,10 +1404,11 @@ with tab2:
             """, unsafe_allow_html=True)
 
             doc_row = fetchone(
-                "SELECT filename, titulo FROM documents WHERE id = %s", (edit_id,)
+                "SELECT filename, titulo, link FROM documents WHERE id = %s", (edit_id,)
             )
             current_filename = doc_row[0] if doc_row else ""
             current_titulo   = doc_row[1] if doc_row and doc_row[1] else ""
+            current_link     = doc_row[2] if doc_row and doc_row[2] else ""
 
             col_form, col_actions = st.columns([3, 1])
             with col_form:
@@ -1418,6 +1419,12 @@ with tab2:
                     key=f"input_titulo_{edit_id}",
                     placeholder="Ej: Manual Metodológico v4 (2024)",
                 )
+                new_link = st.text_input(
+                    "URL de referencia (link en el chat)",
+                    value=current_link,
+                    key=f"input_link_{edit_id}",
+                    placeholder="Ej: https://povertystoplight.org/manual.pdf",
+                )
                 new_filename = st.text_input(
                     "Nombre de archivo",
                     value=current_filename,
@@ -1427,13 +1434,14 @@ with tab2:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 if st.button("💾 Guardar", type="primary", key=f"btn_save_{edit_id}"):
                     t = new_titulo.strip() or None
+                    lnk = new_link.strip() or None
                     f = new_filename.strip()
                     if not f:
                         st.error("El nombre de archivo no puede estar vacío.")
                     else:
                         execute_sql(
-                            "UPDATE documents SET filename = %s, titulo = %s WHERE id = %s",
-                            (f, t, edit_id),
+                            "UPDATE documents SET filename = %s, titulo = %s, link = %s WHERE id = %s",
+                            (f, t, lnk, edit_id),
                         )
                         st.success("Guardado correctamente.")
                         st.session_state.doc_edit_id = None
