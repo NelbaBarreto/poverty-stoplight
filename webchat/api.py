@@ -69,14 +69,17 @@ WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
 def _daily_token(dt: datetime) -> str:
     date_str = dt.strftime("%d/%m/%Y")
     raw = f"{WEBCHAT_SECRET}{date_str}"
-    return hashlib.sha512(raw.encode()).hexdigest()
+    token = hashlib.sha512(raw.encode()).hexdigest()
+    return token
 
 
 def require_token(x_auth_token: str = Header(..., alias="X-Auth-Token")):
     expected = _daily_token(datetime.now())
+    log.debug(f"[Token] Comparing: expected={expected[:16]}... vs received={x_auth_token[:16] if x_auth_token else 'NONE'}...")
     if x_auth_token != expected:
-        log.warning("Token inválido recibido: %s...", x_auth_token[:16])
+        log.warning(f"[Token] INVALID: received '{x_auth_token[:32]}...' vs expected '{expected[:32]}...'")
         raise HTTPException(status_code=403, detail="Token inválido o expirado")
+    log.debug("[Token] Valid token accepted")
 
 EMBED_TABLE = {
     "bge-m3":                 "embeddings_bge_m3",
@@ -321,6 +324,22 @@ def debug_ping():
         "status": "ok",
         "message": "API is accessible and CORS is working",
         "timestamp": datetime.now().isoformat(),
+    }
+
+
+@app.get("/api/debug/token")
+def debug_token():
+    """Debug endpoint - returns today's expected token without requiring authentication.
+    Used to verify token generation on client side matches server expectations."""
+    today = datetime.now()
+    expected_token = _daily_token(today)
+    date_str = today.strftime("%d/%m/%Y")
+    return {
+        "status": "ok",
+        "date": date_str,
+        "secret": WEBCHAT_SECRET,
+        "expected_token": expected_token,
+        "token_length": len(expected_token),
     }
 
 
