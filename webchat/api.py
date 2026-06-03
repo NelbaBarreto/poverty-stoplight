@@ -314,6 +314,16 @@ def health(_: None = Depends(require_token)):
     }
 
 
+@app.get("/api/debug/ping")
+def debug_ping():
+    """Debug endpoint - no token required. Used to test CORS and connectivity."""
+    return {
+        "status": "ok",
+        "message": "API is accessible and CORS is working",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @app.post("/api/session")
 def new_session(req: SessionCreateRequest, _: None = Depends(require_token)):
     session_id = create_session(origin=req.origin)
