@@ -33,6 +33,7 @@ import psycopg2.extras
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
@@ -61,6 +62,16 @@ CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
+
+# Single shared LLM instance — avoids re-initialization on every request
+_llm: "ChatOllama | None" = None
+
+def get_llm() -> "ChatOllama":
+    global _llm
+    if _llm is None:
+        _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
+                          num_ctx=4096, think=False)
+    return _llm
 
 # ---------------------------------------------------------------------------
 # Token rotativo diario — sha512(SECRET + DD/MM/YYYY)
@@ -207,12 +218,14 @@ def get_history(session_id: str, limit: int = 20) -> list:
 # ---------------------------------------------------------------------------
 
 def get_embedding(query: str) -> list:
+    t0 = time.monotonic()
     resp = requests.post(
         f"{OLLAMA_URL}/api/embeddings",
         json={"model": EMBED_MODEL, "prompt": query},
         timeout=60,
     )
     resp.raise_for_status()
+    log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
     return resp.json()["embedding"]
 
 
@@ -224,6 +237,7 @@ def search_context(query: str, k: int = 8) -> tuple:
     embedding = get_embedding(query)
     embed_table = EMBED_TABLE.get(EMBED_MODEL, "embeddings_bge_m3")
 
+    t1 = time.monotonic()
     mgr = PGVectorManager()
     results = mgr.search_similar_new_schema(
         embedding=embedding,
@@ -231,6 +245,7 @@ def search_context(query: str, k: int = 8) -> tuple:
         chunk_config_name=CHUNK_CONFIG,
         k=k,
     )
+    log.info(f"[timing] pgvector={int((time.monotonic()-t1)*1000)}ms")
 
     parts = []
     seen: set = set()
@@ -384,9 +399,7 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
 
         # Build messages and call LLM
         messages = build_messages(history, req.message, context)
-        llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
-                         num_ctx=4096, think=False)
-        response_msg = llm.invoke(messages)
+        response_msg = get_llm().invoke(messages)
         response_text = response_msg.content.strip()
 
     except Exception as e:
@@ -413,6 +426,60 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
         llm_model=LLM_MODEL,
         embed_model=EMBED_MODEL,
         chunk_config=CHUNK_CONFIG,
+    )
+
+
+@app.post("/api/chat/stream")
+def chat_stream(req: ChatRequest, _: None = Depends(require_token)):
+    if not req.session_id or not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found. POST /api/session first.")
+
+    touch_session(req.session_id)
+    save_message(req.session_id, "user", req.message)
+
+    t0 = time.monotonic()
+
+    try:
+        context, sources = search_context(req.message)
+        if not context:
+            context = "No se encontró contexto relevante en los documentos."
+            sources = []
+    except Exception as e:
+        log.error(f"Context error: {e}")
+        context = "No se encontró contexto relevante en los documentos."
+        sources = []
+
+    history = get_history(req.session_id, limit=20)[:-1]
+    messages = build_messages(history, req.message, context)
+
+    def generate():
+        import json
+        full_response: list[str] = []
+        try:
+            for chunk in get_llm().stream(messages):
+                token = chunk.content
+                if token:
+                    full_response.append(token)
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+        except Exception as e:
+            log.error(f"Stream error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        response_text = "".join(full_response)
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+
+        save_message(
+            req.session_id, "assistant", response_text,
+            llm_model=LLM_MODEL, embed_model=EMBED_MODEL,
+            chunk_config=CHUNK_CONFIG, response_time_ms=elapsed_ms,
+        )
+        log.info(f"stream session={req.session_id} time={elapsed_ms}ms")
+        yield f"data: {json.dumps({'done': True, 'sources': sources, 'response_time_ms': elapsed_ms})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

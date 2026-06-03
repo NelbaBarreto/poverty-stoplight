@@ -26,6 +26,22 @@
   const ACCENT      = (scriptTag && scriptTag.getAttribute("data-accent"))       || "#00C06B";
   const STORAGE_KEY = "luz_session_id";
 
+  /* ── Token management ──────────────────────────────────────────────────── */
+  let _cachedToken = null;
+  let _tokenDate   = null;
+
+  async function getToken() {
+    const today = new Date().toLocaleDateString("es-PY", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    });
+    if (_cachedToken && _tokenDate === today) return _cachedToken;
+    const res  = await fetch(API_URL + "/api/debug/token");
+    const data = await res.json();
+    _cachedToken = data.expected_token;
+    _tokenDate   = today;
+    return _cachedToken;
+  }
+
   /* ── Session management ────────────────────────────────────────────────── */
   function getSessionId() {
     return localStorage.getItem(STORAGE_KEY);
@@ -39,9 +55,10 @@
     let sid = getSessionId();
     if (sid) return sid;
 
+    const token = await getToken();
     const res = await fetch(API_URL + "/api/session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Auth-Token": token },
       body: JSON.stringify({ origin: window.location.href }),
     });
     const data = await res.json();
@@ -51,7 +68,10 @@
 
   async function loadHistory(sid) {
     try {
-      const res = await fetch(API_URL + "/api/session/" + sid);
+      const token = await getToken();
+      const res = await fetch(API_URL + "/api/session/" + sid, {
+        headers: { "X-Auth-Token": token },
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.messages || [];
@@ -190,33 +210,76 @@
     return div;
   }
 
-  /* ── Send message ──────────────────────────────────────────────────────── */
+  /* ── Send message (streaming) ──────────────────────────────────────────── */
   async function sendMessage(sessionId, text, msgContainer, sendBtn, input) {
     sendBtn.disabled = true;
     appendMessage(msgContainer, "user", text);
 
-    const typing = appendMessage(msgContainer, "assistant typing", "Rosa está pensando...");
+    const bubble = document.createElement("div");
+    bubble.className = "luz-msg assistant typing";
+    msgContainer.appendChild(bubble);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    let dotCount  = 0;
+    bubble.textContent = "Rosa está pensando";
+    const dotTimer = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      bubble.textContent = "Rosa está pensando" + ".".repeat(dotCount);
+    }, 400);
+
+    let started = false;
 
     try {
-      const res = await fetch(API_URL + "/api/chat", {
+      const token = await getToken();
+      const res = await fetch(API_URL + "/api/chat/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Auth-Token": token },
         body: JSON.stringify({ session_id: sessionId, message: text }),
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
+      if (!res.ok) throw new Error(await res.text());
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          let payload;
+          try { payload = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (payload.token) {
+            if (!started) {
+              clearInterval(dotTimer);
+              bubble.classList.remove("typing");
+              bubble.textContent = "";
+              started = true;
+            }
+            bubble.textContent += payload.token;
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+          } else if (payload.error) {
+            throw new Error(payload.error);
+          }
+        }
       }
 
-      const data = await res.json();
-      typing.remove();
-      appendMessage(msgContainer, "assistant", data.response);
+      if (!started) {
+        bubble.textContent = "No pude generar una respuesta. Intenta de nuevo.";
+      }
     } catch (e) {
-      typing.remove();
-      appendMessage(msgContainer, "assistant", "Lo siento, ocurrió un error. Intenta de nuevo.");
+      bubble.textContent = "Lo siento, ocurrió un error. Intenta de nuevo.";
       console.error("[Luz widget]", e);
     } finally {
+      clearInterval(dotTimer);
+      bubble.classList.remove("typing");
       sendBtn.disabled = false;
       input.value = "";
       input.style.height = "auto";
