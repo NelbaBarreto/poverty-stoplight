@@ -47,9 +47,15 @@ fi
 
 echo "Python: $PYTHON"
 
-# ── Arrancar API (uvicorn, background) ───────────────────────────────────────
+# ── Kill any existing process on API_PORT ────────────────────────────────────
 API_PORT="${API_PORT:-8000}"
-echo "Iniciando Webchat API en http://localhost:${API_PORT}"
+echo "Verificando si el puerto $API_PORT está en uso..."
+if lsof -Pi :${API_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "Matando proceso existente en puerto $API_PORT..."
+    kill $(lsof -t -i:${API_PORT}) 2>/dev/null || true
+    sleep 1
+fi
+echo "Iniciando Webchat API en http://0.0.0.0:${API_PORT}"
 
 "$PYTHON" -m uvicorn webchat.api:app \
     --host 0.0.0.0 \
@@ -65,7 +71,7 @@ echo "API PID: $API_PID"
 # Esperar a que la API esté lista (hasta 15 s)
 i=0
 while [ $i -lt 15 ]; do
-    if "$PYTHON" -c "import urllib.request; urllib.request.urlopen('http://localhost:${API_PORT}/api/health')" >/dev/null 2>&1; then
+    if "$PYTHON" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_PORT}/api/health')" >/dev/null 2>&1; then
         echo "API lista."
         break
     fi
