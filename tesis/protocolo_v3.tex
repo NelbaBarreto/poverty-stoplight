@@ -1,0 +1,758 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{hyperref}
+
+\begin{document}
+
+\hyphenation{}
+
+\title{Diseño, Implementación y Evaluación de un Agente Conversacional basado en RAG para el Acceso a la Base de Conocimientos del Proyecto \textit{Semáforo de la Pobreza} en Paraguay}
+
+\author{
+  Carlos Bustamante \\
+  Universidad Comunera \\
+  \texttt{cbustamantem@gmail.com}
+  \and
+  Nelba Barreto \\
+  Universidad Comunera \\
+  \texttt{barretonelba@gmail.com}
+}
+
+\date{Junio 2026}
+\maketitle
+
+\section{Introducción}\label{sec:introduccion}
+
+La pobreza es un fenómeno complejo y multidimensional que no puede comprenderse únicamente a partir de los niveles de ingreso, por lo que su abordaje requiere considerar de manera integrada distintas dimensiones de la calidad de vida \cite{BrochureEspanolDigital}. En este marco, el proyecto \textit{Semáforo de la Pobreza}, desarrollado por la Fundación Paraguaya\footnote{Sitio oficial de la Fundación Paraguaya: \href{https://www.fundacionparaguaya.org.py}{www.fundacionparaguaya.org.py} }, propone una metodología centrada en el rol activo de las personas en la identificación y superación de sus carencias. A través de una herramienta digital, los participantes realizan una autoevaluación basada en indicadores organizados en múltiples dimensiones, lo que les permite visualizar su situación, establecer prioridades y definir acciones concretas para mejorar sus condiciones de vida \cite{ManualSemaforo2023}.
+
+La expansión del \textit{Semáforo de la Pobreza} ha dado lugar a una red global de implementación, presente en 59 países y con más de 1.000 organizaciones participantes \cite{BrochureEspanolDigital}. Este crecimiento ha favorecido la acumulación de una base de conocimientos compuesta por documentos institucionales, indicadores, recomendaciones, casos de éxito, experiencias de intervención, estudios académicos y reportes técnicos vinculados con la aplicación de la metodología en distintos contextos. Sin embargo, el aprovechamiento efectivo de este conocimiento representa un desafío, ya que la información se encuentra distribuida en múltiples fuentes y formatos heterogéneos, lo que dificulta su localización, consulta y uso por parte de los diferentes actores involucrados.
+
+En este contexto, la Generación Aumentada por Recuperación (RAG, por sus siglas en inglés) constituye una alternativa pertinente para facilitar el acceso a información especializada, al combinar modelos de lenguaje con mecanismos de recuperación de documentos relevantes desde fuentes externas \cite{Lewis2020RAG}. Aplicado a la base de conocimientos del \textit{Semáforo de la Pobreza}, este enfoque permite desarrollar un agente conversacional capaz de responder consultas en lenguaje natural a partir de evidencia documental del propio dominio, contribuyendo así a un acceso más flexible, contextualizado e intuitivo al conocimiento institucional.
+
+A partir de este escenario, el presente trabajo propone el diseño, la implementación y la evaluación de un agente conversacional basado en RAG aplicado a la base de conocimientos del \textit{Semáforo de la Pobreza} de la Fundación Paraguaya, con el fin de facilitar el acceso a la información mediante consultas en lenguaje natural. En particular, se analiza el desempeño del sistema ante variaciones del modelo de \textit{embeddings}, del tamaño de los \textit{chunks} y del solapamiento de caracteres, empleando métricas automáticas de recuperación y generación, complementadas con evaluación humana de expertos del dominio. De este modo, la propuesta busca no solo diseñar, implementar y evaluar un agente conversacional en un contexto institucional real, sino también generar evidencia empírica sobre decisiones de configuración relevantes para sistemas RAG aplicados a corpus heterogéneos del ámbito social.
+% --------------------------------------------------
+\section{Estado del arte}\label{sec:estadoArte}
+
+En los últimos años, el uso de la inteligencia artificial, y en particular del procesamiento del lenguaje natural (NLP, por sus siglas en inglés), ha comenzado a consolidarse como una línea de trabajo relevante para el análisis de problemáticas sociales. En este ámbito, se han reportado aplicaciones orientadas al estudio de condiciones socioeconómicas, la identificación de patrones en noticias, el análisis de narrativas sobre pobreza y la clasificación de niveles socioeconómicos a partir de texto libre \cite{nlp_social_good_survey}. Estos antecedentes muestran que las herramientas de NLP pueden contribuir no solo al análisis de fenómenos sociales, sino también al acceso y uso de información especializada en dominios de interés público.
+
+En paralelo, el desarrollo reciente de los modelos de lenguaje de gran escala ha ampliado las posibilidades de interacción con bases documentales extensas y heterogéneas. Entre los enfoques más relevantes se encuentra la Generación Aumentada por Recuperación (RAG), que combina modelos generativos con mecanismos de recuperación de información para producir respuestas fundamentadas en documentos relevantes \cite{Lewis2020RAG}. Esta arquitectura ha cobrado importancia en escenarios donde no basta con generar texto fluido, sino que también se requiere vincular las respuestas con fuentes concretas del dominio consultado.
+
+En contextos aplicados, estas capacidades han dado lugar a iniciativas orientadas a facilitar el acceso a conocimiento especializado mediante interfaces conversacionales. Un ejemplo es IDR Answers, una plataforma que responde consultas sobre impacto social en India a partir de un repositorio de más de 2.000 artículos elaborados por expertos \cite{idr_answers}. A nivel local, también comienzan a observarse desarrollos con propósitos afines. En Paraguay, \textit{Angirũ Bot} permite responder consultas en castellano, guaraní y jopará sobre prevención y tratamiento del VIH a partir de información validada, contribuyendo a reducir barreras de acceso para poblaciones en situación de vulnerabilidad \cite{angiru_bot}. En conjunto, estos casos evidencian el potencial de los sistemas conversacionales para mediar el acceso a conocimiento técnico en dominios sociales.
+
+No obstante, la literatura reciente señala que el dominio de la pobreza continúa relativamente subexplorado en NLP en comparación con otras áreas del desarrollo social \cite{nlp_social_good_survey}. Además, los estudios existentes enfrentan desafíos relacionados con la escasez o incompletitud de datos sobre pobreza, la dependencia de variables proxy para aproximar condiciones socioeconómicas y la limitada comparabilidad entre investigaciones, lo que dificulta la consolidación de evidencia acumulativa en este dominio \cite{nlp_social_good_survey}.
+
+A esta brecha temática se suma un desafío metodológico asociado al diseño y evaluación de sistemas RAG. La investigación reciente ha descrito su funcionamiento general, sus componentes principales y diversos puntos críticos de ingeniería y validación \cite{gao2023retrieval, barnett2024seven}. Sin embargo, persiste la necesidad de generar evidencia aplicada sobre el desempeño de estas arquitecturas en corpus institucionales heterogéneos, especialmente en relación con decisiones de configuración como la selección del modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres. Esta necesidad resulta relevante en contextos del ámbito social, donde los documentos disponibles pueden variar en formato, nivel de estructura, extensión y propósito comunicativo.
+
+A partir de esta brecha, el presente trabajo se sitúa en la intersección entre NLP aplicado al desarrollo social y la evaluación de sistemas basados en RAG. La propuesta plantea el diseño, la implementación y la evaluación de un agente conversacional orientado a mejorar el acceso, la localización y la comprensión de la información contenida en la base de conocimientos del \textit{Semáforo de la Pobreza}, mediante la integración de fuentes heterogéneas y el uso de consultas en lenguaje natural.
+% --------------------------------------------------
+\section{Descripción de la propuesta}\label{sec:descripcion}
+
+La propuesta consiste en diseñar, implementar y evaluar un agente conversacional basado en la arquitectura de Generación Aumentada por Recuperación (RAG), orientado a facilitar el acceso a la base de conocimientos del \textit{Semáforo de la Pobreza} de la Fundación Paraguaya.
+
+El sistema integrará fuentes heterogéneas relacionadas con la metodología, incluyendo recursos institucionales, documentos metodológicos, indicadores, recomendaciones, casos de éxito, experiencias de intervención, estudios académicos y trabajos elaborados por terceros. A partir de estos recursos, se plantea desarrollar un proceso de ingesta y estructuración de datos para conformar una base de conocimientos vectorial que permita la recuperación de información relevante.
+
+El agente utilizará un modelo de lenguaje de gran escala (LLM, por sus siglas en inglés) junto con un mecanismo de recuperación semántica. De esta manera, se busca generar respuestas contextualizadas a partir de los documentos recuperados, permitiendo realizar consultas en lenguaje natural sobre contenidos distribuidos en múltiples fuentes.
+
+Para evaluar el desempeño del sistema, se llevará a cabo un estudio experimental del \textit{pipeline} RAG. Esta evaluación contemplará la variación sistemática del modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres. Los resultados serán analizados mediante un enfoque mixto que combina métricas automáticas de recuperación y generación con evaluación humana por expertos del dominio.
+
+Finalmente, la propuesta incluye la implementación del sistema en un entorno de ejecución local, accesible a través de una interfaz web. Esta arquitectura está pensada para su integración con la página web institucional de la Fundación Paraguaya, lo que permitiría su uso por distintos actores interesados en consultar información del \textit{Semáforo de la Pobreza}.
+
+% --------------------------------------------------
+\section{Planteamiento del problema}\label{sec:planteamiento}
+
+El \textit{Semáforo de la Pobreza} ha generado una base de conocimientos amplia y heterogénea, compuesta por información institucional, documentación metodológica sobre sus indicadores y funcionamiento, así como recursos prácticos, como el Banco de Soluciones, orientados a acompañar a personas, familias y comunidades en la mejora de su calidad de vida. Esta base puede ser utilizada por diversos actores, incluidos familias participantes, facilitadores, coordinadores y organizaciones implementadoras.
+
+Sin embargo, a partir del relevamiento realizado para este trabajo, se observa que los materiales disponibles para la construcción del corpus se encuentran distribuidos en múltiples fuentes y formatos, sin una estructura consolidada que facilite su procesamiento automatizado. La diversidad de contenidos y las distintas necesidades de información de los actores involucrados dificultan la localización y comprensión de los recursos disponibles, especialmente para quienes no cuentan con conocimiento previo sobre la metodología o sobre la forma en que se organiza la información del \textit{Semáforo de la Pobreza}. En consecuencia, estas limitaciones reducen la capacidad de aprovechar plenamente el valor potencial del conocimiento disponible.
+
+En este escenario, se identifica la oportunidad de implementar una solución que permita estructurar la base de conocimientos y habilitar un acceso más intuitivo, flexible y contextualizado. Los sistemas de búsqueda convencionales pueden resultar limitados para este propósito, ya que, cuando se basan principalmente en coincidencias léxicas, dependen de la formulación de consultas precisas y del uso de términos similares a los empleados en la documentación. En contraste, la búsqueda semántica permite recuperar información considerando la similitud conceptual entre la consulta y los documentos, en lugar de depender únicamente de coincidencias léxicas \cite{farivar2025semantic_search}.
+
+En este contexto, los sistemas basados en RAG se presentan como una alternativa pertinente, al combinar mecanismos de recuperación de información con modelos generativos capaces de producir respuestas en lenguaje natural fundamentadas en documentos relevantes \cite{Lewis2020RAG}. No obstante, su desempeño puede verse afectado por decisiones de diseño asociadas a la indexación y recuperación de información, entre ellas la selección del modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres \cite{gao2023retrieval, barnett2024seven}. Por ello, resulta necesario examinar cómo estas decisiones inciden en el comportamiento del sistema dentro de un corpus institucional heterogéneo y en un contexto de implementación local.
+
+En consecuencia, el problema de investigación se centra en responder las siguientes preguntas:
+
+\begin{itemize}
+
+\item ¿Cómo diseñar e implementar un proceso de ingesta y estructuración de fuentes heterogéneas del \textit{Semáforo de la Pobreza} que permita su uso en un sistema RAG?
+
+\item ¿Cómo diseñar e implementar un \textit{pipeline} basado en RAG que permita recuperar información relevante y generar respuestas contextualizadas?
+
+\item ¿Cómo influyen las variaciones en el modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres en el desempeño del sistema?
+
+\item ¿Qué configuración del sistema presenta mejor desempeño, considerando métricas automáticas de recuperación y generación, así como evaluación humana por expertos del dominio?
+
+\item ¿Qué arquitectura permite implementar el agente conversacional en un entorno de ejecución local accesible mediante una interfaz web?
+
+\end{itemize}
+
+\section{Objetivos}\label{sec:objetivos}
+
+\subsection{Objetivo general}
+Diseñar, implementar y evaluar un agente conversacional basado en Generación Aumentada por Recuperación (RAG) aplicado a la base de conocimientos del \textit{Semáforo de la Pobreza} de la Fundación Paraguaya, validando el desempeño del modelo ante variaciones del modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres.
+
+\subsection{Objetivos específicos}
+
+\begin{itemize}
+
+\item Construir una base de conocimientos estructurada del \textit{Semáforo de la Pobreza} a partir de fuentes heterogéneas.
+
+\item Diseñar e implementar un pipeline basado en RAG que permita la recuperación de información relevante y la generación de respuestas contextualizadas.
+
+\item Evaluar el desempeño del agente realizando variaciones del modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres, con métricas automáticas de recuperación de información y generación de textos.
+
+\item Determinar la configuración más adecuada del sistema mediante las métricas automáticas y la evaluación humana por expertos del dominio.
+
+\item Implementar el agente conversacional en un entorno de ejecución local accesible mediante una interfaz web.
+
+\end{itemize}
+
+% --------------------------------------------------
+\section{Resultados esperados}
+
+Se espera obtener los siguientes resultados:
+
+\begin{itemize}
+
+\item Un corpus documental del \textit{Semáforo de la Pobreza}, construido a partir de fuentes heterogéneas, procesado e indexado en una base vectorial para su utilización en un sistema basado en Generación Aumentada por Recuperación (RAG).
+
+\item Un \textit{pipeline} RAG implementado para recuperar información desde la base de conocimientos y generar respuestas en lenguaje natural a partir del contexto recuperado.
+
+\item Un conjunto de resultados de evaluación obtenidos a partir de la comparación de configuraciones que varían el modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres, utilizando métricas automáticas de recuperación y generación.
+
+\item Una valoración complementaria del sistema realizada por expertos del dominio, orientada a evaluar la utilidad y adecuación de las respuestas generadas en el contexto del \textit{Semáforo de la Pobreza}.
+
+\item La identificación de una configuración con desempeño favorable para el contexto de estudio, considerando tanto las métricas automáticas como la evaluación humana.
+
+\item Un agente conversacional basado en RAG, implementado en un entorno de ejecución local y accesible mediante una interfaz web.
+
+\end{itemize}
+
+% --------------------------------------------------
+\section{Aportación científica}
+
+La aportación científica de este trabajo se expresa en cuatro contribuciones principales:
+
+\begin{itemize}
+
+\item La aplicación de un enfoque basado en Generación Aumentada por Recuperación (RAG) a una base de conocimientos institucional del ámbito de la pobreza, compuesta por fuentes heterogéneas y documentos reales del \textit{Semáforo de la Pobreza}. Esto permite explorar el uso de RAG en un dominio social con necesidades concretas de acceso y organización del conocimiento.
+
+\item El diseño e implementación de un \textit{pipeline} RAG en entorno local, que integra la estructuración de la base de conocimientos, la recuperación semántica y la generación de respuestas sobre un corpus institucional heterogéneo.
+
+\item Un esquema de evaluación comparativa de configuraciones del sistema, centrado en variables de diseño relevantes para RAG, como el modelo de \textit{embeddings}, el tamaño de los \textit{chunks} y el solapamiento de caracteres, con el fin de examinar su relación con el desempeño del agente conversacional.
+
+\item Una evaluación mixta del agente conversacional, que combina métricas automáticas orientadas a sistemas RAG con evaluación humana por expertos del dominio, permitiendo contrastar el desempeño técnico del sistema con la utilidad y adecuación de sus respuestas en el contexto institucional.
+
+\end{itemize}
+
+% --------------------------------------------------
+\section{Metodología}\label{sec:metodologia}
+
+La metodología adoptada en este trabajo es de carácter aplicado-experimental y se orienta al diseño, implementación y evaluación de un sistema basado en Generación Aumentada por Recuperación (RAG) aplicado a la base documental del \textit{Semáforo de la Pobreza}. El corpus utilizado está compuesto por 18 documentos únicos provenientes de fuentes heterogéneas: 15 archivos PDF, 2 archivos Markdown y 1 archivo CSV.
+
+La base de conocimientos incluye manuales metodológicos, guías de implementación y adaptación, fichas técnicas, presentaciones institucionales, reportes, estudios de caso, análisis de encuestas y un banco estructurado de soluciones. En conjunto, estos materiales describen la metodología del Semáforo, la estructura de dimensiones e indicadores, criterios de medición, experiencias de implementación en comunidades y empresas, resultados de investigación aplicada, recomendaciones de intervención y estadísticas descriptivas derivadas de encuestas.
+
+En términos de contenido, los manuales y guías explican la lógica metodológica, los pasos operativos y el uso de facilitadores y soluciones; las fichas técnicas y documentos de indicadores detallan variables, definiciones y criterios de clasificación; los estudios, reportes e informes de investigación documentan resultados, aprendizajes e impactos observados; el archivo CSV reúne 1.135 registros de soluciones asociadas a dimensiones e indicadores; y los dos archivos Markdown contienen análisis textuales de encuestas y estadísticas descriptivas del Semáforo en Paraguay.
+
+El corpus completo reúne 432.657 palabras. El tamaño promedio es de 24.036,5 palabras por documento, con una mediana de 9.527 palabras. Los 15 PDF concentran 184.098 palabras distribuidas en 644 páginas, con un promedio de 42,93 páginas por archivo PDF. Por su parte, el CSV aporta 243.928 palabras y los dos archivos Markdown aportan en conjunto 4.631 palabras.
+
+Para su incorporación al \textit{pipeline} RAG, los documentos se procesan según su formato original: los archivos PDF se convierten en representaciones textuales en texto plano y Markdown, los archivos Markdown se incorporan directamente como fuentes textuales, y el CSV se transforma a texto estructurado por registro. Posteriormente, los textos se segmentan en \textit{chunks} de distintos tamaños, con su correspondiente solapamiento de caracteres, y se vectorizan mediante múltiples modelos de \textit{embeddings}.
+
+El sistema implementa un \textit{pipeline} basado en RAG, compuesto por las siguientes etapas:
+
+\begin{itemize}
+
+\item Transformación de la consulta del usuario en una representación vectorial mediante un modelo de \textit{embeddings}.
+
+\item Recuperación de los \textit{chunks} más relevantes a partir de una base vectorial, utilizando similitud del coseno para medir la cercanía semántica entre el vector de la consulta y los vectores de los \textit{chunks} almacenados.
+
+\item Selección de los \textit{chunks} más similares, definidos por el parámetro \textit{top-k}, para su uso como contexto.
+
+\item Generación de la respuesta mediante un modelo de lenguaje, condicionada al contexto recuperado.
+
+\end{itemize}
+
+\subsection{Diseño experimental}\label{sec:diseno_experimental}
+
+El diseño experimental contempla la evaluación de múltiples configuraciones del sistema RAG mediante la variación de los siguientes componentes:
+
+\begin{itemize}
+\item Modelo de \textit{embeddings}.
+\item Tamaño de los \textit{chunks}.
+\item Solapamiento de caracteres asociado a cada tamaño de \textit{chunks}.
+\end{itemize}
+
+A partir de la combinación de estos elementos, se define un conjunto de configuraciones experimentales que se comparan en términos de desempeño mediante métricas automáticas de recuperación de información y generación de texto. En la implementación experimental, el tamaño de los \textit{chunks} y el solapamiento se evalúan de manera conjunta como una misma decisión de segmentación, dado que cada tamaño utiliza un valor fijo de solapamiento. De manera complementaria, las configuraciones seleccionadas son evaluadas por expertos de la Fundación Paraguaya, con el fin de incorporar una valoración humana sobre la utilidad y adecuación de las respuestas generadas.
+
+El proceso de generación, evaluación y análisis de resultados se estructura mediante un \textit{pipeline} metodológico, presentado en la Figura~\ref{fig:flujo_rag}. Este flujo integra tres niveles complementarios: la construcción del sistema, la evaluación técnica de sus configuraciones y la valoración de su utilidad en el contexto institucional.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{diagrama_rag_eval.png}
+\caption{Flujo metodológico del sistema RAG propuesto, incluyendo las etapas de generación de respuestas, evaluación secuencial y análisis de resultados.}
+\label{fig:flujo_rag}
+\end{figure}
+
+\subsection{Evaluación}\label{sec:eval}
+
+La evaluación del sistema se plantea en dos niveles complementarios:
+
+\begin{itemize}
+
+\item \textbf{Evaluación automática:} basada en métricas orientadas a sistemas de RAG, implementadas mediante el framework RAGAS \cite{es2024ragas}, para examinar el desempeño del sistema en recuperación y generación.
+
+\item \textbf{Evaluación humana:} realizada por expertos del dominio a través de una interfaz web, mediante una escala del 1 al 10, donde los valores más altos representan una mayor utilidad y adecuación de la respuesta generada al contexto de la consulta. Esta valoración se complementa con observaciones cualitativas de los evaluadores para identificar fortalezas, limitaciones y posibles respuestas problemáticas.
+
+\end{itemize}
+
+En conjunto, este esquema metodológico busca valorar tanto el funcionamiento técnico del sistema como su aplicabilidad en un entorno institucional real, de acuerdo con los objetivos de construcción del corpus, implementación del \textit{pipeline} RAG, comparación de configuraciones y despliegue del agente conversacional.
+
+Para la evaluación automática se empleó el framework RAGAS \cite{es2024ragas}, que permite analizar el desempeño de un sistema RAG distinguiendo entre recuperación y generación. En este estudio se utilizaron cuatro métricas: \textit{Faithfulness}, para medir si las afirmaciones de la respuesta están respaldadas por el contexto recuperado; \textit{Answer Relevancy}, para valorar en qué medida la respuesta aborda la pregunta formulada; \textit{Context Precision}, para estimar la pertinencia de los \textit{chunks} recuperados respecto de la respuesta correcta; y \textit{Context Recall}, para medir qué proporción de la información de referencia puede atribuirse al contexto recuperado.
+
+La interpretación de estas métricas se realizó mediante una discretización basada en cuartiles estadísticos calculados empíricamente sobre el total de observaciones generadas en el experimento para cada métrica. Este criterio se adoptó ante la ausencia de una escala cualitativa formal en el framework RAGAS \cite{es2024ragas}: sus autores reportan valores numéricos entre 0 y 1, pero no establecen umbrales interpretativos para clasificar el desempeño. La discretización por cuartiles permite identificar niveles de rendimiento relativos a la distribución real de las respuestas del sistema, determinando empíricamente el umbral de rendimiento óptimo ($Q_3$, percentil 75) y el umbral crítico ($Q_1$, percentil 25). La Tabla~\ref{tab:escalas} presenta los umbrales resultantes.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Nivel} & \textbf{Faithfulness} & \textbf{Ans.Rel.} & \textbf{Ctx.Prec.} & \textbf{Ctx.Rec.} \\
+                & ($N=1{,}276$)         & ($N=4{,}028$)     & ($N=547$)          & ($N=4{,}138$) \\
+\hline
+Óptimo $(\geq Q_3)$        & $\geq 0.91$ & $\geq 0.87$ & $\geq 0.94$ & $\geq 0.33$ \\
+Bueno $[Q_2,\,Q_3)$        & $0.71$--$0.90$ & $0.79$--$0.86$ & $0.50$--$0.93$ & $>0$--$0.32$ \\
+Moderado $[Q_1,\,Q_2)$     & $0.43$--$0.70$ & $0.68$--$0.78$ & $>0$--$0.49$ & ---\rlap{$^{\dagger}$} \\
+Insuficiente $(<Q_1)$      & $< 0.43$ & $< 0.68$ & $= 0$ & $= 0$ \\
+\hline
+\end{tabular}
+\caption{Escala de interpretación de métricas RAGAS basada en cuartiles empíricos del experimento.
+$^\dagger$~En \textit{Context Recall}, $Q_1 = Q_2 = 0$ (el 67{,}1\,\% de las observaciones son exactamente 0),
+por lo que la categoría \textit{Moderado} no tiene rango definido y se omite; esta distribución
+bimodal constituye en sí misma un hallazgo sobre la dificultad de recuperación completa del sistema.}
+\label{tab:escalas}
+\end{table}
+
+La Figura~\ref{fig:eval_humana} muestra la interfaz utilizada para la evaluación humana del sistema.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{evaluacion_ui.jpeg}
+\caption{Interfaz web utilizada para la evaluación humana de las respuestas generadas por el sistema. Se presentan la pregunta, la respuesta de referencia, la respuesta generada y las métricas automáticas, junto con un mecanismo de valoración por parte del evaluador.}
+\label{fig:eval_humana}
+\end{figure}
+
+%-------------------------Implementacion------------
+\section{Estado actual de la implementación}
+
+\subsection{Avance de construcción del corpus y del sistema}
+
+La propuesta ya cuenta con un avance funcional que permite verificar la factibilidad técnica del enfoque. El corpus inicial está compuesto por 18 documentos únicos provenientes de fuentes heterogéneas: 15 archivos PDF, 2 archivos Markdown y 1 archivo CSV. Estos materiales incluyen manuales metodológicos, guías de implementación, fichas técnicas, presentaciones institucionales, reportes, estudios de caso, análisis de encuestas y un banco estructurado de soluciones.
+
+Los documentos fueron procesados con estrategias diferenciadas según su formato. Los PDF se convirtieron con Docling\footnote{\url{https://github.com/docling-project/docling}}, preservando en lo posible la estructura del contenido en Markdown y texto plano; los archivos Markdown se incorporaron directamente como fuentes textuales; y el CSV fue transformado a texto estructurado mediante pandas\footnote{\url{https://pandas.pydata.org/}}. A partir de este procesamiento se construyó una base vectorial en PostgreSQL/pgvector, organizada para comparar distintas configuraciones del \textit{pipeline} RAG.
+
+\subsection{Recursos de evaluación ya disponibles}
+
+Como parte del avance del proyecto, el equipo del \textit{Semáforo de la Pobreza} elaboró un documento con 110 preguntas y sus respuestas de referencia. De este conjunto, 30 preguntas fueron seleccionadas para la fase experimental actual, por corresponder a documentos ya incorporados al corpus. Esta base inicial permite realizar una evaluación controlada del sistema y deja preparado un conjunto adicional de preguntas para fases posteriores, cuando el corpus sea ampliado.
+
+Sobre esta base se ejecutó un primer espacio experimental con combinaciones de modelos generativos, modelos de \textit{embeddings} y tamaños de \textit{chunks}. La Tabla~\ref{tab:modelos} resume los componentes principales considerados hasta el momento.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Componente} & \textbf{Valores evaluados} & \textbf{Parámetros fijos} \\
+\hline
+LLM                & qwen3:8b, gpt-oss:20b,       & Temperatura de generación: 0$^{a}$ \\
+& llama3.2:3b, llama3.2:latest & Fragmentos recuperados por consulta: 8$^{b}$ \\
+\hline
+Embeddings         & bge-m3 (1024 dims)           & Motor de inferencia: Ollama local \\
+& mxbai-embed-large (1024)     & Base de datos vectorial: PostgreSQL/pgvector \\
+& all-minilm (384)             & Índice de búsqueda aproximada: IVFFlat$^{c}$ \\
+& nomic-embed-text (768)       & (lists = 113, métrica: coseno) \\
+& snowflake-arctic-embed (1024) & \\
+\hline
+Chunk size         & small: 512 caracteres, overlap 64 caracteres  & Procesamiento de documentos: \\
+& medium: 1024 caracteres, overlap 128 caracteres & Docling $\rightarrow$ Markdown \\
+& large: 2048 caracteres, overlap 256 caracteres & \\
+\hline
+Juez local         & gpt-oss:20b + bge-m3         & Answer Relevancy + Context Recall \\
+Juez externo       & gpt-4o-mini + text-embedding-3-small & Faithfulness + Context Precision \\
+\hline
+\end{tabular}
+\caption{Componentes del experimento de evaluación RAG}
+\label{tab:modelos}
+\end{table}
+
+\noindent\textbf{Notas sobre los parámetros fijos:}
+
+\medskip
+\noindent $^{a}$\textbf{Temperatura de generación = 0.} La temperatura es un parámetro que controla el grado de aleatoriedad en las respuestas de un modelo de lenguaje. En este estudio se fijó en 0 para reducir la variabilidad entre ejecuciones y favorecer la comparabilidad entre configuraciones.
+
+\medskip
+\noindent $^{b}$\textbf{\textit{Chunks} recuperados por consulta = 8.} Cuando el usuario formula una pregunta, el sistema la convierte en un vector numérico mediante el modelo de \textit{embeddings} y busca en la base de datos los \textit{chunks} cuyo vector es más cercano al de la pregunta, medido por distancia coseno. El parámetro 8 indica cuántos \textit{chunks} se toman como contexto para que el LLM genere su respuesta en todas las combinaciones evaluadas. Este valor se adoptó como una decisión de diseño para mantener constante la cantidad de contexto recuperado entre configuraciones y no fue variado como factor experimental, lo que constituye una limitación del estudio: su efecto independiente no fue medido.
+
+\medskip
+\noindent $^{c}$\textbf{Índice IVFFlat.} Para encontrar los 8 \textit{chunks} más similares a una consulta, una búsqueda exacta requeriría calcular la distancia entre el vector de la consulta y todos los vectores almacenados. IVFFlat (\textit{Inverted File Flat}) es un tipo de índice de búsqueda aproximada que organiza el espacio vectorial en listas durante la indexación. Al momento de una consulta, el sistema busca en las listas más cercanas en lugar de comparar contra todos los vectores, reduciendo el tiempo de respuesta. El parámetro \texttt{lists = 113} fue calculado automáticamente como la raíz cuadrada del total de \textit{chunks} indexados ($\sqrt{12.855} \approx 113$), siguiendo la recomendación de la documentación de pgvector para balancear velocidad y precisión. El índice se creó después de cargar todos los datos, ya que IVFFlat requiere conocer la distribución de los vectores para construir las listas de búsqueda.
+
+% ── DER ──────────────────────────────────────────────────────────────────────
+\subsection*{Esquema de la base de datos (DER)}
+
+La base de datos experimental se organiza en dos grupos de tablas. El primero, denominado \textbf{corpus indexado}, gestiona los documentos fuente, su segmentación en \textit{chunks} y las representaciones vectoriales generadas. El segundo, denominado \textbf{ciclo de evaluación}, registra las ejecuciones del agente y los puntajes automáticos obtenidos. Ambos grupos se presentan a continuación de forma separada.
+
+\tikzset{
+  tabla/.style={rectangle, draw=black, thick, fill=blue!8,
+                text width=3.8cm, align=left, font=\small,
+                inner sep=4pt, rounded corners=2pt},
+  rel/.style={-{Latex[length=3pt]}, thick, gray}
+}
+
+% ── Grupo 1: Corpus indexado ─────────────────────────────────────────────────
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.1cm and 1.6cm]
+
+\node[tabla] (docs) {
+  \textbf{documents}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  filename\\
+  file\_type\\
+  file\_path
+};
+
+\node[tabla, below=of docs] (cc) {
+  \textbf{chunk\_configs}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  name (small/medium/large)\\
+  chunk\_size\\
+  overlap
+};
+
+\node[tabla, right=of docs, yshift=-1.2cm] (chunks) {
+  \textbf{chunks}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  document\_id $\rightarrow$ documents\\
+  chunk\_config\_id $\rightarrow$ chunk\_configs\\
+  format (markdown / plaintext)\\
+  chunk\_index\\
+  chunk\_text
+};
+
+\node[tabla, below=of chunks] (emtab) {
+  \textbf{embeddings\_*} (×5)\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  chunk\_id $\rightarrow$ chunks\\
+  embedding\_model\_id\\
+  embedding vector(N)
+};
+
+\node[tabla, below=of emtab] (em) {
+  \textbf{embedding\_models}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  model\_name\\
+  table\_name\\
+  dimensions
+};
+
+\draw[rel] (docs.east) -- ++(0.3,0) |- (chunks.west);
+\draw[rel] (cc.east)   -- ++(0.3,0) |- (chunks.west);
+\draw[rel] (chunks.south) -- (emtab.north);
+\draw[rel] (em.north)     -- (emtab.south);
+
+\begin{scope}[on background layer]
+  \node[draw=blue!40, fill=blue!4, thick, dashed, rounded corners,
+        fit=(docs)(cc)(chunks)(emtab)(em), inner sep=8pt,
+        label={[blue!60, font=\small\bfseries]above:Corpus indexado}] {};
+\end{scope}
+
+\end{tikzpicture}
+\caption{Diagrama Entidad-Relación: grupo \textit{Corpus indexado}}
+\label{fig:der-corpus}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Tabla \texttt{documents}:} Almacena los archivos fuente del corpus con sus metadatos básicos: nombre del archivo, tipo de formato (\texttt{pdf}, \texttt{md}, \texttt{csv}) y ruta de acceso en el sistema.
+  \item \textbf{Tabla \texttt{chunk\_configs}:} Registra las configuraciones de segmentación utilizadas en el experimento, incluyendo el nombre de la configuración (\textit{small}, \textit{medium}, \textit{large}), el tamaño del \textit{chunk} en caracteres y el solapamiento (\textit{overlap}) aplicado.
+  \item \textbf{Tabla \texttt{chunks}:} Almacena los fragmentos textuales generados a partir de cada documento según la configuración de segmentación correspondiente. Registra el formato del texto (Markdown o texto plano), el índice de orden dentro del documento y el contenido del fragmento.
+  \item \textbf{Tabla \texttt{embedding\_models}:} Registra los modelos de \textit{embeddings} disponibles en el sistema, con su nombre identificador, el nombre de la tabla vectorial asociada y la dimensionalidad de los vectores que produce.
+  \item \textbf{Tablas \texttt{embeddings\_*} (×5):} Conjunto de cinco tablas —una por cada modelo de \textit{embeddings}— que almacenan las representaciones vectoriales de los \textit{chunks}. Cada registro vincula un \textit{chunk} con su vector de dimensión $N$ generado por el modelo correspondiente.
+\end{itemize}
+
+% ── Grupo 2: Ciclo de evaluación ─────────────────────────────────────────────
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.1cm]
+
+\node[tabla, text width=5.5cm] (kb) {
+  \textbf{knowledge\_base}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  question\\
+  answer (ground truth)\\
+  category\\
+  phase (fase\_1 / futura)
+};
+
+\node[tabla, text width=5.5cm, below=of kb] (llm) {
+  \textbf{llm\_models}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  model\_name
+};
+
+\node[tabla, text width=5.5cm, below=of llm] (er) {
+  \textbf{eval\_runs}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  llm\_model\_id $\rightarrow$ llm\_models\\
+  embedding\_model\_id\\
+  chunk\_config\_id\\
+  knowledge\_base\_id\\
+  retrieved\_contexts (JSONB)\\
+  k\_retrieved\\
+  generated\_answer\\
+  retrieval\_time\_ms\\
+  generation\_time\_ms
+};
+
+\node[tabla, text width=5.5cm, below=of er] (es) {
+  \textbf{eval\_scores}\\
+  \rule{\linewidth}{0.4pt}\\
+  \underline{id}\\
+  eval\_run\_id $\rightarrow$ eval\_runs\\
+  faithfulness\\
+  answer\_relevancy\\
+  context\_precision\\
+  context\_recall\\
+  judge\_llm
+};
+
+\draw[rel] (kb.south)  -- (llm.north);
+\draw[rel] (llm.south) -- (er.north);
+\draw[rel] (er.south)  -- (es.north);
+
+\begin{scope}[on background layer]
+  \node[draw=orange!50, fill=orange!4, thick, dashed, rounded corners,
+        fit=(kb)(llm)(er)(es), inner sep=8pt,
+        label={[orange!70, font=\small\bfseries]above:Ciclo de evaluación}] {};
+\end{scope}
+
+\end{tikzpicture}
+\caption{Diagrama Entidad-Relación: grupo \textit{Ciclo de evaluación}}
+\label{fig:der-eval}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Tabla \texttt{knowledge\_base}:} Reúne las preguntas y respuestas de referencia (\textit{ground truth}) elaboradas para la evaluación del sistema. Cada registro incluye la pregunta, la respuesta esperada, una categoría temática y la fase experimental a la que pertenece (\textit{fase\_1} o fases futuras).
+  \item \textbf{Tabla \texttt{llm\_models}:} Registra los modelos de lenguaje generativos evaluados en el experimento, identificados por su nombre.
+  \item \textbf{Tabla \texttt{eval\_runs}:} Almacena cada ejecución de evaluación, registrando la combinación de modelo generativo, modelo de \textit{embeddings} y configuración de \textit{chunks} utilizada, junto con la pregunta de referencia correspondiente. Incluye los contextos recuperados en formato JSONB, la cantidad de fragmentos recuperados, la respuesta generada por el agente y los tiempos de recuperación y generación.
+  \item \textbf{Tabla \texttt{eval\_scores}:} Concentra los puntajes automáticos calculados para cada ejecución: \textit{faithfulness}, \textit{answer relevancy}, \textit{context precision} y \textit{context recall}, junto con el identificador del modelo juez que los calculó.
+\end{itemize}
+
+%-----------------------------Resultados---------------
+\section{Avances preliminares}
+
+Como parte del trabajo ya desarrollado, se realizaron evaluaciones preliminares del \textit{pipeline} RAG con el objetivo de verificar la viabilidad del enfoque y obtener una primera señal sobre el efecto de las decisiones de configuración. En esta etapa se evaluaron 60 combinaciones derivadas de 4 modelos LLM, 5 modelos de \textit{embeddings} y 3 tamaños de \textit{chunks}, utilizando 30 preguntas de referencia del conjunto elaborado por el equipo del proyecto.
+
+\subsection{Resultados globales}
+
+La Tabla~\ref{tab:resultados-globales} presenta los valores promedio de las cuatro métricas calculadas sobre las ejecuciones válidas de esta fase preliminar.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Promedio global} & \textbf{Nivel (véase Tabla~\ref{tab:escalas})} \\
+\hline
+Faithfulness        & 0.6329 & Moderado \\
+Answer Relevancy    & 0.7066 & Moderado \\
+Context Precision   & 0.5424 & Bueno    \\
+Context Recall      & 0.2383 & Bueno    \\
+\hline
+\end{tabular}
+\caption{Resultados promedio globales del sistema RAG en la fase preliminar}
+\label{tab:resultados-globales}
+\end{table}
+
+De acuerdo con la escala de cuartiles definida en la Tabla~\ref{tab:escalas}, el sistema obtiene un nivel \textit{Moderado} en \textit{Faithfulness} y \textit{Answer Relevancy} —ambas métricas se ubican entre $Q_1$ y $Q_2$ de sus respectivas distribuciones— y un nivel \textit{Bueno} en \textit{Context Precision} y \textit{Context Recall}, superando en ambos casos el percentil 50. Estos resultados sugieren que el enfoque es prometedor, aunque la fidelidad y la relevancia de las respuestas generadas representan el principal margen de mejora del sistema.
+
+\subsection{Tendencias observadas}
+
+La Tabla~\ref{tab:embeddings-promedio} resume el desempeño promedio de cada modelo de \textit{embeddings}, agregando todas las combinaciones de modelos LLM y tamaños de \textit{chunks}. Este análisis resulta especialmente útil porque permite identificar qué decisiones de representación semántica parecen más sensibles para el avance del proyecto.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Embedding} & \textbf{Dims} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+bge-m3 & 1024 & 360 & 0.7860 & 0.7616 & 0.7904 & 0.4225 \\
+mxbai-embed-large & 1024 & 359 & 0.6941 & 0.7192 & 0.6519 & 0.3140 \\
+all-minilm & 384 & 360 & 0.6614 & 0.6917 & 0.5794 & 0.2792 \\
+nomic-embed-text & 768 & 359 & 0.5349 & 0.7021 & 0.3796 & 0.1125 \\
+snowflake-arctic-embed & 1024 & 360 & 0.4871 & 0.6559 & 0.3099 & 0.0742 \\
+\hline
+\end{tabular}
+\caption{Resultados promedio por modelos de \textit{embeddings} (AR=Answer Relevancy, CP=Context Precision, CR=Context Recall)}
+\label{tab:embeddings-promedio}
+\end{table}
+
+Los resultados muestran que \texttt{bge-m3} obtiene los mejores valores promedio en todas las métricas, especialmente en \textit{Context Precision} y \textit{Context Recall}. Esta tendencia sugiere que el componente de recuperación merece una atención prioritaria en la siguiente etapa del trabajo. Además, dentro del conjunto evaluado, los \textit{chunks} de tamaño intermedio mostraron un comportamiento más estable que los fragmentos más pequeños.
+
+\subsection{Mejor configuración preliminar}
+
+A partir del análisis comparativo de las configuraciones evaluadas, la mejor puntuación promedio se obtuvo con \textbf{qwen3:8b} como modelo generador, \textbf{bge-m3} como modelo de \textit{embeddings} y \textit{chunks} de tamaño \textbf{medium} (1024 caracteres). La Tabla~\ref{tab:mejor-config} resume los resultados de esta configuración.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Valor} & \textbf{Nivel} \\
+\hline
+Faithfulness        & 0.9035 & Bueno   \\
+Answer Relevancy    & 0.7970 & Bueno   \\
+Context Precision   & 0.8308 & Bueno   \\
+Context Recall      & 0.5057 & Óptimo  \\
+\textbf{Promedio}   & \textbf{0.7658} & \textbf{Bueno} \\
+\hline
+Tiempo recuperación (ms) & 259.5 & -- \\
+Tiempo generación (ms) & 5{,}255.2 & -- \\
+Preguntas respondidas & 30/30 & -- \\
+\hline
+\end{tabular}
+\caption{Resultados de la mejor configuración preliminar: qwen3:8b + bge-m3 + medium (niveles según Tabla~\ref{tab:escalas})}
+\label{tab:mejor-config}
+\end{table}
+
+De acuerdo con la escala de cuartiles de la Tabla~\ref{tab:escalas}, esta configuración alcanza el nivel \textit{Bueno} en \textit{Faithfulness}, \textit{Answer Relevancy} y \textit{Context Precision}, y el nivel \textit{Óptimo} en \textit{Context Recall} —superando el percentil 75 ($Q_3 = 0.33$) de esa métrica—. En comparación con los resultados globales de la Tabla~\ref{tab:resultados-globales}, esta configuración mejora de forma consistente en las cuatro métricas: las métricas de generación avanzan de \textit{Moderado} a \textit{Bueno}, mientras que \textit{Context Recall} alcanza el nivel \textit{Óptimo}, lo que indica que la selección del modelo de \textit{embeddings} y el tamaño de \textit{chunk} tienen un efecto sustantivo en la calidad de recuperación.
+
+\subsection{Visualización de resultados}
+
+La Figura~\ref{fig:scatter} presenta un gráfico de dispersión de las 10 mejores configuraciones, con \textit{Context Recall} en el eje horizontal y \textit{Faithfulness} en el eje vertical. El color de cada punto indica el modelo de \textit{embedding} utilizado. La cruz negra representa el promedio global de las 60 combinaciones. Las líneas punteadas grises marcan los promedios globales de cada métrica e indican el nivel correspondiente según la escala de cuartiles de la Tabla~\ref{tab:escalas}; las líneas de referencia de color señalan los umbrales $Q_3$ (\textit{Óptimo}) para \textit{Context Recall} y $Q_2$ (\textit{Bueno}) para \textit{Faithfulness}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  xlabel={Context Recall},
+  ylabel={Faithfulness},
+  xmin=0.05, xmax=0.60,
+  ymin=0.60, ymax=0.95,
+  xtick={0.1,0.2,0.3,0.4,0.5,0.6},
+  ytick={0.60,0.65,0.70,0.75,0.80,0.85,0.90,0.95},
+  xticklabel style={font=\small},
+  yticklabel style={font=\small},
+  xlabel style={font=\small},
+  ylabel style={font=\small},
+  grid=both,
+  grid style={line width=0.3pt, draw=gray!30},
+  major grid style={line width=0.5pt, draw=gray!50},
+  width=12cm, height=9cm,
+  legend style={at={(1.02,1)}, anchor=north west, font=\small,
+                draw=gray, fill=white, inner sep=4pt},
+  clip=false,
+]
+
+% ── Umbrales de cuartiles ────────────────────────────────────────────────────
+% Q3 Context Recall = 0.33 → umbral Óptimo
+\addplot[solid, teal, thick, forget plot]
+  coordinates {(0.33,0.60) (0.33,0.95)};
+\node[font=\tiny, teal, anchor=north, rotate=90] at (axis cs:0.325,0.625)
+  {$Q_3$ CR = 0.33 (\textit{Óptimo})};
+
+% Q2 Faithfulness = 0.71 → umbral Bueno
+\addplot[solid, orange!80!black, thick, forget plot]
+  coordinates {(0.05,0.71) (0.60,0.71)};
+\node[font=\tiny, orange!80!black, anchor=west] at (axis cs:0.055,0.715)
+  {$Q_2$ F = 0.71 (\textit{Bueno})};
+
+% ── Líneas de referencia (promedio global) ───────────────────────────────────
+\addplot[dashed, gray!70, thick, forget plot]
+  coordinates {(0.2383,0.60) (0.2383,0.95)};
+\addplot[dashed, gray!70, thick, forget plot]
+  coordinates {(0.05,0.6329) (0.60,0.6329)};
+\node[font=\tiny, gray, anchor=west] at (axis cs:0.242,0.615)
+  {CR prom.=0.238 (\textit{Bueno})};
+\node[font=\tiny, gray, anchor=south] at (axis cs:0.08,0.638)
+  {F prom.=0.633 (\textit{Moderado})};
+
+% ── bge-m3 (azul) ────────────────────────────────────────────────────────────
+\addplot[only marks, mark=*, blue, mark size=4pt] coordinates {
+  (0.5057, 0.9035)
+  (0.5057, 0.8119)
+  (0.4741, 0.8346)
+  (0.5343, 0.7893)
+  (0.5225, 0.7771)
+  (0.5271, 0.7835)
+  (0.4879, 0.7882)
+  (0.4805, 0.7343)
+};
+\addlegendentry{bge-m3}
+
+% ── mxbai-embed-large (rojo) ─────────────────────────────────────────────────
+\addplot[only marks, mark=square*, red!80!black, mark size=4pt] coordinates {
+  (0.3990, 0.7611)
+};
+\addlegendentry{mxbai-embed-large}
+
+% ── all-minilm (verde) ───────────────────────────────────────────────────────
+\addplot[only marks, mark=triangle*, green!60!black, mark size=5pt] coordinates {
+  (0.4602, 0.6936)
+};
+\addlegendentry{all-minilm}
+
+% ── Promedio global (cruz) ───────────────────────────────────────────────────
+\addplot[only marks, mark=x, black, mark size=7pt, line width=2pt] coordinates {
+  (0.2383, 0.6329)
+};
+\addlegendentry{Promedio global}
+
+% ── Etiquetas de puntos clave ────────────────────────────────────────────────
+\node[font=\tiny, blue, anchor=south west] at (axis cs:0.508,0.906)
+  {\#1 qwen3:8b};
+\node[font=\tiny, blue, anchor=north west] at (axis cs:0.508,0.810)
+  {\#2 gpt-oss:20b};
+\node[font=\tiny, blue, anchor=south east] at (axis cs:0.472,0.836)
+  {\#3 qwen3:8b};
+\node[font=\tiny, red!80!black, anchor=north east] at (axis cs:0.397,0.759)
+  {\#9 mxbai};
+\node[font=\tiny, green!60!black, anchor=north west] at (axis cs:0.462,0.691)
+  {\#10 all-minilm};
+
+\end{axis}
+\end{tikzpicture}
+\caption{Dispersión de las 10 mejores configuraciones: \textit{Context Recall} vs.\ \textit{Faithfulness}.
+  El color indica el modelo de \textit{embedding}. La cruz negra es el promedio global (60 combinaciones).
+  Las líneas punteadas grises marcan los promedios globales; las líneas de color señalan
+  $Q_3$ de \textit{Context Recall} (teal) y $Q_2$ de \textit{Faithfulness} (naranja),
+  umbrales de la escala de cuartiles (Tabla~\ref{tab:escalas}).}
+\label{fig:scatter}
+\end{figure}
+
+El gráfico permite observar tres patrones en relación con la escala de cuartiles definida en la Tabla~\ref{tab:escalas}: (1) las 8 configuraciones con \texttt{bge-m3} se agrupan en la región superior-derecha, todas con \textit{Context Recall} en nivel \textit{Óptimo} ($\geq Q_3 = 0.33$) y \textit{Faithfulness} en nivel \textit{Bueno} ($\geq Q_2 = 0.71$); (2) la configuración con \texttt{mxbai-embed-large} (\#9) también alcanza el nivel \textit{Óptimo} en \textit{Context Recall}, aunque con menor \textit{Faithfulness} que el grupo \texttt{bge-m3}; (3) la configuración con \texttt{all-minilm} (\#10) alcanza el nivel \textit{Óptimo} en \textit{Context Recall}, pero se ubica en nivel \textit{Moderado} en \textit{Faithfulness}, por debajo del umbral $Q_2 = 0.71$. En contraste, la cruz que representa el promedio global (CR=0.238, F=0.633) se ubica en nivel \textit{Bueno} en \textit{Context Recall} y \textit{Moderado} en \textit{Faithfulness}, evidenciando que las configuraciones con \texttt{nomic-embed-text} y \texttt{snowflake-arctic-embed} arrastran considerablemente las métricas promedio.
+
+\subsection{Implicancias para la siguiente etapa}
+
+Los avances obtenidos hasta aquí permiten sostener que la propuesta es viable en términos técnicos y metodológicos, pero también delimitan con mayor claridad las prioridades de la siguiente fase. En particular, los resultados sugieren que:
+
+\begin{itemize}
+\item La selección del modelo de \textit{embeddings} es un factor crítico para el desempeño del sistema.
+\item La recuperación sigue siendo el principal cuello de botella del \textit{pipeline} RAG.
+\item La estrategia de segmentación del corpus debe seguir afinándose, especialmente en la relación entre tamaño de \textit{chunk} y cobertura de contexto.
+\item La evaluación humana seguirá siendo necesaria para contrastar el desempeño técnico con la utilidad real de las respuestas.
+\end{itemize}
+
+\subsection{Interfaz para evaluación humana}
+
+Como parte del avance del proyecto, también se desarrolló una herramienta interna para apoyar la evaluación por expertos del dominio. Esta interfaz permite visualizar la pregunta, la respuesta de referencia y la respuesta generada por el sistema, además de registrar observaciones cualitativas y valoraciones sobre la utilidad de la respuesta.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{image.png}
+    \caption{Herramienta web de apoyo a la evaluación humana de respuestas generadas.}
+    \label{fig:respuestas}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{protocolo latest/image.png}
+    \caption{Vista de la interfaz utilizada para registrar la valoración de expertos.}
+    \label{fig:pantalla-evaluacion}
+\end{figure}
+
+% ============================================================
+\section{Componentes de software implementados}\label{sec:software}
+% ============================================================
+
+Como parte del avance del proyecto, se han desarrollado e integrado los siguientes componentes de software que conforman la arquitectura funcional del sistema. El código fuente de todos los componentes se encuentra disponible en el repositorio público del proyecto.\footnote{\url{https://github.com/NelbaBarreto/poverty-stoplight}}
+
+\begin{description}
+
+  \item[\textbf{Administrador UI.}]
+  Interfaz web de administración que permite gestionar la base de conocimientos, supervisar las configuraciones del agente, visualizar los resultados de evaluación automática y acceder al historial de ejecuciones del \textit{pipeline} RAG. Está orientada al equipo técnico responsable del mantenimiento y ajuste del sistema.
+
+  \item[\textbf{Web Chat de Pruebas.}]
+  Interfaz conversacional de pruebas que permite interactuar con el agente en tiempo real, formulando consultas en lenguaje natural y visualizando las respuestas generadas junto con los \textit{chunks} recuperados como contexto. Fue utilizada durante la fase de desarrollo para verificar el comportamiento del sistema ante distintas configuraciones.
+
+  \item[\textbf{API WebChat.}]
+  Servicio \textit{backend} que expone los endpoints necesarios para la comunicación entre las interfaces de usuario y el \textit{pipeline} RAG. Gestiona la recepción de consultas, la recuperación semántica desde la base vectorial, la generación de respuestas mediante el modelo de lenguaje seleccionado y el retorno estructurado de resultados.
+
+  \item[\textbf{Integración del Web Chat en el sitio Rosa de la Fundación Paraguaya.}]
+  El agente conversacional fue integrado en el sitio web institucional de la Fundación Paraguaya denominado \textit{Rosa}, permitiendo que el sistema quede embebido en el entorno digital ya utilizado por la organización. Esta integración constituye el despliegue en producción del agente y valida la viabilidad de la propuesta en un entorno institucional real.
+
+\end{description}
+
+% ============================================================
+\section{Calendario de actividades}\label{sec:calendario}
+% ============================================================
+
+El desarrollo del trabajo se organiza en las siguientes etapas, considerando que el proyecto se encuentra actualmente en una fase intermedia con resultados preliminares obtenidos:
+
+\textbf{Etapa 1: Revisión bibliográfica y diseño conceptual.}\\
+Se realizó el estudio del estado del arte en sistemas RAG y la definición de la arquitectura general del sistema.
+
+\textbf{Etapa 2: Construcción de la base de conocimientos y desarrollo del sistema.}\\
+Se implementó el proceso de ingesta y estructuración de la información, así como el pipeline RAG para la recuperación y generación de respuestas.
+
+\textbf{Etapa 3: Evaluación inicial y resultados preliminares.}\\
+Se llevaron a cabo las primeras evaluaciones del sistema, obteniendo resultados preliminares sobre distintas configuraciones.
+
+\textbf{Etapa 4: Iteración y ajuste del sistema.}\\
+Se realizará el refinamiento del sistema a partir de la retroalimentación de expertos del dominio.
+
+\textbf{Etapa 5: Evaluación final y análisis de resultados.}\\
+Se ejecutarán experimentos adicionales para validar los resultados y consolidar las métricas obtenidas.
+
+\textbf{Etapa 6: Documentación y redacción final.}\\
+Se llevará a cabo la redacción del documento final.
+
+Las etapas del proyecto y su distribución temporal se representan en la Figura~\ref{fig:cronograma}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{protocolo latest/gantt.png}
+    \caption{Cronograma del proyecto.}
+    \label{fig:cronograma}
+\end{figure}
+
+\bibliographystyle{plain}
+\bibliography{protocolo}
+
+\clearpage
+% Visto bueno
+\vfill
+\Large{Vo. Bo.}
+\\    \\    \\    \\    \\  \\    \\    \\    \\    \\   
+ 
+\begin{tabular}{@{}p{6cm}p{7cm}@{}}
+    \Large{Firma del Alumno:} & \hrulefill \\
+                         & \large{Alumno} \par \\
+    \\    \\    \\    \\    \\    
+    \Large{Directora de tesis:} & \hrulefill \\
+                         & \large{Dra. Helena Gómez Adorno} \\
+    \Large{} & \\
+                         & \large{Investigadora Titular A} \\
+    \Large{} &  \\
+                         & \large{IIMAS-UNAM} \\
+    
+\end{tabular}
+
+
+\end{document}
