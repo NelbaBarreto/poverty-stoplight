@@ -62,12 +62,13 @@ log = logging.getLogger("webchat.api")
 LLM_BACKEND     = os.getenv("LLM_BACKEND",    "vllm")   # "vllm" or "ollama"
 VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
 _DEFAULT_MODEL  = {
     "vllm":   "Qwen/Qwen3-8B",
     "ollama": "qwen3:8b",
 }
-LLM_MODEL       = os.getenv("LLM_MODEL", _DEFAULT_MODEL.get(LLM_BACKEND, "Qwen/Qwen2.5-7B-Instruct"))
+LLM_MODEL       = os.getenv("LLM_MODEL", _DEFAULT_MODEL.get(LLM_BACKEND, "Qwen/Qwen3-8B"))
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
@@ -81,12 +82,15 @@ def get_llm():
     if _llm is None:
         if LLM_BACKEND == "ollama":
             _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
-                              num_ctx=4096, think=False)
+                              num_ctx=LLM_MAX_TOKENS, think=False)
         else:
+            # enable_thinking=False avoids Qwen3 spending tokens on internal
+            # reasoning (<think> blocks) that eat into the max_tokens budget.
             _llm = ChatOpenAI(model=LLM_MODEL, temperature=0,
                               base_url=f"{VLLM_URL}/v1", api_key="EMPTY",
-                              max_tokens=4096)
-    log.info(f"[llm] backend={LLM_BACKEND} model={LLM_MODEL}")
+                              max_tokens=LLM_MAX_TOKENS,
+                              model_kwargs={"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}})
+    log.info(f"[llm] backend={LLM_BACKEND} model={LLM_MODEL} max_tokens={LLM_MAX_TOKENS}")
     return _llm
 
 # ---------------------------------------------------------------------------
@@ -369,6 +373,7 @@ def health(_: None = Depends(require_token)):
         "embed_model":  EMBED_MODEL,
         "chunk_config": CHUNK_CONFIG,
         "llm_backend":  LLM_BACKEND,
+        "llm_max_tokens": LLM_MAX_TOKENS,
         "vllm_url":     VLLM_URL,
         "ollama_url":   OLLAMA_URL,
     }
