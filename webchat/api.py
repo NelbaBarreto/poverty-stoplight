@@ -13,7 +13,8 @@ Configuration (via .env):
   LLM_MODEL      default: qwen3:8b
   EMBED_MODEL    default: bge-m3
   CHUNK_CONFIG   default: medium
-  VLLM_BASE_URL  default: http://localhost:8800
+  VLLM_BASE_URL  default: http://localhost:8800  (LLM inference only)
+  OLLAMA_BASE_URL default: http://localhost:11434 (embeddings only)
   API_PORT       default: 8000
   ALLOWED_ORIGINS  default: * (CORS)
 """
@@ -60,6 +61,7 @@ LLM_MODEL       = os.getenv("LLM_MODEL",       "qwen3:8b")
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
+OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
 
@@ -223,16 +225,17 @@ def get_history(session_id: str, limit: int = 20) -> list:
 # ---------------------------------------------------------------------------
 
 def get_embedding(query: str) -> list:
+    # Embeddings stay on Ollama — vectors stored in DB were generated with Ollama
+    # and vLLM only serves generative models, not embedding endpoints.
     t0 = time.monotonic()
     resp = requests.post(
-        f"{VLLM_URL}/v1/embeddings",
-        json={"model": EMBED_MODEL, "input": query},
-        headers={"Authorization": "Bearer EMPTY"},
+        f"{OLLAMA_URL}/api/embeddings",
+        json={"model": EMBED_MODEL, "prompt": query},
         timeout=60,
     )
     resp.raise_for_status()
     log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
-    return resp.json()["data"][0]["embedding"]
+    return resp.json()["embedding"]
 
 
 def search_context(query: str, k: int = 8) -> tuple:
@@ -355,6 +358,7 @@ def health(_: None = Depends(require_token)):
         "embed_model":  EMBED_MODEL,
         "chunk_config": CHUNK_CONFIG,
         "vllm_url":     VLLM_URL,
+        "ollama_url":   OLLAMA_URL,
     }
 
 
