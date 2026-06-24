@@ -295,10 +295,9 @@ def search_context(query: str, k: int = RAG_K) -> tuple:
 
 def build_messages(history: list, prompt: str, context: str):
     """Build LangChain message list from DB history + new RAG prompt."""
-    # System message carries instructions + RAG context so the model treats
-    # them as background knowledge, not as part of the user turn.
+    system_prompt = load_system_prompt()
     system_content = (
-        f"{load_system_prompt()}\n\n"
+        f"{system_prompt}\n\n"
         f"## CONTEXTO RELEVANTE:\n\n{context}"
     )
     messages = [SystemMessage(content=system_content)]
@@ -311,6 +310,11 @@ def build_messages(history: list, prompt: str, context: str):
             messages.append(AIMessage(content=msg["content"]))
 
     messages.append(HumanMessage(content=prompt))
+
+    log.debug(f"[prompt] system_prompt ({len(system_prompt)} chars): {system_prompt[:120]}...")
+    log.debug(f"[prompt] context ({len(context)} chars), history_turns={len(history)}, question={prompt[:80]}")
+    log.info(f"[prompt] messages={len(messages)} system={len(system_content)}chars question={len(prompt)}chars")
+
     return messages
 
 
