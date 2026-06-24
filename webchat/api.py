@@ -57,7 +57,7 @@ log = logging.getLogger("webchat.api")
 # Config
 # ---------------------------------------------------------------------------
 
-LLM_MODEL       = os.getenv("LLM_MODEL",       "Qwen/Qwen3-8B")
+LLM_MODEL       = os.getenv("LLM_MODEL",       "Qwen/Qwen2.5-7B-Instruct")
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
