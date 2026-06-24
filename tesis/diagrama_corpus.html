@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>Diseño del Corpus — Semáforo de la Pobreza</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #1a2744;
+    --blue:   #1e40af;
+    --purple: #6d28d9;
+    --teal:   #0f766e;
+    --amber:  #92400e;
+    --g50:    #f8fafc;
+    --g100:   #f1f5f9;
+    --g300:   #cbd5e1;
+    --g500:   #64748b;
+    --sh:     0 4px 18px rgba(0,0,0,.09);
+    --sh2:    0 2px 7px rgba(0,0,0,.06);
+  }
+
+  body {
+    width: 1280px; height: 720px;
+    overflow: hidden;
+    background: var(--g50);
+    font-family: 'DM Sans', sans-serif;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--g300) 1px, transparent 1px),
+      linear-gradient(90deg, var(--g300) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: .18;
+    pointer-events: none;
+  }
+
+  .topbar {
+    height: 5px;
+    background: linear-gradient(90deg, #1a2744 0%, #1e40af 25%, #6d28d9 50%, #0f766e 75%, #b45309 100%);
+    flex-shrink: 0; z-index: 10; position: relative;
+  }
+
+  /* ── header ── */
+  .hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 34px 7px;
+    flex-shrink: 0; z-index: 10; position: relative;
+  }
+  .hdr h1 { font-size: 19px; font-weight: 700; color: var(--navy); letter-spacing: -.3px; }
+  .hdr p  { font-size: 10.5px; color: var(--g500); margin-top: 2px; }
+
+  .badge {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--navy); border-radius: 28px;
+    padding: 5px 15px 5px 9px;
+    box-shadow: 0 2px 10px rgba(26,39,68,.25);
+  }
+  .badge-dot {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #1e40af;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .badge-num  { font-size: 8.5px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #93c5fd; line-height: 1; }
+  .badge-name { font-size: 12.5px; font-weight: 700; color: #fff; line-height: 1.2; }
+
+  /* ── main ── */
+  .main {
+    flex: 1;
+    display: flex; align-items: stretch;
+    padding: 0 26px 8px; gap: 0;
+    position: relative; z-index: 10;
+  }
+
+  /* ── stage card ── */
+  .stage {
+    flex: 1; border-radius: 12px;
+    overflow: hidden; box-shadow: var(--sh);
+    display: flex; flex-direction: column;
+    min-width: 0;
+  }
+  .sh {
+    padding: 9px 11px 8px;
+    display: flex; align-items: center; gap: 7px;
+    flex-shrink: 0;
+  }
+  .sn {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(255,255,255,.22);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    font-family: 'DM Mono', monospace; flex-shrink: 0;
+  }
+  .si { font-size: 15px; }
+  .st { font-size: 11.5px; font-weight: 700; color: #fff; letter-spacing: -.1px; line-height: 1.2; }
+  .ss { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+
+  .s1 .sh { background: var(--navy); }
+  .s2 .sh { background: var(--blue); }
+  .s3 .sh { background: var(--purple); }
+  .s4 .sh { background: var(--teal); }
+  .s5 .sh { background: var(--amber); }
+
+  .sb {
+    flex: 1; padding: 9px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    overflow: hidden;
+  }
+  .s1 .sb { background: #f0f4ff; border: 1px solid #c7d7ff; border-top: none; border-radius: 0 0 12px 12px; }
+  .s2 .sb { background: #eff6ff; border: 1px solid #bfdbfe; border-top: none; border-radius: 0 0 12px 12px; }
+  .s3 .sb { background: #f5f3ff; border: 1px solid #ddd6fe; border-top: none; border-radius: 0 0 12px 12px; }
+  .s4 .sb { background: #f0fdfa; border: 1px solid #99f6e4; border-top: none; border-radius: 0 0 12px 12px; }
+  .s5 .sb { background: #fffbeb; border: 1px solid #fde68a; border-top: none; border-radius: 0 0 12px 12px; }
+
+  /* item row */
+  .it {
+    display: flex; align-items: center; gap: 7px;
+    background: #fff; border-radius: 7px;
+    padding: 6px 8px; box-shadow: var(--sh2);
+    flex-shrink: 0;
+  }
+  .ii { font-size: 13px; flex-shrink: 0; line-height: 1; }
+  .il { font-size: 10.5px; font-weight: 500; color: #1e293b; line-height: 1.3; flex: 1; }
+  .isb { font-size: 9px; color: var(--g500); margin-top: 1px; }
+  .ib {
+    font-size: 9px; font-weight: 600;
+    border-radius: 5px; padding: 2px 5px;
+    flex-shrink: 0; font-family: 'DM Mono', monospace;
+  }
+  .s1 .ib { background: #dbeafe; color: #1d4ed8; }
+  .s2 .ib { background: #e0e7ff; color: #4338ca; }
+  .s3 .ib { background: #ede9fe; color: #6d28d9; }
+  .s4 .ib { background: #ccfbf1; color: #0f766e; }
+  .s5 .ib { background: #fef3c7; color: #92400e; }
+
+  .dl {
+    font-size: 8.5px; font-weight: 700; letter-spacing: 1.4px;
+    text-transform: uppercase; padding: 2px 0 1px; flex-shrink: 0;
+  }
+  .s1 .dl { color: #6b7280; }
+  .s2 .dl { color: #4338ca; }
+  .s3 .dl { color: #6d28d9; }
+  .s4 .dl { color: #0f766e; }
+  .s5 .dl { color: #92400e; }
+
+  .mono { font-family: 'DM Mono', monospace; font-size: 10px !important; }
+
+  /* ── arrow between stages ── */
+  .arr {
+    flex-shrink: 0; width: 44px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px;
+  }
+  .am {
+    font-size: 9.5px; font-weight: 700;
+    border-radius: 8px; padding: 3px 6px;
+    text-align: center; line-height: 1.3; white-space: nowrap;
+  }
+  .arr-1 .am { background: #dbeafe; color: #1e40af; }
+  .arr-2 .am { background: #ede9fe; color: #6d28d9; }
+  .arr-3 .am { background: #ccfbf1; color: #0f766e; }
+  .arr-4 .am { background: #fef3c7; color: #92400e; }
+
+  .al { width: 28px; height: 3px; border-radius: 2px; position: relative; flex-shrink: 0; }
+  .al::after {
+    content: '';
+    position: absolute;
+    right: -8px; top: 50%; transform: translateY(-50%);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+  .arr-1 .al { background: linear-gradient(90deg, #1e40af, #6d28d9); }
+  .arr-1 .al::after { border-left: 9px solid #6d28d9; }
+  .arr-2 .al { background: linear-gradient(90deg, #6d28d9, #0f766e); }
+  .arr-2 .al::after { border-left: 9px solid #0f766e; }
+  .arr-3 .al { background: linear-gradient(90deg, #0f766e, #0f766e); }
+  .arr-3 .al::after { border-left: 9px solid #0f766e; }
+  .arr-4 .al { background: linear-gradient(90deg, #0f766e, #b45309); }
+  .arr-4 .al::after { border-left: 9px solid #b45309; }
+
+  /* ── stats row ── */
+  .stats {
+    height: 54px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 0 26px;
+    position: relative; z-index: 10; flex-shrink: 0;
+  }
+  .sp {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border-radius: 28px;
+    padding: 6px 13px 6px 9px;
+    box-shadow: var(--sh2); border: 1px solid var(--g100);
+  }
+  .spi {
+    width: 25px; height: 25px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .sp1 .spi { background: #dbeafe; }
+  .sp2 .spi { background: #e0e7ff; }
+  .sp3 .spi { background: #ede9fe; }
+  .sp4 .spi { background: #ccfbf1; }
+  .sp5 .spi { background: #fef3c7; }
+
+  .sv { font-size: 16px; font-weight: 700; color: var(--navy); font-family: 'DM Mono', monospace; letter-spacing: -.5px; line-height: 1; }
+  .sl { font-size: 9.5px; color: var(--g500); font-weight: 500; line-height: 1.25; white-space: nowrap; }
+  .sdot { width: 3px; height: 3px; border-radius: 50%; background: var(--g300); flex-shrink: 0; }
+
+  /* ── footer ── */
+  .footer {
+    height: 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 34px;
+    position: relative; z-index: 10; flex-shrink: 0;
+  }
+  .fl { font-size: 9px; color: var(--g500); font-weight: 500; letter-spacing: .4px; }
+  .fr { font-size: 9px; color: var(--g500); display: flex; align-items: center; gap: 5px; }
+  .fd { width: 4px; height: 4px; border-radius: 50%; background: #1e40af; }
+</style>
+</head>
+<body>
+
+<div class="topbar"></div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <h1>Diseño del Corpus Indexado</h1>
+    <p>Pipeline de construcción vectorial · 14 fuentes · 3 configuraciones de chunk · 5 modelos de embedding · PostgreSQL + pgvector</p>
+  </div>
+  <div class="badge">
+    <div class="badge-dot">📚</div>
+    <div>
+      <div class="badge-num">Fase 2</div>
+      <div class="badge-name">Indexación</div>
+    </div>
+  </div>
+</div>
+
+<!-- PIPELINE -->
+<div class="main">
+
+  <!-- S1: Fuentes -->
+  <div class="stage s1">
+    <div class="sh"><div class="sn">1</div><div class="si">📁</div><div><div class="st">Fuentes</div><div class="ss">14 documentos originales</div></div></div>
+    <div class="sb">
+      <div class="dl">PDFs · 11 documentos</div>
+      <div class="it"><div class="ii">📑</div><div><div class="il">Manuales metodológicos</div><div class="isb">v4-2024, Guía impl. 2025, Guía adaptación</div></div><div class="ib">×3</div></div>
+      <div class="it"><div class="ii">📊</div><div><div class="il">Reportes de investigación</div><div class="isb">USAID, HDCA, foros, efecto agencia</div></div><div class="ib">×5</div></div>
+      <div class="it"><div class="ii">📋</div><div><div class="il">Presentaciones y brochures</div><div class="isb">Empresas, final en., brochure esp.</div></div><div class="ib">×3</div></div>
+      <div class="dl" style="margin-top:3px">Datos estructurados · 1 CSV</div>
+      <div class="it"><div class="ii">📂</div><div><div class="il">Banco de soluciones</div><div class="isb">Banco_de_soluciones_processed.csv</div></div><div class="ib">×1</div></div>
+      <div class="dl" style="margin-top:3px">Análisis · 2 Markdown</div>
+      <div class="it"><div class="ii">📝</div><div><div class="il">Análisis de encuestas</div><div class="isb">Paraguay + Semáforo general</div></div><div class="ib">×2</div></div>
+    </div>
+  </div>
+
+  <div class="arr arr-1"><div class="am">×2<br>fmt</div><div class="al"></div></div>
+
+  <!-- S2: Extracción -->
+  <div class="stage s2">
+    <div class="sh"><div class="sn">2</div><div class="si">🔧</div><div><div class="st">Extracción</div><div class="ss">Conversión a texto</div></div></div>
+    <div class="sb">
+      <div class="dl">PDFs → Docling</div>
+      <div class="it"><div class="ii">⚙️</div><div><div class="il">Docling</div><div class="isb">OCR + estructura semántica</div></div></div>
+      <div class="it" style="margin-left:8px"><div class="ii">→</div><div class="il">Markdown</div><div class="ib">fmt 1</div></div>
+      <div class="it" style="margin-left:8px"><div class="ii">→</div><div class="il">Plain text</div><div class="ib">fmt 2</div></div>
+      <div class="dl" style="margin-top:3px">CSV → pandas</div>
+      <div class="it"><div class="ii">🐼</div><div><div class="il">to_markdown() + CSV text</div><div class="isb">una fila = un chunk independiente</div></div></div>
+      <div class="dl" style="margin-top:3px">Markdown → directo</div>
+      <div class="it"><div class="ii">📖</div><div><div class="il">Lectura directa</div><div class="isb">sin transformación adicional</div></div></div>
+    </div>
+  </div>
+
+  <div class="arr arr-2"><div class="am">×3<br>cfg</div><div class="al"></div></div>
+
+  <!-- S3: Segmentación -->
+  <div class="stage s3">
+    <div class="sh"><div class="sn">3</div><div class="si">✂️</div><div><div class="st">Segmentación</div><div class="ss">RecursiveCharacterTextSplitter</div></div></div>
+    <div class="sb">
+      <div class="dl">3 Configuraciones</div>
+      <div class="it">
+        <div class="ii">🟢</div>
+        <div style="flex:1"><div class="il">Small</div><div class="isb">512 chars · overlap 64</div></div>
+        <div class="ib">cfg 1</div>
+      </div>
+      <div class="it">
+        <div class="ii">🟡</div>
+        <div style="flex:1"><div class="il">Medium</div><div class="isb">1024 chars · overlap 128</div></div>
+        <div class="ib">cfg 2</div>
+      </div>
+      <div class="it">
+        <div class="ii">🔴</div>
+        <div style="flex:1"><div class="il">Large</div><div class="isb">2048 chars · overlap 256</div></div>
+        <div class="ib">cfg 3</div>
+      </div>
+      <div class="dl" style="margin-top:3px">Método</div>
+      <div class="it"><div class="ii">🔗</div><div><div class="il">Separadores naturales</div><div class="isb">párrafo → oración → carácter</div></div></div>
+      <div class="it"><div class="ii">📦</div><div style="flex:1"><div class="il" style="font-weight:700">12,855 chunks totales</div></div><div class="ib" style="font-size:11px">✓</div></div>
+    </div>
+  </div>
+
+  <div class="arr arr-3"><div class="am">×5<br>mod</div><div class="al"></div></div>
+
+  <!-- S4: Vectorización -->
+  <div class="stage s4">
+    <div class="sh"><div class="sn">4</div><div class="si">🧮</div><div><div class="st">Vectorización</div><div class="ss">Ollama · embeddings locales</div></div></div>
+    <div class="sb">
+      <div class="dl">5 Modelos Ollama</div>
+      <div class="it"><div class="ii">🧠</div><div style="flex:1"><div class="il mono">bge-m3</div></div><div class="ib">1024d</div></div>
+      <div class="it"><div class="ii">🧠</div><div style="flex:1"><div class="il mono">nomic-embed-text</div></div><div class="ib">768d</div></div>
+      <div class="it"><div class="ii">🧠</div><div style="flex:1"><div class="il mono">mxbai-embed-large</div></div><div class="ib">1024d</div></div>
+      <div class="it"><div class="ii">🧠</div><div style="flex:1"><div class="il mono">all-minilm</div></div><div class="ib">384d</div></div>
+      <div class="it"><div class="ii">🧠</div><div style="flex:1"><div class="il mono">snowflake-arctic-embed</div></div><div class="ib">1024d</div></div>
+      <div class="dl" style="margin-top:3px">Estrategia</div>
+      <div class="it"><div class="ii">⚡</div><div><div class="il">Batch 10 + fallback individual</div><div class="isb">truncado 1500/500 chars en error</div></div></div>
+    </div>
+  </div>
+
+  <div class="arr arr-4"><div class="am">→ DB</div><div class="al"></div></div>
+
+  <!-- S5: Almacenamiento -->
+  <div class="stage s5">
+    <div class="sh"><div class="sn">5</div><div class="si">🗄️</div><div><div class="st">Almacenamiento</div><div class="ss">PostgreSQL + pgvector 0.8.1</div></div></div>
+    <div class="sb">
+      <div class="dl">5 Tablas de vectores</div>
+      <div class="it"><div class="ii">🔷</div><div style="flex:1"><div class="il mono">embeddings_bge_m3</div><div class="isb">12,833 vectores</div></div></div>
+      <div class="it"><div class="ii">🔷</div><div style="flex:1"><div class="il mono">embeddings_nomic</div><div class="isb">12,855 vectores</div></div></div>
+      <div class="it"><div class="ii">🔷</div><div style="flex:1"><div class="il mono">embeddings_mxbai</div><div class="isb">12,847 vectores</div></div></div>
+      <div class="it"><div class="ii">🔷</div><div style="flex:1"><div class="il mono">embeddings_minilm</div><div class="isb">12,789 vectores</div></div></div>
+      <div class="it"><div class="ii">🔷</div><div style="flex:1"><div class="il mono">embeddings_snowflake</div><div class="isb">12,847 vectores</div></div></div>
+      <div class="it" style="margin-top:2px"><div class="ii">⚡</div><div><div class="il">IVFFlat · lists=113</div><div class="isb">similitud coseno · distancia pgvector</div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- STATS ROW -->
+<div class="stats">
+  <div class="sp sp1"><div class="spi">📁</div><div><div class="sv">14</div><div class="sl">documentos</div></div></div>
+  <div class="sdot"></div>
+  <div class="sp sp2"><div class="spi">🔧</div><div><div class="sv">28</div><div class="sl">combinaciones<br>doc × formato</div></div></div>
+  <div class="sdot"></div>
+  <div class="sp sp3"><div class="spi">✂️</div><div><div class="sv">12,855</div><div class="sl">chunks totales</div></div></div>
+  <div class="sdot"></div>
+  <div class="sp sp4"><div class="spi">🧠</div><div><div class="sv">5</div><div class="sl">modelos de<br>embedding</div></div></div>
+  <div class="sdot"></div>
+  <div class="sp sp5"><div class="spi">🗄️</div><div><div class="sv">64,171</div><div class="sl">vectores<br>almacenados</div></div></div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="fl">Universidad Comunera · Maestría en Ciencia de Datos · 2026</div>
+  <div class="fr"><div class="fd"></div>Bustamante · Barreto</div>
+</div>
+
+</body>
+</html>

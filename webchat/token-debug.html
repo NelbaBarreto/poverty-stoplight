@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Verification Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        * { font-family: Arial, sans-serif; }
+        body { padding: 20px; max-width: 800px; margin: 0 auto; background: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .section { margin: 20px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #0077be; }
+        .section h2 { margin-top: 0; color: #0077be; font-size: 16px; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; font-family: monospace; font-size: 12px; }
+        button { padding: 10px 15px; background: #0077be; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px 5px 5px 0; }
+        button:hover { background: #005a9c; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .match { background: #d4edda; padding: 5px; border-radius: 3px; }
+        .mismatch { background: #f8d7da; padding: 5px; border-radius: 3px; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Token Generation Verification Tool</h1>
+        
+        <div class="section">
+            <h2>1. Generate Token (Client-side)</h2>
+            <label>Secret (default: W3bCh4tFup4):</label>
+            <input type="text" id="secret" value="W3bCh4tFup4" />
+            <button onclick="generateClientToken()">Generate Token</button>
+            <label>Generated Token:</label>
+            <textarea id="clientToken" rows="4" readonly></textarea>
+            <div id="clientTokenInfo" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>2. Fetch Token from Server</h2>
+            <label>API URL:</label>
+            <input type="text" id="apiUrl" value="http://10.1.50.50:8000" />
+            <button onclick="fetchServerToken()">Fetch Server Token</button>
+            <label>Server Response:</label>
+            <textarea id="serverResponse" rows="6" readonly></textarea>
+            <div id="serverTokenInfo" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>3. Token Comparison</h2>
+            <button onclick="compareTokens()">Compare Tokens</button>
+            <div id="comparison" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. Test API Request with Token</h2>
+            <button onclick="testApiCall()">Test /api/health</button>
+            <label>Response:</label>
+            <textarea id="apiResponse" rows="4" readonly></textarea>
+            <div id="apiTestResult" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>5. Debug Info</h2>
+            <div id="debugInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        let clientToken = null;
+        let serverToken = null;
+
+        function generateClientToken() {
+            const secret = document.getElementById('secret').value;
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const dateStr = `${dd}/${mm}/${yyyy}`;
+            const raw = `${secret}${dateStr}`;
+            
+            clientToken = CryptoJS.SHA512(raw).toString();
+            
+            document.getElementById('clientToken').value = clientToken;
+            document.getElementById('clientTokenInfo').innerHTML = `
+                <strong>Date:</strong> ${dateStr}<br>
+                <strong>Secret:</strong> ${secret}<br>
+                <strong>Raw Input:</strong> <code>${raw}</code><br>
+                <strong>Token Length:</strong> ${clientToken.length}
+            `;
+            console.log('[Client] Generated token:', clientToken.substring(0, 32) + '...');
+        }
+
+        async function fetchServerToken() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            try {
+                const response = await fetch(`${apiUrl}/api/debug/token`);
+                serverToken = await response.json();
+                document.getElementById('serverResponse').value = JSON.stringify(serverToken, null, 2);
+                document.getElementById('serverTokenInfo').innerHTML = `
+                    <strong>Date:</strong> ${serverToken.date || 'N/A'}<br>
+                    <strong>Token Length:</strong> ${serverToken.token_length || 'N/A'}<br>
+                    <span class="success">✓ Successfully fetched from server</span>
+                `;
+                console.log('[Server] Fetched token:', serverToken.expected_token?.substring(0, 32) + '...');
+            } catch (e) {
+                document.getElementById('serverTokenInfo').innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+                console.error('[Server] Error:', e);
+            }
+        }
+
+        function compareTokens() {
+            if (!clientToken || !serverToken) {
+                document.getElementById('comparison').innerHTML = '<span class="error">Generate both tokens first</span>';
+                return;
+            }
+
+            const clientShort = clientToken.substring(0, 32);
+            const serverShort = serverToken.expected_token?.substring(0, 32);
+            const match = clientToken === serverToken.expected_token;
+
+            document.getElementById('comparison').innerHTML = `
+                <strong>Client Token (first 32):</strong> <code>${clientShort}</code><br>
+                <strong>Server Token (first 32):</strong> <code>${serverShort}</code><br>
+                <div style="margin-top: 10px;">
+                    ${match ? '<span class="success match">✓ TOKENS MATCH!</span>' : '<span class="error mismatch">✗ TOKENS DO NOT MATCH</span>'}
+                </div>
+            `;
+        }
+
+        async function testApiCall() {
+            if (!clientToken) {
+                document.getElementById('apiTestResult').innerHTML = '<span class="error">Generate client token first</span>';
+                return;
+            }
+
+            const apiUrl = document.getElementById('apiUrl').value;
+            try {
+                const response = await fetch(`${apiUrl}/api/health`, {
+                    headers: {
+                        'X-Auth-Token': clientToken
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('apiResponse').value = JSON.stringify(data, null, 2);
+                
+                if (response.status === 200) {
+                    document.getElementById('apiTestResult').innerHTML = '<span class="success">✓ API request successful!</span>';
+                } else {
+                    document.getElementById('apiTestResult').innerHTML = `<span class="error">✗ API returned: ${response.status} - ${data.detail || 'Unknown error'}</span>`;
+                }
+            } catch (e) {
+                document.getElementById('apiTestResult').innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+            }
+        }
+
+        function updateDebugInfo() {
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            
+            document.getElementById('debugInfo').innerHTML = `
+                <strong>Current Date:</strong> ${dd}/${mm}/${yyyy}<br>
+                <strong>CryptoJS Available:</strong> ${typeof CryptoJS !== 'undefined' ? '✓ Yes' : '✗ No'}<br>
+                <strong>Browser:</strong> ${navigator.userAgent.substring(0, 50)}...
+            `;
+        }
+
+        // Auto-generate token on load
+        window.addEventListener('load', () => {
+            updateDebugInfo();
+            generateClientToken();
+        });
+    </script>
+</body>
+</html>

@@ -284,6 +284,27 @@ def build_messages(history: list, prompt: str, context: str):
 
 
 # ---------------------------------------------------------------------------
+# LLM metadata helper
+# ---------------------------------------------------------------------------
+
+def _log_llm_meta(meta: dict):
+    """Log tokens/second and other Ollama response metadata."""
+    if not meta:
+        return
+    eval_count    = meta.get("eval_count", 0)
+    eval_dur_ns   = meta.get("eval_duration", 0)
+    prompt_tokens = meta.get("prompt_eval_count", 0)
+    load_dur_ns   = meta.get("load_duration", 0)
+    tok_per_sec   = eval_count / (eval_dur_ns / 1e9) if eval_dur_ns else 0
+    log.info(
+        f"[ollama] prompt_tokens={prompt_tokens} "
+        f"gen_tokens={eval_count} "
+        f"speed={tok_per_sec:.1f}tok/s "
+        f"load={load_dur_ns//1_000_000}ms"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
@@ -401,6 +422,7 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
         messages = build_messages(history, req.message, context)
         response_msg = get_llm().invoke(messages)
         response_text = response_msg.content.strip()
+        _log_llm_meta(response_msg.response_metadata)
 
     except Exception as e:
         log.error(f"Chat error: {e}")
@@ -455,18 +477,22 @@ def chat_stream(req: ChatRequest, _: None = Depends(require_token)):
     def generate():
         import json
         full_response: list[str] = []
+        last_meta: dict = {}
         try:
             for chunk in get_llm().stream(messages):
                 token = chunk.content
                 if token:
                     full_response.append(token)
                     yield f"data: {json.dumps({'token': token})}\n\n"
+                if chunk.response_metadata:
+                    last_meta = chunk.response_metadata
         except Exception as e:
             log.error(f"Stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
         response_text = "".join(full_response)
         elapsed_ms = int((time.monotonic() - t0) * 1000)
+        _log_llm_meta(last_meta)
 
         save_message(
             req.session_id, "assistant", response_text,

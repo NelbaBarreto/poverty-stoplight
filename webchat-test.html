@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Webchat API Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Webchat API Test</h1>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_URL = "http://10.1.50.50:8000";
+        const resultsDiv = document.getElementById("results");
+
+        function addResult(title, success, data) {
+            const div = document.createElement("div");
+            div.className = `result ${success ? 'success' : 'error'}`;
+            div.innerHTML = `
+                <strong>${title}</strong>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            resultsDiv.appendChild(div);
+        }
+
+        // Test 1: Debug ping (no token)
+        fetch(`${API_URL}/api/debug/ping`)
+            .then(r => r.json())
+            .then(data => addResult("Test 1: Debug Ping (no auth)", true, data))
+            .catch(e => addResult("Test 1: Debug Ping", false, {error: e.message}));
+
+        // Test 2: Health check (needs token) - just to see if it tries
+        fetch(`${API_URL}/api/health`)
+            .then(r => r.json())
+            .then(data => addResult("Test 2: Health (expects 422)", false, data))
+            .catch(e => addResult("Test 2: Health", false, {error: e.message}));
+
+        // Test 3: Create session with correct token
+        const generateToken = async () => {
+            const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '/');
+            const secret = "W3bCh4tFup4";
+            const raw = secret + today;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(raw);
+            const hashBuffer = await crypto.subtle.digest('SHA-512', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        generateToken().then(token => {
+            console.log("Generated token:", token.substring(0, 16) + "...");
+            
+            return fetch(`${API_URL}/api/session`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Auth-Token": token
+                },
+                body: JSON.stringify({origin: "browser-test"})
+            });
+        })
+        .then(r => r.json())
+        .then(data => addResult("Test 3: Create Session (with token)", true, data))
+        .catch(e => addResult("Test 3: Create Session", false, {error: e.message}));
+    </script>
+</body>
+</html>

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>Metodología RAG — Semáforo de la Pobreza</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:    #1a2744;
+    --teal:    #0d9488;
+    --teal2:   #14b8a6;
+    --teal-lt: #e6fafa;
+    --emerald: #065f46;
+    --emerald2:#10b981;
+    --emerald-lt:#d1fae5;
+    --white:   #ffffff;
+    --gray50:  #f8fafc;
+    --gray100: #f1f5f9;
+    --gray300: #cbd5e1;
+    --gray500: #64748b;
+    --shadow:  0 4px 24px rgba(0,0,0,.10);
+    --shadow2: 0 2px 8px rgba(0,0,0,.07);
+  }
+
+  body {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: var(--gray50);
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--gray300) 1px, transparent 1px),
+      linear-gradient(90deg, var(--gray300) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: .22;
+    pointer-events: none;
+  }
+
+  /* ── top bar ── */
+  .top-bar {
+    height: 5px;
+    background: linear-gradient(90deg, var(--navy) 0%, var(--teal) 45%, var(--teal2) 70%, var(--emerald2) 100%);
+    flex-shrink: 0;
+    position: relative; z-index: 10;
+  }
+
+  /* ── slide header ── */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 36px 8px;
+    flex-shrink: 0;
+    position: relative; z-index: 10;
+  }
+
+  .header-left h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -.3px;
+    line-height: 1.2;
+  }
+  .header-left p {
+    font-size: 11.5px;
+    color: var(--gray500);
+    margin-top: 2px;
+    font-weight: 400;
+  }
+
+  .fase-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--navy);
+    border-radius: 30px;
+    padding: 6px 16px 6px 10px;
+    box-shadow: 0 2px 12px rgba(26,39,68,.25);
+  }
+  .fase-badge-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--teal);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .fase-badge-text {
+    display: flex;
+    flex-direction: column;
+  }
+  .fase-badge-text .fase-num {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--teal2);
+    line-height: 1;
+  }
+  .fase-badge-text .fase-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    line-height: 1.2;
+    letter-spacing: -.1px;
+  }
+
+  /* ── main row ── */
+  .main {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    padding: 0 32px 16px;
+    gap: 0;
+    position: relative; z-index: 10;
+  }
+
+  /* ══════════════════════════
+     ENTRADAS (navy)
+  ══════════════════════════ */
+  .entradas {
+    flex-shrink: 0;
+    width: 200px;
+    background: var(--navy);
+    border-radius: 16px;
+    padding: 18px 15px;
+    box-shadow: 0 8px 40px rgba(26,39,68,.38);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    position: relative;
+  }
+  .entradas::after {
+    content: '';
+    position: absolute;
+    top: -10px; right: -10px;
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    background: var(--teal);
+    opacity: .15;
+    pointer-events: none;
+  }
+
+  .col-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 3px;
+  }
+  .entradas .col-label { color: var(--teal2); }
+
+  .entrada-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 9px;
+    padding: 9px 11px;
+  }
+  .entrada-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+  .entrada-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: #e2e8f0;
+    line-height: 1.3;
+  }
+  .entrada-sub { font-size: 10px; color: #94a3b8; }
+
+  /* ══════════════════════════
+     CONNECTORS
+  ══════════════════════════ */
+  .connector {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    gap: 5px;
+  }
+  .conn-line {
+    height: 4px;
+    border-radius: 2px;
+    position: relative;
+  }
+  .conn-line.c1 {
+    width: 36px;
+    background: linear-gradient(90deg, var(--teal), var(--teal2));
+  }
+  .conn-line.c1::after {
+    content: '';
+    position: absolute;
+    right: -9px; top: 50%;
+    transform: translateY(-50%);
+    border-left: 10px solid var(--teal2);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+  }
+  .conn-line.c2 {
+    width: 36px;
+    background: linear-gradient(90deg, var(--emerald2), var(--emerald));
+  }
+  .conn-line.c2::after {
+    content: '';
+    position: absolute;
+    right: -9px; top: 50%;
+    transform: translateY(-50%);
+    border-left: 10px solid var(--emerald);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+  }
+  .conn-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .conn-label.c1 { color: var(--teal); }
+  .conn-label.c2 { color: var(--emerald2); }
+
+  /* ══════════════════════════
+     PROCESO RAG (white)
+  ══════════════════════════ */
+  .proceso {
+    flex: 1;
+    background: white;
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray100);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .proceso-header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--teal-lt);
+  }
+  .proceso-header-icon {
+    width: 30px; height: 30px;
+    background: var(--teal);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .proceso-header h2 {
+    font-size: 14px; font-weight: 700;
+    color: var(--navy); letter-spacing: -.2px;
+  }
+  .proceso-header p {
+    font-size: 10px; color: var(--gray500); margin-top: 1px;
+  }
+
+  .steps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    position: relative;
+  }
+
+  .step {
+    background: var(--gray50);
+    border: 1px solid var(--gray100);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    box-shadow: var(--shadow2);
+  }
+  .step::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 12px; bottom: 12px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+  }
+  .step-1::before { background: #0d9488; }
+  .step-2::before { background: #0891b2; }
+  .step-3::before { background: #7c3aed; }
+  .step-4::before { background: #b45309; }
+
+  .step-top { display: flex; align-items: center; gap: 8px; }
+
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    color: white;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+  }
+  .step-1 .step-num { background: #0d9488; }
+  .step-2 .step-num { background: #0891b2; }
+  .step-3 .step-num { background: #7c3aed; }
+  .step-4 .step-num { background: #b45309; }
+
+  .step-icon { font-size: 18px; }
+
+  .step-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--navy); line-height: 1.35;
+  }
+  .step-tech {
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px; color: var(--gray500);
+    background: var(--gray100);
+    border-radius: 4px;
+    padding: 2px 6px;
+    width: fit-content;
+  }
+
+  /* internal flow arrows */
+  .arrow-right {
+    position: absolute;
+    top: calc(25% - 1px); left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex; align-items: center; z-index: 5;
+  }
+  .arr-line-h {
+    width: 24px; height: 3px;
+    background: var(--teal2);
+    border-radius: 2px; position: relative;
+  }
+  .arr-line-h::after {
+    content: '';
+    position: absolute;
+    right: -6px; top: 50%; transform: translateY(-50%);
+    border-left: 7px solid var(--teal2);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+
+  .arrow-down {
+    position: absolute;
+    top: 50%; right: calc(25% - 1px);
+    transform: translate(50%, -50%);
+    display: flex; flex-direction: column; align-items: center; z-index: 5;
+  }
+  .arr-line-v {
+    width: 3px; height: 24px;
+    background: #7c3aed;
+    border-radius: 2px; position: relative;
+  }
+  .arr-line-v::after {
+    content: '';
+    position: absolute;
+    bottom: -6px; left: 50%; transform: translateX(-50%);
+    border-top: 7px solid #7c3aed;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+
+  .arrow-left {
+    position: absolute;
+    bottom: calc(25% - 1px); left: 50%;
+    transform: translate(-50%, 50%);
+    display: flex; align-items: center; z-index: 5;
+  }
+  .arr-line-hl {
+    width: 24px; height: 3px;
+    background: #b45309;
+    border-radius: 2px; position: relative;
+  }
+  .arr-line-hl::before {
+    content: '';
+    position: absolute;
+    left: -6px; top: 50%; transform: translateY(-50%);
+    border-right: 7px solid #b45309;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+
+  /* ══════════════════════════
+     SALIDA (emerald)
+  ══════════════════════════ */
+  .salida {
+    flex-shrink: 0;
+    width: 205px;
+    background: var(--emerald);
+    border-radius: 16px;
+    padding: 18px 15px;
+    box-shadow: 0 8px 40px rgba(6,95,70,.38);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+  .salida::after {
+    content: '';
+    position: absolute;
+    bottom: -10px; left: -10px;
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    background: var(--emerald2);
+    opacity: .18;
+    pointer-events: none;
+  }
+
+  .salida .col-label { color: var(--emerald2); }
+
+  /* DB icon card */
+  .salida-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,.09);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 10px;
+    padding: 12px 11px 10px;
+  }
+  .salida-db-icon {
+    font-size: 30px;
+    line-height: 1;
+  }
+  .salida-main-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #d1fae5;
+    text-align: center;
+    line-height: 1.35;
+  }
+
+  /* field rows */
+  .salida-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .salida-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--emerald2);
+    margin-bottom: 1px;
+    padding-left: 2px;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 7px;
+    padding: 6px 9px;
+  }
+  .field-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--emerald2);
+    flex-shrink: 0;
+  }
+  .field-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #a7f3d0;
+    font-weight: 500;
+  }
+
+  .meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(255,255,255,.10);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 9px;
+    color: #6ee7b7;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── footer ── */
+  .footer {
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 36px;
+    position: relative; z-index: 10;
+    flex-shrink: 0;
+  }
+  .footer-left { font-size: 9.5px; color: var(--gray500); font-weight: 500; letter-spacing: .4px; }
+  .footer-right { font-size: 9.5px; color: var(--gray500); display: flex; align-items: center; gap: 5px; }
+  .footer-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--teal); }
+</style>
+</head>
+<body>
+
+  <div class="top-bar"></div>
+
+  <!-- ── HEADER ── -->
+  <div class="slide-header">
+    <div class="header-left">
+      <h1>Diseño Experimental del Pipeline RAG</h1>
+      <p>Semáforo de la Pobreza · Fundación Paraguaya · Evaluación de configuraciones</p>
+    </div>
+    <div class="fase-badge">
+      <div class="fase-badge-dot">⚡</div>
+      <div class="fase-badge-text">
+        <span class="fase-num">Fase 1</span>
+        <span class="fase-name">Generación</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAIN ROW ── -->
+  <div class="main">
+
+    <!-- ENTRADAS -->
+    <div class="entradas">
+      <div class="col-label">Entradas</div>
+
+      <div class="entrada-item">
+        <div class="entrada-icon">📄</div>
+        <div class="entrada-text">Documentación<br><span class="entrada-sub">18 fuentes heterogéneas</span></div>
+      </div>
+      <div class="entrada-item">
+        <div class="entrada-icon">🧠</div>
+        <div class="entrada-text">Modelos de Embedding<br><span class="entrada-sub">bge-m3, nomic, mxbai…</span></div>
+      </div>
+      <div class="entrada-item">
+        <div class="entrada-icon">🤖</div>
+        <div class="entrada-text">Modelos LLM<br><span class="entrada-sub">qwen3:8b, llama3.2…</span></div>
+      </div>
+      <div class="entrada-item">
+        <div class="entrada-icon">⚙️</div>
+        <div class="entrada-text">Config. Chunk Size<br><span class="entrada-sub">512 / 1024 / 2048 chars</span></div>
+      </div>
+    </div>
+
+    <!-- CONECTOR 1 -->
+    <div class="connector">
+      <div class="conn-line c1"></div>
+      <div class="conn-label c1">Pipeline</div>
+    </div>
+
+    <!-- PROCESO RAG -->
+    <div class="proceso">
+      <div class="proceso-header">
+        <div class="proceso-header-icon">🔄</div>
+        <div>
+          <h2>Proceso RAG</h2>
+          <p>Recuperación Aumentada por Generación · PostgreSQL / pgvector</p>
+        </div>
+      </div>
+
+      <div class="steps-grid">
+
+        <div class="step step-1">
+          <div class="step-top">
+            <div class="step-num">1</div>
+            <div class="step-icon">🔍</div>
+          </div>
+          <div class="step-title">Generar embeddings<br>de la pregunta</div>
+          <div class="step-tech">Ollama · modelo seleccionado</div>
+        </div>
+
+        <div class="step step-2">
+          <div class="step-top">
+            <div class="step-num">2</div>
+            <div class="step-icon">📦</div>
+          </div>
+          <div class="step-title">Recuperar top-k fragmentos<br>similares con pgvector</div>
+          <div class="step-tech">IVFFlat · similitud coseno</div>
+        </div>
+
+        <div class="step step-4">
+          <div class="step-top">
+            <div class="step-num">4</div>
+            <div class="step-icon">💾</div>
+          </div>
+          <div class="step-title">Guardar resultados<br>en base de datos</div>
+          <div class="step-tech">PostgreSQL · eval_scores</div>
+        </div>
+
+        <div class="step step-3">
+          <div class="step-top">
+            <div class="step-num">3</div>
+            <div class="step-icon">✍️</div>
+          </div>
+          <div class="step-title">Generar respuesta con<br>el LLM evaluado</div>
+          <div class="step-tech">temp=0 · top-k contexto</div>
+        </div>
+
+        <div class="arrow-right"><div class="arr-line-h"></div></div>
+        <div class="arrow-down"><div class="arr-line-v"></div></div>
+        <div class="arrow-left"><div class="arr-line-hl"></div></div>
+
+      </div>
+    </div>
+
+    <!-- CONECTOR 2 -->
+    <div class="connector">
+      <div class="conn-line c2"></div>
+      <div class="conn-label c2">Persiste</div>
+    </div>
+
+    <!-- SALIDA -->
+    <div class="salida">
+      <div class="col-label">Salida</div>
+
+      <div class="salida-main">
+        <div class="salida-db-icon">🗄️</div>
+        <div class="salida-main-title">Resultados almacenados<br>por ejecución</div>
+      </div>
+
+      <div class="salida-fields">
+        <div class="salida-section-label">Por ejecución</div>
+
+        <div class="field-row">
+          <div class="field-dot"></div>
+          <div class="field-name">generated_answer</div>
+        </div>
+        <div class="field-row">
+          <div class="field-dot"></div>
+          <div class="field-name">retrieved_contexts</div>
+        </div>
+
+        <div class="salida-section-label" style="margin-top:4px;">Metadatos</div>
+
+        <div class="field-row">
+          <div class="field-dot" style="background:#6ee7b7;"></div>
+          <span class="meta-tag">LLM</span>
+          <span class="meta-tag">Embedding</span>
+        </div>
+        <div class="field-row">
+          <div class="field-dot" style="background:#6ee7b7;"></div>
+          <span class="meta-tag">Chunk</span>
+          <span class="meta-tag">Pregunta</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div class="footer">
+    <div class="footer-left">Universidad Comunera · Maestría en Ciencia de Datos · 2026</div>
+    <div class="footer-right">
+      <div class="footer-dot"></div>
+      Bustamante · Barreto
+    </div>
+  </div>
+
+</body>
+</html>
