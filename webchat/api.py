@@ -36,7 +36,7 @@ import requests
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
@@ -287,21 +287,22 @@ def search_context(query: str, k: int = 8) -> tuple:
 
 def build_messages(history: list, prompt: str, context: str):
     """Build LangChain message list from DB history + new RAG prompt."""
-    messages = []
-    # Include last 6 turns for context
+    # System message carries instructions + RAG context so the model treats
+    # them as background knowledge, not as part of the user turn.
+    system_content = (
+        f"{load_system_prompt()}\n\n"
+        f"## CONTEXTO RELEVANTE:\n\n{context}"
+    )
+    messages = [SystemMessage(content=system_content)]
+
+    # Include last 6 turns for multi-turn context
     for msg in history[-6:]:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))
         else:
             messages.append(AIMessage(content=msg["content"]))
 
-    full_prompt = (
-        f"{load_system_prompt()}\n\n"
-        f"## CONTEXTO:\n\n{context}\n\n"
-        f"## PREGUNTA:\n{prompt}\n\n"
-        f"## RESPUESTA:"
-    )
-    messages.append(HumanMessage(content=full_prompt))
+    messages.append(HumanMessage(content=prompt))
     return messages
 
 
