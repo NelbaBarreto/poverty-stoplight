@@ -119,10 +119,12 @@ EMBED_TABLE = {
 }
 
 _PROMPT_FILE = PROJECT_ROOT / "prompt.txt"
+log.info(f"[prompt] looking for prompt file at: {_PROMPT_FILE} (exists={_PROMPT_FILE.exists()})")
 
 def load_system_prompt() -> str:
     if _PROMPT_FILE.exists():
         return _PROMPT_FILE.read_text(encoding="utf-8").strip()
+    log.warning(f"[prompt] {_PROMPT_FILE} not found — using built-in fallback")
     return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
 DB_CONFIG = dict(
