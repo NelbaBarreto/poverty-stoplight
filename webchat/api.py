@@ -62,7 +62,8 @@ log = logging.getLogger("webchat.api")
 LLM_BACKEND     = os.getenv("LLM_BACKEND",    "vllm")   # "vllm" or "ollama"
 VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "8192"))
+LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+RAG_K           = int(os.getenv("RAG_K", "5"))
 
 _DEFAULT_MODEL  = {
     "vllm":   "Qwen/Qwen3-8B",
@@ -251,7 +252,7 @@ def get_embedding(query: str) -> list:
     return resp.json()["embedding"]
 
 
-def search_context(query: str, k: int = 8) -> tuple:
+def search_context(query: str, k: int = RAG_K) -> tuple:
     """Return (context_str, sources_list) where sources_list is [{titulo, link}]."""
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.pgvector_manager import PGVectorManager
