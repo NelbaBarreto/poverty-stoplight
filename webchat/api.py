@@ -127,27 +127,14 @@ EMBED_TABLE = {
 }
 
 _PROMPT_FILE = PROJECT_ROOT / "prompt.txt"
+_FALLBACK_PROMPT = "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
 def load_system_prompt() -> str:
-    """Load system prompt: DB (prompt_history) → prompt.txt → hardcoded fallback."""
-    try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT prompt_text FROM prompt_history ORDER BY created_at DESC LIMIT 1")
-            row = cur.fetchone()
-        conn.close()
-        if row and row["prompt_text"]:
-            log.info("[prompt] loaded from DB prompt_history")
-            return row["prompt_text"].strip()
-    except Exception as e:
-        log.warning(f"[prompt] DB read failed, falling back to file: {e}")
-
+    """Read prompt from prompt.txt on every request (fast file read, OS-cached)."""
     if _PROMPT_FILE.exists():
-        log.info(f"[prompt] loaded from {_PROMPT_FILE}")
         return _PROMPT_FILE.read_text(encoding="utf-8").strip()
-
-    log.warning("[prompt] using hardcoded fallback")
-    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
+    log.warning("[prompt] prompt.txt not found — using fallback")
+    return _FALLBACK_PROMPT
 
 DB_CONFIG = dict(
     host=os.getenv("DB_HOST", "localhost"),
@@ -166,6 +153,26 @@ app = FastAPI(
     description="RAG chat backend for the WordPress widget",
     version="1.0.0",
 )
+
+def _sync_prompt_from_db():
+    """Pull latest prompt from DB and write to prompt.txt so every request reads the file."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt_text FROM prompt_history ORDER BY created_at DESC LIMIT 1")
+            row = cur.fetchone()
+        conn.close()
+        if row and row["prompt_text"]:
+            _PROMPT_FILE.write_text(row["prompt_text"].strip(), encoding="utf-8")
+            log.info(f"[prompt] synced from DB → {_PROMPT_FILE} ({len(row['prompt_text'])} chars)")
+            return
+    except Exception as e:
+        log.warning(f"[prompt] DB sync failed: {e}")
+    log.info(f"[prompt] using existing {_PROMPT_FILE}")
+
+@app.on_event("startup")
+def startup_load_prompt():
+    _sync_prompt_from_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -404,6 +411,14 @@ def health(_: None = Depends(require_token)):
         "vllm_url":     VLLM_URL,
         "ollama_url":   OLLAMA_URL,
     }
+
+
+@app.post("/api/reload-prompt")
+def reload_prompt(_: None = Depends(require_token)):
+    """Sync latest prompt from DB to prompt.txt. Call from admin UI after saving a new prompt."""
+    _sync_prompt_from_db()
+    prompt = load_system_prompt()
+    return {"status": "ok", "prompt_length": len(prompt)}
 
 
 @app.get("/api/debug/ping")
