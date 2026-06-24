@@ -64,7 +64,7 @@ VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 _DEFAULT_MODEL  = {
-    "vllm":   "Qwen/Qwen2.5-7B-Instruct",
+    "vllm":   "Qwen/Qwen3-8B",
     "ollama": "qwen3:8b",
 }
 LLM_MODEL       = os.getenv("LLM_MODEL", _DEFAULT_MODEL.get(LLM_BACKEND, "Qwen/Qwen2.5-7B-Instruct"))
