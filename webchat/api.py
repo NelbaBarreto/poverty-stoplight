@@ -13,7 +13,7 @@ Configuration (via .env):
   LLM_MODEL      default: qwen3:8b
   EMBED_MODEL    default: bge-m3
   CHUNK_CONFIG   default: medium
-  OLLAMA_URL     default: http://localhost:11434
+  VLLM_BASE_URL  default: http://localhost:8800
   API_PORT       default: 8000
   ALLOWED_ORIGINS  default: * (CORS)
 """
@@ -35,7 +35,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -59,18 +59,23 @@ log = logging.getLogger("webchat.api")
 LLM_MODEL       = os.getenv("LLM_MODEL",       "qwen3:8b")
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
-OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
 
 # Single shared LLM instance — avoids re-initialization on every request
-_llm: "ChatOllama | None" = None
+_llm: "ChatOpenAI | None" = None
 
-def get_llm() -> "ChatOllama":
+def get_llm() -> "ChatOpenAI":
     global _llm
     if _llm is None:
-        _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
-                          num_ctx=4096, think=False)
+        _llm = ChatOpenAI(
+            model=LLM_MODEL,
+            temperature=0,
+            base_url=f"{VLLM_URL}/v1",
+            api_key="EMPTY",
+            max_tokens=4096,
+        )
     return _llm
 
 # ---------------------------------------------------------------------------
@@ -220,13 +225,14 @@ def get_history(session_id: str, limit: int = 20) -> list:
 def get_embedding(query: str) -> list:
     t0 = time.monotonic()
     resp = requests.post(
-        f"{OLLAMA_URL}/api/embeddings",
-        json={"model": EMBED_MODEL, "prompt": query},
+        f"{VLLM_URL}/v1/embeddings",
+        json={"model": EMBED_MODEL, "input": query},
+        headers={"Authorization": "Bearer EMPTY"},
         timeout=60,
     )
     resp.raise_for_status()
     log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
-    return resp.json()["embedding"]
+    return resp.json()["data"][0]["embedding"]
 
 
 def search_context(query: str, k: int = 8) -> tuple:
@@ -288,19 +294,17 @@ def build_messages(history: list, prompt: str, context: str):
 # ---------------------------------------------------------------------------
 
 def _log_llm_meta(meta: dict):
-    """Log tokens/second and other Ollama response metadata."""
+    """Log token usage from vLLM/OpenAI response metadata."""
     if not meta:
         return
-    eval_count    = meta.get("eval_count", 0)
-    eval_dur_ns   = meta.get("eval_duration", 0)
-    prompt_tokens = meta.get("prompt_eval_count", 0)
-    load_dur_ns   = meta.get("load_duration", 0)
-    tok_per_sec   = eval_count / (eval_dur_ns / 1e9) if eval_dur_ns else 0
+    usage         = meta.get("token_usage") or {}
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    gen_tokens    = usage.get("completion_tokens", 0)
+    model_name    = meta.get("model_name", LLM_MODEL)
     log.info(
-        f"[ollama] prompt_tokens={prompt_tokens} "
-        f"gen_tokens={eval_count} "
-        f"speed={tok_per_sec:.1f}tok/s "
-        f"load={load_dur_ns//1_000_000}ms"
+        f"[vllm] prompt_tokens={prompt_tokens} "
+        f"gen_tokens={gen_tokens} "
+        f"model={model_name}"
     )
 
 
@@ -350,6 +354,7 @@ def health(_: None = Depends(require_token)):
         "llm_model":    LLM_MODEL,
         "embed_model":  EMBED_MODEL,
         "chunk_config": CHUNK_CONFIG,
+        "vllm_url":     VLLM_URL,
     }
 
 
