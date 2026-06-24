@@ -62,8 +62,11 @@ log = logging.getLogger("webchat.api")
 LLM_BACKEND     = os.getenv("LLM_BACKEND",    "vllm")   # "vllm" or "ollama"
 VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "2048"))
-RAG_K           = int(os.getenv("RAG_K", "5"))
+LLM_MAX_TOKENS    = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+RAG_K             = int(os.getenv("RAG_K", "5"))
+# Limits Qwen3 thinking tokens — reduces latency before first visible token.
+# Set to 0 to disable thinking entirely, -1 for unlimited.
+THINKING_BUDGET   = int(os.getenv("THINKING_BUDGET", "512"))
 
 _DEFAULT_MODEL  = {
     "vllm":   "Qwen/Qwen3-8B",
@@ -85,9 +88,14 @@ def get_llm():
             _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
                               num_ctx=LLM_MAX_TOKENS, think=False)
         else:
+            extra = {}
+            if THINKING_BUDGET >= 0:
+                extra = {"chat_template_kwargs": {"enable_thinking": True,
+                                                  "thinking_budget": THINKING_BUDGET}}
             _llm = ChatOpenAI(model=LLM_MODEL, temperature=0,
                               base_url=f"{VLLM_URL}/v1", api_key="EMPTY",
-                              max_tokens=LLM_MAX_TOKENS)
+                              max_tokens=LLM_MAX_TOKENS,
+                              model_kwargs={"extra_body": extra} if extra else {})
     log.info(f"[llm] backend={LLM_BACKEND} model={LLM_MODEL} max_tokens={LLM_MAX_TOKENS}")
     return _llm
 
