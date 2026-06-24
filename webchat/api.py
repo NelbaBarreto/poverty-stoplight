@@ -69,7 +69,7 @@ RAG_K             = int(os.getenv("RAG_K", "5"))
 THINKING_BUDGET   = int(os.getenv("THINKING_BUDGET", "512"))
 
 _DEFAULT_MODEL  = {
-    "vllm":   "Qwen/Qwen3-8B",
+    "vllm":   "Qwen/Qwen3-8B-AWQ",
     "ollama": "qwen3:8b",
 }
 LLM_MODEL       = os.getenv("LLM_MODEL", _DEFAULT_MODEL.get(LLM_BACKEND, "Qwen/Qwen3-8B"))
