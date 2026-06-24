@@ -127,12 +127,26 @@ EMBED_TABLE = {
 }
 
 _PROMPT_FILE = PROJECT_ROOT / "prompt.txt"
-log.info(f"[prompt] looking for prompt file at: {_PROMPT_FILE} (exists={_PROMPT_FILE.exists()})")
 
 def load_system_prompt() -> str:
+    """Load system prompt: DB (prompt_history) → prompt.txt → hardcoded fallback."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt_text FROM prompt_history ORDER BY created_at DESC LIMIT 1")
+            row = cur.fetchone()
+        conn.close()
+        if row and row["prompt_text"]:
+            log.info("[prompt] loaded from DB prompt_history")
+            return row["prompt_text"].strip()
+    except Exception as e:
+        log.warning(f"[prompt] DB read failed, falling back to file: {e}")
+
     if _PROMPT_FILE.exists():
+        log.info(f"[prompt] loaded from {_PROMPT_FILE}")
         return _PROMPT_FILE.read_text(encoding="utf-8").strip()
-    log.warning(f"[prompt] {_PROMPT_FILE} not found — using built-in fallback")
+
+    log.warning("[prompt] using hardcoded fallback")
     return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
 DB_CONFIG = dict(
