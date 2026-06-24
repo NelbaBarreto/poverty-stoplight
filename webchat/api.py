@@ -85,12 +85,9 @@ def get_llm():
             _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
                               num_ctx=LLM_MAX_TOKENS, think=False)
         else:
-            # enable_thinking=False avoids Qwen3 spending tokens on internal
-            # reasoning (<think> blocks) that eat into the max_tokens budget.
             _llm = ChatOpenAI(model=LLM_MODEL, temperature=0,
                               base_url=f"{VLLM_URL}/v1", api_key="EMPTY",
-                              max_tokens=LLM_MAX_TOKENS,
-                              model_kwargs={"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}})
+                              max_tokens=LLM_MAX_TOKENS)
     log.info(f"[llm] backend={LLM_BACKEND} model={LLM_MODEL} max_tokens={LLM_MAX_TOKENS}")
     return _llm
 
