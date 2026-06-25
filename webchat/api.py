@@ -436,16 +436,20 @@ def debug_ping():
 def debug_token():
     """Debug endpoint - returns today's expected token without requiring authentication.
     Used to verify token generation on client side matches server expectations."""
+    from fastapi.responses import JSONResponse
     today = datetime.now()
     expected_token = _daily_token(today)
     date_str = today.strftime("%d/%m/%Y")
-    return {
-        "status": "ok",
-        "date": date_str,
-        "secret": WEBCHAT_SECRET,
-        "expected_token": expected_token,
-        "token_length": len(expected_token),
-    }
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "date": date_str,
+            "secret": WEBCHAT_SECRET,
+            "expected_token": expected_token,
+            "token_length": len(expected_token),
+        },
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.post("/api/session")

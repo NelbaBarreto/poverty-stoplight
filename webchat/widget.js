@@ -35,7 +35,7 @@
       day: "2-digit", month: "2-digit", year: "numeric",
     });
     if (_cachedToken && _tokenDate === today) return _cachedToken;
-    const res  = await fetch(API_URL + "/api/debug/token");
+    const res  = await fetch(API_URL + "/api/debug/token?_t=" + Date.now());
     const data = await res.json();
     _cachedToken = data.expected_token;
     _tokenDate   = today;
