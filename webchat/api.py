@@ -154,6 +154,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Middleware must be registered before event handlers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def _sync_prompt_from_db():
     """Pull latest prompt from DB and write to prompt.txt so every request reads the file."""
     try:
@@ -173,14 +182,6 @@ def _sync_prompt_from_db():
 @app.on_event("startup")
 def startup_load_prompt():
     _sync_prompt_from_db()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ---------------------------------------------------------------------------
 # DB helpers
