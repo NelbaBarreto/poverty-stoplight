@@ -61,13 +61,17 @@ log = logging.getLogger("webchat.api")
 # ---------------------------------------------------------------------------
 
 LLM_BACKEND     = os.getenv("LLM_BACKEND",    "vllm")   # "vllm" or "ollama"
-# Comma-separated list of vLLM URLs for round-robin load balancing
+# Comma-separated vLLM URLs — round-robin load balancing
 # e.g. VLLM_BASE_URLS=http://localhost:8800,http://localhost:8801
 _vllm_urls_raw  = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", "http://localhost:8800"))
 VLLM_URLS       = [u.strip() for u in _vllm_urls_raw.split(",") if u.strip()]
 VLLM_URL        = VLLM_URLS[0]  # kept for display / embedding fallback
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+# Per-instance max_tokens — must match order of VLLM_BASE_URLS
+# e.g. VLLM_MAX_TOKENS_LIST=2048,1024
+_max_tokens_raw = os.getenv("VLLM_MAX_TOKENS_LIST", "")
+_max_tokens_list = [int(x.strip()) for x in _max_tokens_raw.split(",") if x.strip()]
+LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "2048"))  # default / Ollama
 RAG_K           = int(os.getenv("RAG_K", "5"))
 THINKING_BUDGET = int(os.getenv("THINKING_BUDGET", "512"))
 
@@ -111,14 +115,15 @@ def _build_llm_pool():
         if THINKING_BUDGET >= 0:
             extra = {"chat_template_kwargs": {"enable_thinking": True,
                                               "thinking_budget": THINKING_BUDGET}}
-        for url in VLLM_URLS:
+        for i, url in enumerate(VLLM_URLS):
             model = LLM_MODEL or _detect_vllm_model(url)
+            max_tok = _max_tokens_list[i] if i < len(_max_tokens_list) else LLM_MAX_TOKENS
             instance = ChatOpenAI(model=model, temperature=0,
                                   base_url=f"{url}/v1", api_key="EMPTY",
-                                  max_tokens=LLM_MAX_TOKENS,
+                                  max_tokens=max_tok,
                                   model_kwargs={"extra_body": extra} if extra else {})
             pool.append(instance)
-            log.info(f"[llm] vllm pool: {url} model={model}")
+            log.info(f"[llm] vllm pool: {url} model={model} max_tokens={max_tok}")
     _llm_pool = pool
     _llm_cycle = itertools.cycle(pool)
 
