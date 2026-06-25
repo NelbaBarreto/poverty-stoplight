@@ -21,6 +21,7 @@ Configuration (via .env):
 """
 
 import hashlib
+import itertools
 import os
 import sys
 import time
@@ -60,44 +61,72 @@ log = logging.getLogger("webchat.api")
 # ---------------------------------------------------------------------------
 
 LLM_BACKEND     = os.getenv("LLM_BACKEND",    "vllm")   # "vllm" or "ollama"
-VLLM_URL        = os.getenv("VLLM_BASE_URL",  "http://localhost:8800")
+# Comma-separated list of vLLM URLs for round-robin load balancing
+# e.g. VLLM_BASE_URLS=http://localhost:8800,http://localhost:8801
+_vllm_urls_raw  = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", "http://localhost:8800"))
+VLLM_URLS       = [u.strip() for u in _vllm_urls_raw.split(",") if u.strip()]
+VLLM_URL        = VLLM_URLS[0]  # kept for display / embedding fallback
 OLLAMA_URL      = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MAX_TOKENS    = int(os.getenv("LLM_MAX_TOKENS", "2048"))
-RAG_K             = int(os.getenv("RAG_K", "5"))
-# Limits Qwen3 thinking tokens — reduces latency before first visible token.
-# Set to 0 to disable thinking entirely, -1 for unlimited.
-THINKING_BUDGET   = int(os.getenv("THINKING_BUDGET", "512"))
+LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+RAG_K           = int(os.getenv("RAG_K", "5"))
+THINKING_BUDGET = int(os.getenv("THINKING_BUDGET", "512"))
 
-_DEFAULT_MODEL  = {
-    "vllm":   "Qwen/Qwen3-30B-A3B",
-    "ollama": "qwen3:8b",
-}
-LLM_MODEL       = os.getenv("LLM_MODEL", _DEFAULT_MODEL.get(LLM_BACKEND, "Qwen/Qwen3-8B"))
+LLM_MODEL       = os.getenv("LLM_MODEL", "")   # if empty, auto-detected per vLLM instance
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
 
-# Single shared LLM instance — avoids re-initialization on every request
-_llm = None
+# ---------------------------------------------------------------------------
+# LLM pool — one ChatOpenAI/ChatOllama per backend URL, round-robin
+# ---------------------------------------------------------------------------
+
+_llm_pool: list = []
+_llm_cycle = None
+
+def _detect_vllm_model(url: str) -> str:
+    """Query /v1/models to get the loaded model name for this vLLM instance."""
+    try:
+        resp = requests.get(f"{url}/v1/models",
+                            headers={"Authorization": "Bearer EMPTY"}, timeout=10)
+        resp.raise_for_status()
+        models = resp.json().get("data", [])
+        if models:
+            return models[0]["id"]
+    except Exception as e:
+        log.warning(f"[llm] could not detect model at {url}: {e}")
+    return "unknown"
+
+def _build_llm_pool():
+    """Build one LLM instance per vLLM URL (or single Ollama instance)."""
+    global _llm_pool, _llm_cycle
+    pool = []
+    if LLM_BACKEND == "ollama":
+        model = LLM_MODEL or "qwen3:8b"
+        pool.append(ChatOllama(model=model, temperature=0, base_url=OLLAMA_URL,
+                               num_ctx=LLM_MAX_TOKENS, think=False))
+        log.info(f"[llm] ollama pool: 1 instance model={model}")
+    else:
+        extra = {}
+        if THINKING_BUDGET >= 0:
+            extra = {"chat_template_kwargs": {"enable_thinking": True,
+                                              "thinking_budget": THINKING_BUDGET}}
+        for url in VLLM_URLS:
+            model = LLM_MODEL or _detect_vllm_model(url)
+            instance = ChatOpenAI(model=model, temperature=0,
+                                  base_url=f"{url}/v1", api_key="EMPTY",
+                                  max_tokens=LLM_MAX_TOKENS,
+                                  model_kwargs={"extra_body": extra} if extra else {})
+            pool.append(instance)
+            log.info(f"[llm] vllm pool: {url} model={model}")
+    _llm_pool = pool
+    _llm_cycle = itertools.cycle(pool)
 
 def get_llm():
-    global _llm
-    if _llm is None:
-        if LLM_BACKEND == "ollama":
-            _llm = ChatOllama(model=LLM_MODEL, temperature=0, base_url=OLLAMA_URL,
-                              num_ctx=LLM_MAX_TOKENS, think=False)
-        else:
-            extra = {}
-            if THINKING_BUDGET >= 0:
-                extra = {"chat_template_kwargs": {"enable_thinking": True,
-                                                  "thinking_budget": THINKING_BUDGET}}
-            _llm = ChatOpenAI(model=LLM_MODEL, temperature=0,
-                              base_url=f"{VLLM_URL}/v1", api_key="EMPTY",
-                              max_tokens=LLM_MAX_TOKENS,
-                              model_kwargs={"extra_body": extra} if extra else {})
-    log.info(f"[llm] backend={LLM_BACKEND} model={LLM_MODEL} max_tokens={LLM_MAX_TOKENS}")
-    return _llm
+    """Return next LLM instance in round-robin rotation."""
+    if not _llm_pool:
+        _build_llm_pool()
+    return next(_llm_cycle)
 
 # ---------------------------------------------------------------------------
 # Token rotativo diario — sha512(SECRET + DD/MM/YYYY)
@@ -180,8 +209,10 @@ def _sync_prompt_from_db():
     log.info(f"[prompt] using existing {_PROMPT_FILE}")
 
 @app.on_event("startup")
-def startup_load_prompt():
+def startup_events():
     _sync_prompt_from_db()
+    if LLM_BACKEND != "ollama":
+        _build_llm_pool()
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -402,15 +433,16 @@ def health(_: None = Depends(require_token)):
     except Exception as e:
         db = f"error: {e}"
     return {
-        "status":       "ok",
-        "db":           db,
-        "llm_model":    LLM_MODEL,
-        "embed_model":  EMBED_MODEL,
-        "chunk_config": CHUNK_CONFIG,
-        "llm_backend":  LLM_BACKEND,
+        "status":         "ok",
+        "db":             db,
+        "llm_backend":    LLM_BACKEND,
+        "llm_model":      LLM_MODEL or "auto-detected",
+        "vllm_urls":      VLLM_URLS,
+        "pool_size":      len(_llm_pool),
+        "embed_model":    EMBED_MODEL,
+        "chunk_config":   CHUNK_CONFIG,
         "llm_max_tokens": LLM_MAX_TOKENS,
-        "vllm_url":     VLLM_URL,
-        "ollama_url":   OLLAMA_URL,
+        "ollama_url":     OLLAMA_URL,
     }
 
 
