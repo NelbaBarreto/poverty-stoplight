@@ -27,19 +27,10 @@
   const STORAGE_KEY = "luz_session_id";
 
   /* ── Token management ──────────────────────────────────────────────────── */
-  let _cachedToken = null;
-  let _tokenDate   = null;
-
   async function getToken() {
-    const today = new Date().toLocaleDateString("es-PY", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-    if (_cachedToken && _tokenDate === today) return _cachedToken;
     const res  = await fetch(API_URL + "/api/debug/token?_t=" + Date.now());
     const data = await res.json();
-    _cachedToken = data.expected_token;
-    _tokenDate   = today;
-    return _cachedToken;
+    return data.expected_token;
   }
 
   /* ── Session management ────────────────────────────────────────────────── */
