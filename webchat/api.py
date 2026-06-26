@@ -39,6 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
+from sentence_transformers import SentenceTransformer
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -303,18 +304,30 @@ def get_history(session_id: str, limit: int = 20) -> list:
 # RAG helpers
 # ---------------------------------------------------------------------------
 
+_EMBED_MODEL_MAP = {
+    "bge-m3":                 "BAAI/bge-m3",
+    "nomic-embed-text":       "nomic-ai/nomic-embed-text-v1",
+    "mxbai-embed-large":      "mixedbread-ai/mxbai-embed-large-v1",
+    "all-minilm":             "sentence-transformers/all-MiniLM-L6-v2",
+    "snowflake-arctic-embed": "Snowflake/snowflake-arctic-embed-m",
+}
+_st_model: SentenceTransformer | None = None
+
+def _get_st_model() -> SentenceTransformer:
+    global _st_model
+    if _st_model is None:
+        hf_name = _EMBED_MODEL_MAP.get(EMBED_MODEL, "BAAI/bge-m3")
+        log.info(f"[embed] loading sentence-transformers model: {hf_name}")
+        _st_model = SentenceTransformer(hf_name, trust_remote_code=True)
+        log.info(f"[embed] model loaded")
+    return _st_model
+
 def get_embedding(query: str) -> list:
-    # Embeddings stay on Ollama — vectors stored in DB were generated with Ollama
-    # and vLLM only serves generative models, not embedding endpoints.
     t0 = time.monotonic()
-    resp = requests.post(
-        f"{OLLAMA_URL}/api/embeddings",
-        json={"model": EMBED_MODEL, "prompt": query},
-        timeout=60,
-    )
-    resp.raise_for_status()
+    model = _get_st_model()
+    vector = model.encode(query, normalize_embeddings=True).tolist()
     log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
-    return resp.json()["embedding"]
+    return vector
 
 
 def search_context(query: str, k: int = RAG_K) -> tuple:
