@@ -324,8 +324,17 @@ def _get_st_model() -> SentenceTransformer:
 
 def get_embedding(query: str) -> list:
     t0 = time.monotonic()
-    model = _get_st_model()
-    vector = model.encode(query, normalize_embeddings=True).tolist()
+    if LLM_BACKEND == "ollama":
+        resp = requests.post(
+            f"{OLLAMA_URL}/api/embeddings",
+            json={"model": EMBED_MODEL, "prompt": query},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        vector = resp.json()["embedding"]
+    else:
+        model = _get_st_model()
+        vector = model.encode(query, normalize_embeddings=True).tolist()
     log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
     return vector
 
