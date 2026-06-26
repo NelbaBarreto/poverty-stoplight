@@ -112,10 +112,14 @@ def _build_llm_pool():
                                num_ctx=LLM_MAX_TOKENS, think=False))
         log.info(f"[llm] ollama pool: 1 instance model={model}")
     else:
-        extra = {}
-        if THINKING_BUDGET >= 0:
+        # THINKING_BUDGET: >0 = enable with token budget, 0 = disable, -1 = enable unlimited
+        if THINKING_BUDGET > 0:
             extra = {"chat_template_kwargs": {"enable_thinking": True,
                                               "thinking_budget": THINKING_BUDGET}}
+        elif THINKING_BUDGET == 0:
+            extra = {"chat_template_kwargs": {"enable_thinking": False}}
+        else:
+            extra = {}
         for i, url in enumerate(VLLM_URLS):
             model = LLM_MODEL or _detect_vllm_model(url)
             max_tok = _max_tokens_list[i] if i < len(_max_tokens_list) else LLM_MAX_TOKENS
