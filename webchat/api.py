@@ -221,8 +221,9 @@ def _sync_prompt_from_db():
 @app.on_event("startup")
 def startup_events():
     _sync_prompt_from_db()
+    _build_llm_pool()
     if LLM_BACKEND != "ollama":
-        _build_llm_pool()
+        _get_st_model()  # preload embedding model — avoids 6s cold start on first request
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -322,7 +323,13 @@ def _get_st_model() -> SentenceTransformer:
     if _st_model is None:
         hf_name = _EMBED_MODEL_MAP.get(EMBED_MODEL, "BAAI/bge-m3")
         log.info(f"[embed] loading sentence-transformers model: {hf_name}")
-        _st_model = SentenceTransformer(hf_name, trust_remote_code=True)
+        # local_files_only avoids HuggingFace network calls on every startup
+        try:
+            _st_model = SentenceTransformer(hf_name, trust_remote_code=True,
+                                             local_files_only=True)
+        except Exception:
+            log.info(f"[embed] model not cached locally, downloading...")
+            _st_model = SentenceTransformer(hf_name, trust_remote_code=True)
         log.info(f"[embed] model loaded")
     return _st_model
 
