@@ -273,17 +273,19 @@ def session_exists(session_id: str) -> bool:
 
 def save_message(session_id: str, role: str, content: str,
                  llm_model=None, embed_model=None, chunk_config=None,
-                 response_time_ms=None):
+                 response_time_ms=None) -> Optional[int]:
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO chat_messages
                    (session_id, role, content, llm_model, embed_model, chunk_config, response_time_ms)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (session_id, role, content, llm_model, embed_model, chunk_config, response_time_ms),
             )
+            row = cur.fetchone()
         conn.commit()
+        return row["id"] if row else None
     finally:
         conn.close()
 
@@ -456,6 +458,12 @@ class ChatResponse(BaseModel):
     llm_model: str
     embed_model: str
     chunk_config: str
+    message_id: Optional[int] = None
+
+
+class RateRequest(BaseModel):
+    message_id: int
+    rating: int  # 1 = thumbs up, -1 = thumbs down
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +583,7 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
     # Save assistant response
-    save_message(
+    msg_id = save_message(
         req.session_id, "assistant", response_text,
         llm_model=LLM_MODEL, embed_model=EMBED_MODEL,
         chunk_config=CHUNK_CONFIG, response_time_ms=elapsed_ms,
@@ -591,6 +599,7 @@ def chat(req: ChatRequest, _: None = Depends(require_token)):
         llm_model=LLM_MODEL,
         embed_model=EMBED_MODEL,
         chunk_config=CHUNK_CONFIG,
+        message_id=msg_id,
     )
 
 
@@ -637,19 +646,39 @@ def chat_stream(req: ChatRequest, _: None = Depends(require_token)):
         elapsed_ms = int((time.monotonic() - t0) * 1000)
         _log_llm_meta(last_meta)
 
-        save_message(
+        msg_id = save_message(
             req.session_id, "assistant", response_text,
             llm_model=LLM_MODEL, embed_model=EMBED_MODEL,
             chunk_config=CHUNK_CONFIG, response_time_ms=elapsed_ms,
         )
         log.info(f"stream session={req.session_id} time={elapsed_ms}ms")
-        yield f"data: {json.dumps({'done': True, 'sources': sources, 'response_time_ms': elapsed_ms})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'sources': sources, 'response_time_ms': elapsed_ms, 'message_id': msg_id})}\n\n"
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/chat/rate")
+def rate_message(req: RateRequest, _: None = Depends(require_token)):
+    if req.rating not in (1, -1):
+        raise HTTPException(status_code=400, detail="rating must be 1 or -1")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_messages SET rating = %s WHERE id = %s",
+                (req.rating, req.message_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Message not found")
+        conn.commit()
+    finally:
+        conn.close()
+    log.info(f"[rating] message_id={req.message_id} rating={req.rating}")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
