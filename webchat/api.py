@@ -81,6 +81,7 @@ EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
+SYNC_PROMPT_FROM_DB = os.getenv("SYNC_PROMPT_FROM_DB", "true").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # LLM pool — one ChatOpenAI/ChatOllama per backend URL, round-robin
@@ -204,6 +205,9 @@ app.add_middleware(
 
 def _sync_prompt_from_db():
     """Pull latest prompt from DB and write to prompt.txt so every request reads the file."""
+    if not SYNC_PROMPT_FROM_DB:
+        log.info(f"[prompt] SYNC_PROMPT_FROM_DB=false — using existing {_PROMPT_FILE}")
+        return
     try:
         conn = get_conn()
         with conn.cursor() as cur:
