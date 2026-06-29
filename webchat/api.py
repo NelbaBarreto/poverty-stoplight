@@ -391,6 +391,8 @@ def build_messages(history: list, prompt: str, context: str):
     system_prompt = load_system_prompt()
     system_content = (
         f"{system_prompt}\n\n"
+        f"IMPORTANTE: No incluyas la lista de fuentes al final de tu respuesta. "
+        f"Las fuentes se muestran automáticamente en la interfaz.\n\n"
         f"## CONTEXTO RELEVANTE:\n\n{context}"
     )
     messages = [SystemMessage(content=system_content)]
