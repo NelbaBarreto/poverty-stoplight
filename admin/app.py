@@ -2720,6 +2720,19 @@ with tab_eval:
     ver_eval_id_map  = {ver_eval_options[i]: int(df_versions_eval.iloc[i]["id"]) for i in range(len(df_versions_eval))} if not df_versions_eval.empty else {}
     default_ver_eval_idx = next((i for i, r in df_versions_eval.iterrows() if r["activa"]), 0) if not df_versions_eval.empty else 0
 
+    # LLM/embed/chunk defaults from active version_agente
+    _active_va = query_df("""
+        SELECT lm.model_name AS llm, em.model_name AS embed, cc.name AS chunk
+        FROM version_agente va
+        JOIN llm_models lm      ON lm.id = va.llm_model_id
+        JOIN embedding_models em ON em.id = va.embed_model_id
+        JOIN chunk_configs cc    ON cc.id = va.chunk_config_id
+        WHERE va.activa = TRUE LIMIT 1
+    """)
+    _active_llm   = _active_va.iloc[0]["llm"]   if not _active_va.empty else "qwen3:8b"
+    _active_embed = _active_va.iloc[0]["embed"]  if not _active_va.empty else "bge-m3"
+    _active_chunk = _active_va.iloc[0]["chunk"]  if not _active_va.empty else "medium"
+
     col_ver_eval, col_llm, col_embed, col_chunk, col_k = st.columns(5)
 
     with col_ver_eval:
@@ -2727,15 +2740,15 @@ with tab_eval:
         sel_eval_version_id = ver_eval_id_map.get(sel_eval_ver_opt, 2)
 
     with col_llm:
-        default_llm = llm_options.index("qwen3:8b") if "qwen3:8b" in llm_options else 0
+        default_llm = llm_options.index(_active_llm) if _active_llm in llm_options else 0
         sel_eval_llm = st.selectbox("Modelo LLM", llm_options, index=default_llm, key="eval_llm")
 
     with col_embed:
-        default_emb = embed_options.index("bge-m3") if "bge-m3" in embed_options else 0
+        default_emb = embed_options.index(_active_embed) if _active_embed in embed_options else 0
         sel_eval_embed = st.selectbox("Embedding", embed_options, index=default_emb, key="eval_embed")
 
     with col_chunk:
-        default_chunk = chunk_options.index("medium") if "medium" in chunk_options else 0
+        default_chunk = chunk_options.index(_active_chunk) if _active_chunk in chunk_options else 0
         sel_eval_chunk = st.selectbox("Chunk config", chunk_options, index=default_chunk, key="eval_chunk")
 
     with col_k:
