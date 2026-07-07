@@ -32,20 +32,59 @@ import psycopg2
 from tqdm import tqdm
 from dotenv import load_dotenv
 
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 OLLAMA_BASE_URL_DEFAULT = "http://localhost:11434"
-K_RETRIEVED = 8
+VLLM_BASE_URL_DEFAULT   = "http://localhost:8800"
+LLM_BACKEND  = os.getenv("LLM_BACKEND", "ollama")   # "vllm" or "ollama"
+OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL_DEFAULT)
+VLLM_URL     = os.getenv("VLLM_BASE_URL",  VLLM_BASE_URL_DEFAULT)
+K_RETRIEVED  = 8
 
-def _load_prompt() -> str:
+# Sentence-transformers for embeddings when LLM_BACKEND=vllm (no Ollama needed)
+_st_model_cache = None
+_EMBED_MODEL_MAP = {
+    "bge-m3":                 "BAAI/bge-m3",
+    "nomic-embed-text":       "nomic-ai/nomic-embed-text-v1",
+    "mxbai-embed-large":      "mixedbread-ai/mxbai-embed-large-v1",
+    "all-minilm":             "sentence-transformers/all-MiniLM-L6-v2",
+    "snowflake-arctic-embed": "Snowflake/snowflake-arctic-embed-m",
+}
+
+def _get_st_model(embed_model_name: str):
+    global _st_model_cache
+    if _st_model_cache is None:
+        from sentence_transformers import SentenceTransformer
+        hf_name = _EMBED_MODEL_MAP.get(embed_model_name, "BAAI/bge-m3")
+        logging.info(f"[embed] loading sentence-transformers: {hf_name}")
+        try:
+            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True, local_files_only=True)
+        except Exception:
+            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True)
+        logging.info("[embed] model loaded")
+    return _st_model_cache
+
+def _load_prompt_from_db(conn) -> str:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt_text FROM prompt_history ORDER BY created_at DESC LIMIT 1")
+            row = cur.fetchone()
+        if row and row[0]:
+            logging.info(f"[prompt] loaded from DB ({len(row[0])} chars)")
+            return row[0].strip()
+    except Exception as e:
+        logging.warning(f"[prompt] DB load failed: {e}")
     f = Path(__file__).parent.parent / "prompt.txt"
     if f.exists():
+        logging.info("[prompt] fallback to prompt.txt")
         return f.read_text(encoding="utf-8").strip()
     return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
 
-RAG_SYSTEM_PROMPT = _load_prompt()
+RAG_SYSTEM_PROMPT = ""  # loaded after DB connection
 
 # ---------------------------------------------------------------------------
 # Database helpers  (same pattern as scripts/ingest_all.py)
@@ -155,7 +194,10 @@ def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id: int, pa
 # ---------------------------------------------------------------------------
 
 def get_query_embedding(model: str, query: str, base_url: str) -> list:
-    """Embed a query string using Ollama /api/embed."""
+    """Embed a query using sentence-transformers (vLLM) or Ollama."""
+    if LLM_BACKEND == "vllm":
+        st = _get_st_model(model)
+        return st.encode(query, normalize_embeddings=True).tolist()
     resp = requests.post(
         f"{base_url}/api/embed",
         json={"model": model, "input": query},
@@ -170,11 +212,19 @@ def get_query_embedding(model: str, query: str, base_url: str) -> list:
 
 
 def is_model_available(model_name: str) -> bool:
-    """Check if an Ollama model is available locally."""
+    """Check if the model is available (vLLM: /v1/models, Ollama: ollama show)."""
+    if LLM_BACKEND == "vllm":
+        try:
+            resp = requests.get(f"{VLLM_URL}/v1/models",
+                                headers={"Authorization": "Bearer EMPTY"}, timeout=10)
+            resp.raise_for_status()
+            ids = [m["id"] for m in resp.json().get("data", [])]
+            return model_name in ids
+        except Exception:
+            return False
     result = subprocess.run(
         ["ollama", "show", model_name],
-        capture_output=True,
-        text=True,
+        capture_output=True, text=True,
     )
     return result.returncode == 0
 
@@ -245,36 +295,63 @@ def generate_answer(
     base_url: str,
 ) -> tuple[str, int]:
     """
-    Build a RAG prompt from contexts and call Ollama /api/generate.
-
-    Returns:
-        (answer_text, generation_time_ms)
+    Build a RAG prompt and call the LLM.
+    Uses vLLM /v1/chat/completions or Ollama /api/generate depending on LLM_BACKEND.
     """
     context_block = "\n\n---\n\n".join(
         f"[Fuente: {c['filename']} | formato: {c['format']} | dist: {c['distance']:.4f}]\n{c['chunk_text']}"
         for c in contexts
     )
 
-    full_prompt = (
+    system_content = (
         f"{RAG_SYSTEM_PROMPT}\n\n"
-        f"## CONTEXTO (documentos encontrados):\n\n{context_block}\n\n"
-        f"## PREGUNTA:\n{question}\n\n"
-        f"## RESPUESTA:"
+        f"INSTRUCCIÓN DE INTERFAZ (prioridad máxima): Las fuentes ya se muestran "
+        f"automáticamente en la interfaz después de tu mensaje. "
+        f"NO añadas ningún bloque 'Fuentes:', 'Referencias:' ni nombres de archivos al final "
+        f"de tu respuesta. Redacta solo el contenido de tu respuesta.\n\n"
+        f"## CONTEXTO (documentos encontrados):\n\n{context_block}"
     )
 
     t0 = time.monotonic()
-    resp = requests.post(
-        f"{base_url}/api/generate",
-        json={
-            "model":  llm_model,
-            "prompt": full_prompt,
-            "stream": False,
-            "options": {"temperature": 0},
-        },
-        timeout=300,
-    )
-    resp.raise_for_status()
-    answer = resp.json().get("response", "").strip()
+
+    if LLM_BACKEND == "vllm":
+        resp = requests.post(
+            f"{VLLM_URL}/v1/chat/completions",
+            headers={"Authorization": "Bearer EMPTY", "Content-Type": "application/json"},
+            json={
+                "model": llm_model,
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user",   "content": question},
+                ],
+                "temperature": 0,
+                "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "2048")),
+                "stream": False,
+                "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+            },
+            timeout=300,
+        )
+        resp.raise_for_status()
+        answer = resp.json()["choices"][0]["message"]["content"].strip()
+    else:
+        full_prompt = (
+            f"{system_content}\n\n"
+            f"## PREGUNTA:\n{question}\n\n"
+            f"## RESPUESTA:"
+        )
+        resp = requests.post(
+            f"{base_url}/api/generate",
+            json={
+                "model":  llm_model,
+                "prompt": full_prompt,
+                "stream": False,
+                "options": {"temperature": 0},
+            },
+            timeout=300,
+        )
+        resp.raise_for_status()
+        answer = resp.json().get("response", "").strip()
+
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     return answer, elapsed_ms
 
@@ -335,12 +412,15 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    load_dotenv()
     args = parse_args()
-    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL_DEFAULT)
+    base_url = OLLAMA_URL
 
+    logging.info(f"LLM_BACKEND={LLM_BACKEND}")
     logging.info("Connecting to database...")
     conn = get_db_connection()
+
+    global RAG_SYSTEM_PROMPT
+    RAG_SYSTEM_PROMPT = _load_prompt_from_db(conn)
 
     try:
         version_id = args.version_id if args.version_id is not None else get_active_version_id(conn)
