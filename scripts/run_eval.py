@@ -349,7 +349,7 @@ def generate_answer(
             timeout=300,
         )
         resp.raise_for_status()
-        answer = resp.json()["choices"][0]["message"]["content"].strip()
+        answer = (resp.json()["choices"][0]["message"]["content"] or "").strip()
     else:
         full_prompt = (
             f"{system_content}\n\n"
