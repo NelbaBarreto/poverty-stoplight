@@ -65,9 +65,10 @@ def _get_st_model(embed_model_name: str):
         hf_name = _EMBED_MODEL_MAP.get(embed_model_name, "BAAI/bge-m3")
         logging.info(f"[embed] loading sentence-transformers: {hf_name}")
         try:
-            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True, local_files_only=True)
+            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True,
+                                                   local_files_only=True, device="cpu")
         except Exception:
-            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True)
+            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True, device="cpu")
         logging.info("[embed] model loaded")
     return _st_model_cache
 

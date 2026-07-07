@@ -332,10 +332,10 @@ def _get_st_model() -> SentenceTransformer:
         # local_files_only avoids HuggingFace network calls on every startup
         try:
             _st_model = SentenceTransformer(hf_name, trust_remote_code=True,
-                                             local_files_only=True)
+                                             local_files_only=True, device="cpu")
         except Exception:
             log.info(f"[embed] model not cached locally, downloading...")
-            _st_model = SentenceTransformer(hf_name, trust_remote_code=True)
+            _st_model = SentenceTransformer(hf_name, trust_remote_code=True, device="cpu")
         log.info(f"[embed] model loaded")
     return _st_model
 
