@@ -42,7 +42,10 @@ OLLAMA_BASE_URL_DEFAULT = "http://localhost:11434"
 VLLM_BASE_URL_DEFAULT   = "http://localhost:8800"
 LLM_BACKEND  = os.getenv("LLM_BACKEND", "ollama")   # "vllm" or "ollama"
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL_DEFAULT)
-VLLM_URL     = os.getenv("VLLM_BASE_URL",  VLLM_BASE_URL_DEFAULT)
+# Accept both VLLM_BASE_URL (singular, eval) and VLLM_BASE_URLS (plural, api.py)
+# — take the first URL from whichever is set
+_vllm_urls_raw = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", VLLM_BASE_URL_DEFAULT))
+VLLM_URL     = _vllm_urls_raw.split(",")[0].strip()
 K_RETRIEVED  = 8
 
 # Sentence-transformers for embeddings when LLM_BACKEND=vllm (no Ollama needed)
