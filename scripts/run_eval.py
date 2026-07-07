@@ -46,6 +46,7 @@ OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL_DEFAULT)
 # — take the first URL from whichever is set
 _vllm_urls_raw = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", VLLM_BASE_URL_DEFAULT))
 VLLM_URL     = _vllm_urls_raw.split(",")[0].strip()
+EMBED_BASE_URL = os.getenv("EMBED_BASE_URL", "")  # dedicated vLLM embedding server
 K_RETRIEVED  = 8
 
 # Sentence-transformers for embeddings when LLM_BACKEND=vllm (no Ollama needed)
@@ -198,8 +199,20 @@ def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id: int, pa
 # ---------------------------------------------------------------------------
 
 def get_query_embedding(model: str, query: str, base_url: str) -> list:
-    """Embed a query using sentence-transformers (vLLM) or Ollama."""
+    """Embed a query using vLLM /v1/embeddings, sentence-transformers, or Ollama."""
+    if LLM_BACKEND == "vllm" and EMBED_BASE_URL:
+        # Dedicated vLLM embedding container
+        hf_name = _EMBED_MODEL_MAP.get(model, model)
+        resp = requests.post(
+            f"{EMBED_BASE_URL}/v1/embeddings",
+            headers={"Authorization": "Bearer EMPTY"},
+            json={"model": hf_name, "input": query},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()["data"][0]["embedding"]
     if LLM_BACKEND == "vllm":
+        # Fallback: sentence-transformers on CPU
         st = _get_st_model(model)
         return st.encode(query, normalize_embeddings=True).tolist()
     resp = requests.post(

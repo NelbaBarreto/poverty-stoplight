@@ -78,6 +78,7 @@ THINKING_BUDGET = int(os.getenv("THINKING_BUDGET", "512"))
 
 LLM_MODEL       = os.getenv("LLM_MODEL", "")   # if empty, auto-detected per vLLM instance
 EMBED_MODEL     = os.getenv("EMBED_MODEL",     "bge-m3")
+EMBED_BASE_URL  = os.getenv("EMBED_BASE_URL",  "")  # vLLM embedding server (e.g. http://localhost:8801)
 CHUNK_CONFIG    = os.getenv("CHUNK_CONFIG",    "medium")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
@@ -349,7 +350,19 @@ def get_embedding(query: str) -> list:
         )
         resp.raise_for_status()
         vector = resp.json()["embedding"]
+    elif EMBED_BASE_URL:
+        # Dedicated vLLM embedding container (e.g. port 8801)
+        hf_name = _EMBED_MODEL_MAP.get(EMBED_MODEL, EMBED_MODEL)
+        resp = requests.post(
+            f"{EMBED_BASE_URL}/v1/embeddings",
+            headers={"Authorization": "Bearer EMPTY"},
+            json={"model": hf_name, "input": query},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        vector = resp.json()["data"][0]["embedding"]
     else:
+        # Fallback: sentence-transformers on CPU
         model = _get_st_model()
         vector = model.encode(query, normalize_embeddings=True).tolist()
     log.info(f"[timing] embed={int((time.monotonic()-t0)*1000)}ms")
