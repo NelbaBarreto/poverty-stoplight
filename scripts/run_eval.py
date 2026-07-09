@@ -23,8 +23,6 @@ import json
 import time
 import logging
 import argparse
-import subprocess
-from pathlib import Path
 from itertools import product
 
 import requests
@@ -38,58 +36,9 @@ load_dotenv()
 # Configuration
 # ---------------------------------------------------------------------------
 
-OLLAMA_BASE_URL_DEFAULT = "http://localhost:11434"
-VLLM_BASE_URL_DEFAULT   = "http://localhost:8800"
-LLM_BACKEND  = os.getenv("LLM_BACKEND", "ollama")   # "vllm" or "ollama"
-OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL_DEFAULT)
-# Accept both VLLM_BASE_URL (singular, eval) and VLLM_BASE_URLS (plural, api.py)
-# — take the first URL from whichever is set
-_vllm_urls_raw = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", VLLM_BASE_URL_DEFAULT))
-VLLM_URL     = _vllm_urls_raw.split(",")[0].strip()
-EMBED_BASE_URL = os.getenv("EMBED_BASE_URL", "")  # dedicated vLLM embedding server
-K_RETRIEVED  = 8
-
-# Sentence-transformers for embeddings when LLM_BACKEND=vllm (no Ollama needed)
-_st_model_cache = None
-_EMBED_MODEL_MAP = {
-    "bge-m3":                 "BAAI/bge-m3",
-    "nomic-embed-text":       "nomic-ai/nomic-embed-text-v1",
-    "mxbai-embed-large":      "mixedbread-ai/mxbai-embed-large-v1",
-    "all-minilm":             "sentence-transformers/all-MiniLM-L6-v2",
-    "snowflake-arctic-embed": "Snowflake/snowflake-arctic-embed-m",
-}
-
-def _get_st_model(embed_model_name: str):
-    global _st_model_cache
-    if _st_model_cache is None:
-        from sentence_transformers import SentenceTransformer
-        hf_name = _EMBED_MODEL_MAP.get(embed_model_name, "BAAI/bge-m3")
-        logging.info(f"[embed] loading sentence-transformers: {hf_name}")
-        try:
-            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True,
-                                                   local_files_only=True, device="cpu")
-        except Exception:
-            _st_model_cache = SentenceTransformer(hf_name, trust_remote_code=True, device="cpu")
-        logging.info("[embed] model loaded")
-    return _st_model_cache
-
-def _load_prompt_from_db(conn) -> str:
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT prompt_text FROM prompt_history ORDER BY created_at DESC LIMIT 1")
-            row = cur.fetchone()
-        if row and row[0]:
-            logging.info(f"[prompt] loaded from DB ({len(row[0])} chars)")
-            return row[0].strip()
-    except Exception as e:
-        logging.warning(f"[prompt] DB load failed: {e}")
-    f = Path(__file__).parent.parent / "prompt.txt"
-    if f.exists():
-        logging.info("[prompt] fallback to prompt.txt")
-        return f.read_text(encoding="utf-8").strip()
-    return "Eres Rosa, la asistente conversacional del Banco de Soluciones de la Fundación Paraguaya."
-
-RAG_SYSTEM_PROMPT = ""  # loaded after DB connection
+WEBCHAT_API_URL = os.getenv("WEBCHAT_API_URL", "http://localhost:8000")
+WEBCHAT_SECRET  = os.getenv("WEBCHAT_SECRET",  "W3bCh4tFup4")
+K_RETRIEVED     = 8
 
 # ---------------------------------------------------------------------------
 # Database helpers  (same pattern as scripts/ingest_all.py)
@@ -195,182 +144,31 @@ def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id: int, pa
     conn.commit()
 
 # ---------------------------------------------------------------------------
-# Ollama helpers  (same pattern as src/tools.py)
+# API call — delegates retrieval + generation to the webchat API
 # ---------------------------------------------------------------------------
 
-def get_query_embedding(model: str, query: str, base_url: str) -> list:
-    """Embed a query using vLLM /v1/embeddings, sentence-transformers, or Ollama."""
-    if LLM_BACKEND == "vllm" and EMBED_BASE_URL:
-        # Dedicated vLLM embedding container
-        hf_name = _EMBED_MODEL_MAP.get(model, model)
-        resp = requests.post(
-            f"{EMBED_BASE_URL}/v1/embeddings",
-            headers={"Authorization": "Bearer EMPTY"},
-            json={"model": hf_name, "input": query},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()["data"][0]["embedding"]
-    if LLM_BACKEND == "vllm":
-        # Fallback: sentence-transformers on CPU
-        st = _get_st_model(model)
-        return st.encode(query, normalize_embeddings=True).tolist()
+def is_api_available() -> bool:
+    """Check if the webchat API is reachable."""
+    try:
+        resp = requests.get(f"{WEBCHAT_API_URL}/api/debug/ping", timeout=10)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def call_eval_endpoint(question: str) -> dict:
+    """
+    Call POST /api/chat/eval on the webchat API.
+    Returns { response, sources, retrieved_contexts, retrieval_time_ms, generation_time_ms }.
+    """
     resp = requests.post(
-        f"{base_url}/api/embed",
-        json={"model": model, "input": query},
-        timeout=60,
+        f"{WEBCHAT_API_URL}/api/chat/eval",
+        headers={"X-Eval-Secret": WEBCHAT_SECRET},
+        json={"message": question, "k": K_RETRIEVED},
+        timeout=300,
     )
     resp.raise_for_status()
-    data = resp.json()
-    embeddings = data.get("embeddings") or data.get("embedding")
-    if isinstance(embeddings, list) and isinstance(embeddings[0], list):
-        return embeddings[0]
-    return embeddings
-
-
-def is_model_available(model_name: str) -> bool:
-    """Check if the model is available (vLLM: /v1/models, Ollama: ollama show)."""
-    if LLM_BACKEND == "vllm":
-        try:
-            resp = requests.get(f"{VLLM_URL}/v1/models",
-                                headers={"Authorization": "Bearer EMPTY"}, timeout=10)
-            resp.raise_for_status()
-            ids = [m["id"] for m in resp.json().get("data", [])]
-            return model_name in ids
-        except Exception:
-            return False
-    result = subprocess.run(
-        ["ollama", "show", model_name],
-        capture_output=True, text=True,
-    )
-    return result.returncode == 0
-
-# ---------------------------------------------------------------------------
-# Retrieval  (replicates src/pgvector_manager.py:search_similar_new_schema)
-# ---------------------------------------------------------------------------
-
-def retrieve_contexts(
-    conn,
-    query: str,
-    embed_model: str,
-    embed_table: str,
-    chunk_config_name: str,
-    base_url: str,
-    k: int = K_RETRIEVED,
-) -> tuple[list[dict], int]:
-    """
-    Embed the query, then retrieve top-k similar chunks.
-
-    Returns:
-        (contexts, retrieval_time_ms)
-        contexts: list of dicts with chunk_id, chunk_text, filename, format, distance
-    """
-    t0 = time.monotonic()
-    embedding = get_query_embedding(embed_model, query, base_url)
-    embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
-
-    with conn.cursor() as cur:
-        query_sql = f"""
-            SELECT
-                c.id          AS chunk_id,
-                c.chunk_text,
-                d.filename,
-                c.format,
-                e.embedding <=> %s::vector AS distance
-            FROM {embed_table} e
-            JOIN chunks c        ON e.chunk_id      = c.id
-            JOIN chunk_configs cc ON c.chunk_config_id = cc.id
-            JOIN documents d     ON c.document_id    = d.id
-            WHERE cc.name = %s
-            ORDER BY e.embedding <=> %s::vector
-            LIMIT %s
-        """
-        cur.execute(query_sql, (embedding_str, chunk_config_name, embedding_str, k))
-        rows = cur.fetchall()
-
-    contexts = [
-        {
-            "chunk_id":   row[0],
-            "chunk_text": row[1],
-            "filename":   row[2],
-            "format":     row[3],
-            "distance":   float(row[4]),
-        }
-        for row in rows
-    ]
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
-    return contexts, elapsed_ms
-
-# ---------------------------------------------------------------------------
-# Generation
-# ---------------------------------------------------------------------------
-
-def generate_answer(
-    llm_model: str,
-    question: str,
-    contexts: list[dict],
-    base_url: str,
-) -> tuple[str, int]:
-    """
-    Build a RAG prompt and call the LLM.
-    Uses vLLM /v1/chat/completions or Ollama /api/generate depending on LLM_BACKEND.
-    """
-    context_block = "\n\n---\n\n".join(
-        f"[Fuente: {c['filename']} | formato: {c['format']} | dist: {c['distance']:.4f}]\n{c['chunk_text']}"
-        for c in contexts
-    )
-
-    system_content = (
-        f"{RAG_SYSTEM_PROMPT}\n\n"
-        f"INSTRUCCIÓN DE INTERFAZ (prioridad máxima): Las fuentes ya se muestran "
-        f"automáticamente en la interfaz después de tu mensaje. "
-        f"NO añadas ningún bloque 'Fuentes:', 'Referencias:' ni nombres de archivos al final "
-        f"de tu respuesta. Redacta solo el contenido de tu respuesta.\n\n"
-        f"## CONTEXTO (documentos encontrados):\n\n{context_block}"
-    )
-
-    t0 = time.monotonic()
-
-    if LLM_BACKEND == "vllm":
-        resp = requests.post(
-            f"{VLLM_URL}/v1/chat/completions",
-            headers={"Authorization": "Bearer EMPTY", "Content-Type": "application/json"},
-            json={
-                "model": llm_model,
-                "messages": [
-                    {"role": "system", "content": system_content},
-                    {"role": "user",   "content": question},
-                ],
-                "temperature": 0,
-                "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "2048")),
-                "stream": False,
-                "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
-            },
-            timeout=300,
-        )
-        resp.raise_for_status()
-        answer = (resp.json()["choices"][0]["message"]["content"] or "").strip()
-    else:
-        full_prompt = (
-            f"{system_content}\n\n"
-            f"## PREGUNTA:\n{question}\n\n"
-            f"## RESPUESTA:"
-        )
-        resp = requests.post(
-            f"{base_url}/api/generate",
-            json={
-                "model":  llm_model,
-                "prompt": full_prompt,
-                "stream": False,
-                "options": {"temperature": 0},
-            },
-            timeout=300,
-        )
-        resp.raise_for_status()
-        answer = resp.json().get("response", "").strip()
-
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
-    return answer, elapsed_ms
+    return resp.json()
 
 # ---------------------------------------------------------------------------
 # CLI argument parsing
@@ -430,14 +228,15 @@ def main():
     )
 
     args = parse_args()
-    base_url = OLLAMA_URL
 
-    logging.info(f"LLM_BACKEND={LLM_BACKEND}")
+    logging.info(f"WEBCHAT_API_URL={WEBCHAT_API_URL}")
+    if not is_api_available():
+        logging.error("Webchat API no disponible. Verificá que esté corriendo.")
+        sys.exit(1)
+    logging.info("Webchat API OK")
+
     logging.info("Connecting to database...")
     conn = get_db_connection()
-
-    global RAG_SYSTEM_PROMPT
-    RAG_SYSTEM_PROMPT = _load_prompt_from_db(conn)
 
     try:
         version_id = args.version_id if args.version_id is not None else get_active_version_id(conn)
@@ -471,18 +270,7 @@ def main():
             logging.info("--dry-run: no DB writes. Exiting.")
             return
 
-        # Verify which LLM models are actually available
-        available_llms = set()
-        for llm_id, llm_name in llm_models:
-            if is_model_available(llm_name):
-                available_llms.add(llm_name)
-                logging.info(f"  LLM OK: {llm_name}")
-            else:
-                logging.warning(f"  LLM UNAVAILABLE (will skip): {llm_name}")
-
-        # Build all combinations
         combos = list(product(llm_models, embed_models, chunk_configs, kb_questions))
-
         errors = 0
         skipped = 0
 
@@ -497,12 +285,6 @@ def main():
                     errors=errors,
                 )
 
-                # Skip unavailable LLMs
-                if llm_name not in available_llms:
-                    pbar.update(1)
-                    skipped += 1
-                    continue
-
                 # Skip already-successful runs (resumability)
                 if already_done(conn, llm_id, embed_id, chunk_id, kb_id, version_id):
                     pbar.update(1)
@@ -512,24 +294,19 @@ def main():
                 t_total_start = time.monotonic()
 
                 try:
-                    # --- Retrieval ---
-                    contexts, retrieval_ms = retrieve_contexts(
-                        conn, question, embed_name, embed_table, chunk_name, base_url
-                    )
-
-                    # --- Generation ---
-                    answer, generation_ms = generate_answer(llm_name, question, contexts, base_url)
-
+                    # Delegate retrieval + generation to the webchat API
+                    # so the eval response matches exactly what users see in the web
+                    data = call_eval_endpoint(question)
                     total_ms = int((time.monotonic() - t_total_start) * 1000)
 
                     upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id, {
-                        "retrieved_contexts":  contexts,
+                        "retrieved_contexts":  data.get("retrieved_contexts", []),
                         "k_retrieved":         K_RETRIEVED,
-                        "generated_answer":    answer,
+                        "generated_answer":    data.get("response", ""),
                         "status":              "success",
                         "error_message":       None,
-                        "retrieval_time_ms":   retrieval_ms,
-                        "generation_time_ms":  generation_ms,
+                        "retrieval_time_ms":   data.get("retrieval_time_ms"),
+                        "generation_time_ms":  data.get("generation_time_ms"),
                         "total_time_ms":       total_ms,
                     })
 
@@ -566,7 +343,7 @@ def main():
         logging.info("Evaluation complete. eval_runs summary:")
         for status, count in rows:
             logging.info(f"  {status}: {count:,}")
-        logging.info(f"  Skipped (already done / unavailable): {skipped:,}")
+        logging.info(f"  Skipped (already done): {skipped:,}")
         logging.info(f"  Errors this run: {errors:,}")
 
     finally:
