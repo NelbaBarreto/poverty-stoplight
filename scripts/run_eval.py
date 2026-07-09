@@ -165,7 +165,7 @@ def _get_token() -> str:
 def _create_session(token: str) -> str:
     resp = requests.post(
         f"{WEBCHAT_API_URL}/api/session",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Auth-Token": token},
         json={"origin": "run_eval"},
         timeout=15,
     )
@@ -181,7 +181,7 @@ def call_webchat(question: str, token: str) -> dict:
     session_id = _create_session(token)
     resp = requests.post(
         f"{WEBCHAT_API_URL}/api/chat",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Auth-Token": token},
         json={"session_id": session_id, "message": question},
         timeout=300,
     )
