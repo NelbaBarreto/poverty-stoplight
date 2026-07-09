@@ -144,11 +144,10 @@ def upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id: int, pa
     conn.commit()
 
 # ---------------------------------------------------------------------------
-# API call — delegates retrieval + generation to the webchat API
+# Webchat API helpers
 # ---------------------------------------------------------------------------
 
 def is_api_available() -> bool:
-    """Check if the webchat API is reachable."""
     try:
         resp = requests.get(f"{WEBCHAT_API_URL}/api/debug/ping", timeout=10)
         return resp.status_code == 200
@@ -156,15 +155,34 @@ def is_api_available() -> bool:
         return False
 
 
-def call_eval_endpoint(question: str) -> dict:
-    """
-    Call POST /api/chat/eval on the webchat API.
-    Returns { response, sources, retrieved_contexts, retrieval_time_ms, generation_time_ms }.
-    """
+def _get_token() -> str:
+    """Fetch the daily auth token from the debug endpoint."""
+    resp = requests.get(f"{WEBCHAT_API_URL}/api/debug/token", timeout=10)
+    resp.raise_for_status()
+    return resp.json()["expected_token"]
+
+
+def _create_session(token: str) -> str:
     resp = requests.post(
-        f"{WEBCHAT_API_URL}/api/chat/eval",
-        headers={"X-Eval-Secret": WEBCHAT_SECRET},
-        json={"message": question, "k": K_RETRIEVED},
+        f"{WEBCHAT_API_URL}/api/session",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"origin": "run_eval"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()["session_id"]
+
+
+def call_webchat(question: str, token: str) -> dict:
+    """
+    Create a fresh session and call POST /api/chat — same pipeline as the web UI.
+    Returns { response, sources }.
+    """
+    session_id = _create_session(token)
+    resp = requests.post(
+        f"{WEBCHAT_API_URL}/api/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"session_id": session_id, "message": question},
         timeout=300,
     )
     resp.raise_for_status()
@@ -234,6 +252,8 @@ def main():
         logging.error("Webchat API no disponible. Verificá que esté corriendo.")
         sys.exit(1)
     logging.info("Webchat API OK")
+    token = _get_token()
+    logging.info("Token diario obtenido")
 
     logging.info("Connecting to database...")
     conn = get_db_connection()
@@ -294,13 +314,11 @@ def main():
                 t_total_start = time.monotonic()
 
                 try:
-                    # Delegate retrieval + generation to the webchat API
-                    # so the eval response matches exactly what users see in the web
-                    data = call_eval_endpoint(question)
+                    data = call_webchat(question, token)
                     total_ms = int((time.monotonic() - t_total_start) * 1000)
 
                     upsert_eval_run(conn, llm_id, embed_id, chunk_id, kb_id, version_id, {
-                        "retrieved_contexts":  data.get("retrieved_contexts", []),
+                        "retrieved_contexts":  data.get("sources", []),
                         "k_retrieved":         K_RETRIEVED,
                         "generated_answer":    data.get("response", ""),
                         "status":              "success",

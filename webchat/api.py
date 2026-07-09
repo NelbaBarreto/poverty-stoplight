@@ -487,19 +487,6 @@ class RateRequest(BaseModel):
     rating: int  # 1 = thumbs up, -1 = thumbs down
 
 
-class EvalChatRequest(BaseModel):
-    message: str
-    k: int = RAG_K
-
-
-class EvalChatResponse(BaseModel):
-    response: str
-    sources: list[Source] = []
-    retrieved_contexts: list[dict] = []
-    retrieval_time_ms: int
-    generation_time_ms: int
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -713,77 +700,6 @@ def rate_message(req: RateRequest, _: None = Depends(require_token)):
         conn.close()
     log.info(f"[rating] message_id={req.message_id} rating={req.rating}")
     return {"ok": True}
-
-
-# ---------------------------------------------------------------------------
-# Eval endpoint — stateless, used by run_eval.py instead of calling vLLM directly
-# ---------------------------------------------------------------------------
-
-def _require_eval_secret(x_eval_secret: str = Header(None)):
-    if x_eval_secret != WEBCHAT_SECRET:
-        raise HTTPException(status_code=403, detail="Invalid eval secret")
-
-
-@app.post("/api/chat/eval", response_model=EvalChatResponse)
-def chat_eval(req: EvalChatRequest, _: None = Depends(_require_eval_secret)):
-    """
-    Stateless eval endpoint — same RAG pipeline as /api/chat but without session
-    management. Returns response + raw retrieved contexts for RAGAS scoring.
-    Auth: X-Eval-Secret header matching WEBCHAT_SECRET.
-    """
-    sys.path.insert(0, str(PROJECT_ROOT))
-    from src.pgvector_manager import PGVectorManager
-
-    t0 = time.monotonic()
-
-    # Retrieval — identical to search_context() but also captures raw chunks
-    embedding = get_embedding(req.message)
-    embed_table = EMBED_TABLE.get(EMBED_MODEL, "embeddings_bge_m3")
-    mgr = PGVectorManager()
-    results = mgr.search_similar_new_schema(
-        embedding=embedding,
-        embed_table=embed_table,
-        chunk_config_name=CHUNK_CONFIG,
-        k=req.k,
-    )
-
-    parts, seen, sources, raw_chunks = [], set(), [], []
-    for doc in results:
-        meta   = doc.metadata or {}
-        titulo = meta.get("titulo") or meta.get("filename", "Desconocido")
-        link   = meta.get("link") or None
-        content = doc.page_content.strip()
-        if content:
-            parts.append(f"[Fuente: {titulo}]\n{content}")
-            raw_chunks.append({
-                "chunk_text": content,
-                "filename":   titulo,
-                "distance":   float(meta.get("distance", 0.0)),
-            })
-        if titulo not in seen:
-            seen.add(titulo)
-            sources.append({"titulo": titulo, "link": link})
-
-    context = "\n\n---\n\n".join(parts) or "No se encontró contexto relevante en los documentos."
-    retrieval_ms = int((time.monotonic() - t0) * 1000)
-
-    # Generation — same build_messages as /api/chat, empty history (stateless)
-    t1 = time.monotonic()
-    messages = build_messages([], req.message, context)
-    response_msg = get_llm().invoke(messages)
-    response_text = (response_msg.content or "").strip()
-    _log_llm_meta(response_msg.response_metadata)
-    generation_ms = int((time.monotonic() - t1) * 1000)
-
-    log.info(f"[eval] retrieval={retrieval_ms}ms generation={generation_ms}ms chunks={len(raw_chunks)}")
-
-    return EvalChatResponse(
-        response=response_text,
-        sources=[Source(**s) for s in sources],
-        retrieved_contexts=raw_chunks,
-        retrieval_time_ms=retrieval_ms,
-        generation_time_ms=generation_ms,
-    )
 
 
 # ---------------------------------------------------------------------------
