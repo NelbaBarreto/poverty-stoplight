@@ -703,6 +703,93 @@ def rate_message(req: RateRequest, _: None = Depends(require_token)):
 
 
 # ---------------------------------------------------------------------------
+# Semáforo Demo — endpoints públicos (sin token)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/semaforo/preguntas")
+def get_semaforo_preguntas():
+    """Devuelve todas las categorías activas con sus preguntas activas anidadas."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    cp.id         AS cat_id,
+                    cp.nombre     AS cat_nombre,
+                    cp.nombre_corto AS cat_corto,
+                    cp.orden      AS cat_orden,
+                    p.id,
+                    p.numero_indicador,
+                    p.titulo,
+                    p.shortname,
+                    p.lifemap_name,
+                    p.descripcion,
+                    p.descripcion_verde,
+                    p.descripcion_amarillo,
+                    p.descripcion_rojo,
+                    p.pregunta_sugerida1,
+                    p.pregunta_sugerida2,
+                    p.pregunta_sugerida3,
+                    p.orden       AS p_orden
+                FROM categoria_pregunta cp
+                JOIN pregunta p ON p.categoria_id = cp.id
+                WHERE cp.activa = true AND p.activa = true
+                ORDER BY cp.orden, p.orden
+            """)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    # Agrupar por categoría
+    cats: dict = {}
+    all_preguntas = []
+    for r in rows:
+        cid = r["cat_id"]
+        if cid not in cats:
+            cats[cid] = {
+                "id": cid,
+                "nombre": r["cat_nombre"],
+                "nombre_corto": r["cat_corto"],
+                "orden": r["cat_orden"],
+                "preguntas": [],
+            }
+        pregunta = {k: r[k] for k in (
+            "id", "numero_indicador", "titulo", "shortname", "lifemap_name",
+            "descripcion", "descripcion_verde", "descripcion_amarillo", "descripcion_rojo",
+            "pregunta_sugerida1", "pregunta_sugerida2", "pregunta_sugerida3",
+        )}
+        cats[cid]["preguntas"].append(pregunta)
+        all_preguntas.append({**pregunta, "categoria": r["cat_nombre"]})
+
+    return {
+        "categorias": list(cats.values()),
+        "preguntas": all_preguntas,
+        "total": len(all_preguntas),
+    }
+
+
+@app.get("/api/semaforo/preguntas/{numero}")
+def get_semaforo_pregunta(numero: int):
+    """Devuelve una pregunta por número de indicador."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.*, cp.nombre AS categoria, cp.nombre_corto AS categoria_corto
+                FROM pregunta p
+                JOIN categoria_pregunta cp ON p.categoria_id = cp.id
+                WHERE p.numero_indicador = %s AND p.activa = true
+            """, (numero,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Indicador no encontrado")
+    return dict(row)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

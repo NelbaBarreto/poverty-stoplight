@@ -1149,7 +1149,7 @@ if not db_status:
 # ---------------------------------------------------------------------------
 # TABS PRINCIPALES
 # ---------------------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt, tab_eval = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt, tab_eval, tab_semaforo = st.tabs([
     "▸ Dashboard",
     "▸ Documentos",
     "▸ Chunks",
@@ -1159,6 +1159,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_prompt, tab_eval = st.tabs([
     "▸ Validación",
     "▸ Prompt del Agente",
     "▸ Nueva Evaluación",
+    "▸ Semáforo Demo",
 ])
 
 # ===========================================================================
@@ -2993,3 +2994,160 @@ with tab_eval:
         st.markdown('<div style="margin-top:1rem;">', unsafe_allow_html=True)
         render_table(df_results)
         st.markdown('</div>', unsafe_allow_html=True)
+
+# ===========================================================================
+# TAB SEMÁFORO DEMO — Gestión de Categorías y Preguntas
+# ===========================================================================
+with tab_semaforo:
+    st.markdown("""
+    <div class="ind-section">
+        <div class="bar"></div>
+        <div class="label">Semáforo Demo — Preguntas e Indicadores</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="display:flex;gap:10px;margin-bottom:1.2rem;flex-wrap:wrap;">
+        <span class="tag tag-green">10 indicadores</span>
+        <span class="tag tag-ice">5 categorías</span>
+        <span class="tag tag-amber">Editable</span>
+        <span style="font-size:0.72rem;color:var(--text-muted,#4ADE80);margin-left:4px;align-self:center;">
+            Imágenes en <code>assets/images/demo-semaforo/{numero}/{verde|amarillo|rojo}.jpg</code>
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Verificar tablas ──────────────────────────────────────────────────
+    tables_ok = True
+    try:
+        df_cats_check = query_df("SELECT COUNT(*) AS n FROM categoria_pregunta")
+    except Exception:
+        tables_ok = False
+
+    if not tables_ok:
+        st.error("Las tablas `categoria_pregunta` y `pregunta` no existen aún. "
+                 "Ejecuta `postgres/migrate_demo_semaforo.sql` en la base de datos.")
+        st.stop()
+
+    # ── Estado local ──────────────────────────────────────────────────────
+    if "sem_edit_id" not in st.session_state:
+        st.session_state.sem_edit_id = None
+
+    # ── Cargar datos ──────────────────────────────────────────────────────
+    df_cats = query_df(
+        "SELECT id, nombre, nombre_corto, orden, activa FROM categoria_pregunta ORDER BY orden"
+    )
+    df_pregs = query_df("""
+        SELECT p.id, p.numero_indicador, p.titulo, p.shortname, p.lifemap_name,
+               p.descripcion, p.descripcion_verde, p.descripcion_amarillo, p.descripcion_rojo,
+               p.pregunta_sugerida1, p.pregunta_sugerida2, p.pregunta_sugerida3,
+               p.activa, p.orden, cp.nombre AS categoria
+        FROM pregunta p
+        JOIN categoria_pregunta cp ON p.categoria_id = cp.id
+        ORDER BY p.orden
+    """)
+
+    col_list, col_edit = st.columns([1, 2])
+
+    # ── Columna izquierda: listado ────────────────────────────────────────
+    with col_list:
+        st.markdown("##### Indicadores")
+        for _, row in df_pregs.iterrows():
+            activa_icon = "🟢" if row["activa"] else "🔴"
+            label = f"{activa_icon} **#{row['numero_indicador']}** {row['shortname']}"
+            cat_small = f"<small style='color:#888'>{row['categoria']}</small>"
+            selected = st.session_state.sem_edit_id == row["id"]
+            if st.button(
+                f"#{row['numero_indicador']} — {row['shortname']}",
+                key=f"sem_btn_{row['id']}",
+                type="primary" if selected else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.sem_edit_id = row["id"]
+                st.rerun()
+
+    # ── Columna derecha: formulario de edición ────────────────────────────
+    with col_edit:
+        edit_id = st.session_state.sem_edit_id
+        if edit_id is None:
+            st.info("Selecciona un indicador de la lista para editar sus textos.")
+        else:
+            p = df_pregs[df_pregs["id"] == edit_id].iloc[0]
+            st.markdown(f"##### Editando: #{p['numero_indicador']} — {p['titulo']}")
+            st.markdown(f"<small>Categoría: **{p['categoria']}**</small>", unsafe_allow_html=True)
+
+            with st.form(key=f"form_pregunta_{edit_id}"):
+                titulo = st.text_input("Título del indicador", value=p["titulo"] or "")
+                shortname = st.text_input("Shortname", value=p["shortname"] or "")
+                lifemap_name = st.text_input("Lifemap name", value=p["lifemap_name"] or "")
+
+                st.markdown("---")
+                st.markdown("**Descripciones por nivel**")
+                col_v, col_a, col_r = st.columns(3)
+                with col_v:
+                    st.markdown("🟢 Verde")
+                    desc_verde = st.text_area(
+                        "Texto verde", value=p["descripcion_verde"] or "",
+                        height=140, label_visibility="collapsed"
+                    )
+                with col_a:
+                    st.markdown("🟡 Amarillo")
+                    desc_amarillo = st.text_area(
+                        "Texto amarillo", value=p["descripcion_amarillo"] or "",
+                        height=140, label_visibility="collapsed"
+                    )
+                with col_r:
+                    st.markdown("🔴 Rojo")
+                    desc_rojo = st.text_area(
+                        "Texto rojo", value=p["descripcion_rojo"] or "",
+                        height=140, label_visibility="collapsed"
+                    )
+
+                st.markdown("---")
+                st.markdown("**Definición**")
+                descripcion = st.text_area(
+                    "Definición completa", value=p["descripcion"] or "", height=100
+                )
+
+                st.markdown("---")
+                st.markdown("**Preguntas sugeridas** (aparecen como chips para enviar a Rosa)")
+                ps1 = st.text_input("Pregunta sugerida 1", value=p["pregunta_sugerida1"] or "")
+                ps2 = st.text_input("Pregunta sugerida 2", value=p["pregunta_sugerida2"] or "")
+                ps3 = st.text_input("Pregunta sugerida 3", value=p["pregunta_sugerida3"] or "")
+
+                activa_check = st.checkbox("Indicador activo", value=bool(p["activa"]))
+
+                # Preview de imagen
+                st.markdown(f"""
+                <div style='margin-top:0.5rem;font-size:0.78rem;color:#888;'>
+                    Imágenes esperadas:<br>
+                    <code>assets/images/demo-semaforo/{p['numero_indicador']}/verde.jpg</code><br>
+                    <code>assets/images/demo-semaforo/{p['numero_indicador']}/amarillo.jpg</code><br>
+                    <code>assets/images/demo-semaforo/{p['numero_indicador']}/rojo.jpg</code>
+                </div>
+                """, unsafe_allow_html=True)
+
+                submitted = st.form_submit_button("💾 Guardar cambios", type="primary")
+                if submitted:
+                    execute_sql("""
+                        UPDATE pregunta SET
+                            titulo = %s, shortname = %s, lifemap_name = %s,
+                            descripcion = %s,
+                            descripcion_verde = %s, descripcion_amarillo = %s, descripcion_rojo = %s,
+                            pregunta_sugerida1 = %s, pregunta_sugerida2 = %s, pregunta_sugerida3 = %s,
+                            activa = %s, updated_at = NOW()
+                        WHERE id = %s
+                    """, (titulo, shortname, lifemap_name, descripcion,
+                          desc_verde, desc_amarillo, desc_rojo,
+                          ps1, ps2, ps3, activa_check, edit_id))
+                    st.success("✅ Guardado correctamente.")
+                    st.rerun()
+
+    # ── Tabla resumen ──────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("##### Resumen de indicadores")
+    cols_show = ["numero_indicador", "categoria", "shortname", "titulo", "activa"]
+    render_table(df_pregs[cols_show].rename(columns={
+        "numero_indicador": "N°", "categoria": "Categoría",
+        "shortname": "Shortname", "titulo": "Título", "activa": "Activa"
+    }))
