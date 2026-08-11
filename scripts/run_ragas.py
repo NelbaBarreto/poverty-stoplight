@@ -284,20 +284,20 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     Instantiate RAGAS judge using local vLLM server (OpenAI-compatible).
     Scores ALL 4 metrics in one pass — no OpenAI API key needed.
 
-    LLM judge : ChatOpenAI → vllm_url/v1  (Qwen3.5-27B-FP8)
-    Embeddings: ChatOpenAI embeddings → embed_url/v1  (bge-m3 via vLLM)
-                Falls back to sentence-transformers locally if embed_url empty.
+    LLM judge : llm_factory → vllm_url/v1  (Qwen3.5-27B-FP8)
+    Embeddings: OpenAIEmbeddings → embed_url/v1  (bge-m3 via vLLM)
+                Falls back to HuggingFaceEmbeddings locally if embed_url empty.
     """
-    from ragas.llms import LangchainLLMWrapper
-    from ragas.embeddings import LangchainEmbeddingsWrapper
-    from ragas.metrics import (
+    from ragas.metrics.collections import (
         Faithfulness,
         AnswerRelevancy,
         LLMContextRecall,
         LLMContextPrecisionWithReference,
     )
     from ragas.run_config import RunConfig
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    from ragas.llms import llm_factory
+    from ragas.embeddings import OpenAIEmbeddings as RagasOpenAIEmbeddings
+    from openai import OpenAI
 
     # Detect model name from vLLM /v1/models
     import requests as _req
@@ -308,39 +308,23 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
         model_name = "unknown"
     logging.info(f"[vllm] judge model detected: {model_name}")
 
-    judge_llm = LangchainLLMWrapper(
-        ChatOpenAI(
-            model=model_name,
-            base_url=f"{vllm_url}/v1",
-            api_key="EMPTY",
-            temperature=0,
-            max_tokens=1024,
-        )
-    )
+    # LLM judge via llm_factory (new RAGAS API)
+    openai_client = OpenAI(base_url=f"{vllm_url}/v1", api_key="EMPTY")
+    judge_llm = llm_factory(model_name, client=openai_client, max_tokens=4096)
 
     if embed_url:
-        # Use vLLM embedding server (bge-m3 via OpenAI embeddings API)
         try:
             r = _req.get(f"{embed_url}/v1/models", headers={"Authorization": "Bearer EMPTY"}, timeout=10)
             embed_model_name = r.json()["data"][0]["id"]
         except Exception:
             embed_model_name = BGE_M3_HF
         logging.info(f"[vllm] embed model: {embed_model_name} at {embed_url}")
-        judge_emb = LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(
-                model=embed_model_name,
-                base_url=f"{embed_url}/v1",
-                api_key="EMPTY",
-            )
-        )
+        embed_client = OpenAI(base_url=f"{embed_url}/v1", api_key="EMPTY")
+        judge_emb = RagasOpenAIEmbeddings(model=embed_model_name, client=embed_client)
     else:
-        # Fallback: sentence-transformers locally
-        logging.info(f"[vllm] no EMBED_BASE_URL — using sentence-transformers ({BGE_M3_HF}) locally")
-        from sentence_transformers import SentenceTransformer
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-        judge_emb = LangchainEmbeddingsWrapper(
-            HuggingFaceEmbeddings(model_name=BGE_M3_HF)
-        )
+        logging.info(f"[vllm] no EMBED_BASE_URL — using HuggingFaceEmbeddings ({BGE_M3_HF}) locally")
+        from ragas.embeddings import HuggingFaceEmbeddings as RagasHFEmbeddings
+        judge_emb = RagasHFEmbeddings(model_name=BGE_M3_HF)
 
     metrics = [
         Faithfulness(),
@@ -348,8 +332,6 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
         LLMContextRecall(),
         LLMContextPrecisionWithReference(),
     ]
-    # max_workers=2: vLLM handles concurrent requests, but keep conservative
-    # to avoid overwhelming the GPU during a long eval run.
     run_config = RunConfig(max_workers=2, timeout=300, max_retries=3, max_wait=60)
     return judge_llm, judge_emb, metrics, run_config, model_name
 
