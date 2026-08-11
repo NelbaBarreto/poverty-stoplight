@@ -1,0 +1,418 @@
+\chapter{Conclusiones y Trabajo Futuro}\label{cap:conclusiones}
+
+En este capítulo se presentan las conclusiones del trabajo, la evolución del sistema hacia el entorno de producción —incluyendo la migración a vLLM, la selección del modelo final y los resultados de la evaluación más reciente—, las respuestas a las preguntas de investigación, las contribuciones realizadas y las líneas de trabajo futuro.
+
+% --------------------------------------------------
+\section{Evolución del sistema hacia producción}\label{sec:evolucion}
+
+A partir de los resultados de la fase experimental, el sistema fue iterado con el objetivo de mejorar su rendimiento en producción. Esta sección documenta los cambios más relevantes aplicados al \textit{pipeline} tras la evaluación inicial.
+
+\subsection{Migración de Ollama a vLLM}\label{sec:migracion_vllm}
+
+La arquitectura inicial utilizaba Ollama como motor de inferencia local tanto para los modelos LLM como para los modelos de \textit{embeddings}. Si bien Ollama facilitó el prototipado y la experimentación inicial, presentó limitaciones para la inferencia de modelos de mayor escala en entornos de producción.
+
+Como resultado de la evaluación experimental, se migró el motor de inferencia a \textbf{vLLM}, un servidor de alto rendimiento compatible con la API de OpenAI. Esta migración habilitó las siguientes mejoras:
+
+\begin{itemize}
+  \item \textbf{Soporte para modelos de mayor escala:} vLLM permite ejecutar modelos de decenas de miles de millones de parámetros con optimizaciones de memoria como \textit{PagedAttention}, lo que no era viable con Ollama en la misma infraestructura.
+  \item \textbf{Separación de recursos por contenedor:} se desplegaron dos instancias independientes — un contenedor dedicado al modelo LLM (\texttt{http://servidor:8800}) y un contenedor dedicado al modelo de \textit{embeddings} (\texttt{http://servidor:8801}) — eliminando la competencia por GPU entre ambas cargas de trabajo.
+  \item \textbf{Compatibilidad con la API OpenAI:} la interfaz estándar \texttt{/v1/chat/completions} y \texttt{/v1/embeddings} permitió integrar vLLM sin modificar la lógica de la API WebChat, únicamente ajustando variables de entorno (\texttt{VLLM\_BASE\_URLS}, \texttt{EMBED\_BASE\_URL}).
+  \item \textbf{Soporte para \textit{thinking tokens}:} el nuevo motor permite configurar un presupuesto de razonamiento interno (\textit{thinking budget}) para los modelos Qwen3, lo que mejora la calidad del razonamiento sin exponer el proceso interno al usuario final.
+\end{itemize}
+
+\subsection{Selección del modelo de producción}\label{sec:seleccion_modelo}
+
+La fase experimental identificó que la combinación \textbf{bge-m3} (embedding) + \textbf{chunks medium} (1024 caracteres) ofrecía el mejor desempeño en métricas automáticas de recuperación. Sin embargo, la dimensión generativa mostraba limitaciones con modelos de menor escala: la evaluación humana de \textit{qwen3:8b} + bge-m3 + medium arrojó una calificación promedio de apenas \textbf{5.52/10} sobre 168 valoraciones.
+
+Habilitada la infraestructura vLLM, se seleccionó el modelo \textbf{Qwen/Qwen3.5-27B-GPTQ-Int4} — con 27.000 millones de parámetros cuantizados a 4 bits mediante el esquema GPTQ (\textit{Generative Pre-trained Transformer Quantization}) — manteniendo fija la configuración de recuperación óptima (bge-m3 + medium). La cuantización GPTQ-Int4 reduce el consumo de GPU a aproximadamente la mitad respecto a la variante FP8, lo que permitió desplegar el modelo con paralelismo en dos GPUs (\texttt{tensor-parallel-size 2}) con una utilización de memoria del 88\,\%. Los criterios de selección fueron:
+
+\begin{itemize}
+  \item Capacidad de razonamiento en dominio técnico-social en español.
+  \item Reducción de alucinaciones respecto a modelos más pequeños.
+  \item Viabilidad en la infraestructura disponible con cuantización GPTQ-Int4.
+  \item Compatibilidad con \textit{thinking tokens} (desactivados en producción vía \texttt{enable\_thinking: false}).
+  \item Soporte para \textit{tool calling} mediante el parser \texttt{qwen3\_coder}.
+\end{itemize}
+
+El contenedor de producción se desplegó con el siguiente comando:
+
+\begin{verbatim}
+docker run -d \
+  --name qwen35-27b-int4 \
+  --gpus all \
+  --ipc=host \
+  -p 8800:8000 \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  vllm/vllm-openai:latest \
+  Qwen/Qwen3.5-27B-GPTQ-Int4 \
+  --tensor-parallel-size 2 \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.88 \
+  --max-num-seqs 8 \
+  --enable-auto-tool-choice \
+  --tool-call-parser qwen3_coder \
+  --reasoning-parser qwen3 \
+  --default-chat-template-kwargs '{"enable_thinking": false}'
+\end{verbatim}
+
+Los resultados de la evaluación humana confirmaron que la ganancia en escala del modelo generativo tiene un impacto sustantivo en la calidad percibida de las respuestas, como se detalla en la sección siguiente.
+
+% --------------------------------------------------
+\section{Resultados de la evaluación más reciente}\label{sec:resultados_recientes}
+
+La evaluación más reciente del sistema (versión 4 del agente) corresponde a la configuración en producción: \textbf{Qwen/Qwen3.5-27B-GPTQ-Int4 + bge-m3 + chunks medium}. Se procesaron las 108 preguntas del conjunto de evaluación a través de la API WebChat, que ejecuta el mismo \textit{pipeline} que utilizan los usuarios finales, garantizando que las respuestas evaluadas son idénticas a las del sistema en producción.
+
+\subsection{Métricas RAGAS acumuladas hasta la fecha}\label{sec:ragas_acumuladas}
+
+La Tabla~\ref{tab:ragas-global} presenta los promedios globales de las cuatro métricas RAGAS calculadas sobre el total de 4.606 evaluaciones automáticas acumuladas a lo largo del experimento, correspondientes a todas las combinaciones de LLM, \textit{embeddings} y tamaño de \textit{chunk} evaluadas.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Promedio global} & \textbf{N evaluaciones} \\
+\hline
+Faithfulness        & 0.6494 & 4{,}606 \\
+Answer Relevancy    & 0.7085 & 4{,}606 \\
+Context Precision   & 0.5282 & 4{,}606 \\
+Context Recall      & 0.2323 & 4{,}606 \\
+\hline
+\textbf{Promedio general} & \textbf{0.5296} & --- \\
+\hline
+\end{tabular}
+\caption{Promedios globales de métricas RAGAS sobre todas las evaluaciones acumuladas hasta la fecha.}
+\label{tab:ragas-global}
+\end{table}
+
+La Tabla~\ref{tab:ragas-por-llm} desagrega el desempeño por modelo LLM, agregando todos los modelos de \textit{embeddings} y tamaños de \textit{chunk}. Se observa que \texttt{qwen3:8b} obtuvo los valores más altos en Faithfulness (0.7381) y Answer Relevancy (0.7529), consolidando su posición como el modelo de referencia en la evaluación automática.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{LLM} & \textbf{N} & \textbf{Faithfulness} & \textbf{Ans.Rel.} & \textbf{Ctx.Recall} \\
+\hline
+qwen3:8b        & 1{,}833 & \textbf{0.7381} & \textbf{0.7529} & 0.2201 \\
+llama3.2:3b     &   523   & 0.6210 & 0.6587 & 0.2369 \\
+llama3.2:latest & 1{,}230 & 0.5981 & 0.6217 & 0.2388 \\
+gpt-oss:20b     & 1{,}020 & 0.5948 & 0.7638 & \textbf{0.2445} \\
+\hline
+\end{tabular}
+\caption{Promedios de métricas RAGAS por modelo LLM (todas las configuraciones de embedding y chunk).}
+\label{tab:ragas-por-llm}
+\end{table}
+
+La Tabla~\ref{tab:ragas-mejores} presenta las ocho mejores configuraciones identificadas en el experimento, ordenadas por \textit{Faithfulness} descendente, considerando únicamente configuraciones con las cuatro métricas disponibles y al menos 28 evaluaciones.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\begin{tabular}{|l|l|l|c|c|c|c|c|}
+\hline
+\textbf{LLM} & \textbf{Embed} & \textbf{Chunk} & \textbf{N} & \textbf{Faith.} & \textbf{AR} & \textbf{CP} & \textbf{CR} \\
+\hline
+qwen3:8b        & bge-m3            & medium & 30 & \textbf{0.9035} & 0.7970 & \textbf{0.8308} & \textbf{0.5057} \\
+qwen3:8b        & bge-m3            & large  & 30 & 0.8346 & 0.7830 & 0.8181 & 0.4741 \\
+qwen3:8b        & all-minilm        & large  & 30 & 0.8047 & 0.7618 & 0.6950 & 0.3222 \\
+qwen3:8b        & mxbai-embed-large & medium & 30 & 0.8038 & 0.7592 & 0.6932 & 0.3883 \\
+qwen3:8b        & bge-m3            & small  & 30 & 0.7970 & \textbf{0.8202} & 0.7318 & 0.2538 \\
+llama3.2:latest & bge-m3            & medium & 28 & 0.7868 & 0.7095 & 0.8476 & 0.5183 \\
+qwen3:8b        & all-minilm        & medium & 30 & 0.7651 & 0.7529 & 0.5596 & 0.2578 \\
+\hline
+\end{tabular}
+\caption{Mejores configuraciones del experimento por Faithfulness (con las 4 métricas RAGAS disponibles, $N \geq 28$).}
+\label{tab:ragas-mejores}
+\end{table}
+
+\subsection{Evaluación humana de la versión de producción}\label{sec:eval_humana_v5}
+
+La evaluación humana de la versión de producción (Qwen3.5-27B-GPTQ-Int4) fue realizada por expertos del dominio del proyecto \textit{Semáforo de la Pobreza}, utilizando la interfaz de evaluación descripta en el Capítulo~\ref{cap:propuesta}. Los evaluadores valoraron la utilidad y adecuación de cada respuesta en una escala del 1 al 10 e indicaron si la respuesta contenía alucinaciones.
+
+La Tabla~\ref{tab:eval-humana-v5} resume los resultados obtenidos sobre 604 valoraciones acumuladas hasta la fecha.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Indicador} & \textbf{Valor} \\
+\hline
+Total de valoraciones              & 604 \\
+Calificación promedio              & \textbf{8.73 / 10} \\
+Mediana                            & 10.0 / 10 \\
+Mínimo                             & 1 / 10 \\
+Máximo                             & 10 / 10 \\
+Desviación estándar                & 2.48 \\
+Respuestas con calificación $= 10$ & 399 (66.1\,\%) \\
+Respuestas con calificación $\geq 8$ & \textbf{502 (83.1\,\%)} \\
+Alucinaciones detectadas           & 9 (1.5\,\%) \\
+\hline
+\end{tabular}
+\caption{Resultados de la evaluación humana de la versión de producción (Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium, versión 4 del agente, $N = 604$ valoraciones).}
+\label{tab:eval-humana-v5}
+\end{table}
+
+La Tabla~\ref{tab:distribucion-calificaciones} muestra la distribución completa de las calificaciones, evidenciando una distribución marcadamente asimétrica hacia los valores altos.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|r|r|}
+\hline
+\textbf{Calificación} & \textbf{N} & \textbf{\%} \\
+\hline
+10 & 399 & 66.1\,\% \\
+9  &  78 & 12.9\,\% \\
+8  &  25 &  4.1\,\% \\
+\hline
+\textit{Subtotal $\geq 8$} & \textit{502} & \textit{83.1\,\%} \\
+\hline
+7  &   7 &  1.2\,\% \\
+6  &   1 &  0.2\,\% \\
+5  &  37 &  6.1\,\% \\
+4  &  17 &  2.8\,\% \\
+3  &  11 &  1.8\,\% \\
+2  &   9 &  1.5\,\% \\
+1  &  20 &  3.3\,\% \\
+\hline
+\textbf{Total} & \textbf{604} & \textbf{100\,\%} \\
+\hline
+\end{tabular}
+\caption{Distribución de calificaciones de la evaluación humana — versión 4 (Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium).}
+\label{tab:distribucion-calificaciones}
+\end{table}
+
+Estos resultados muestran una mejora sustantiva respecto a las versiones anteriores: la calificación promedio pasó de 5.52/10 (qwen3:8b, versión 1) y 5.17/10 (qwen3:8b, versión 2) a \textbf{8.73/10} con el modelo Qwen3.5-27B-FP8. La mediana de 10.0 indica que más del 50\,\% de las respuestas recibieron la máxima calificación, y el 66.1\,\% de las valoraciones fueron de calificación perfecta. La distribución presenta una concentración marcada en el valor 10 (66.1\,\%), un segmento de respuestas intermedias en la zona 8--9 (17.0\,\%) y una cola izquierda de menor magnitud (16.9\,\%, calificaciones 1--7). La tasa de alucinaciones detectada fue del 1.5\,\%, lo que sugiere un nivel de fidelidad alto para el contexto de uso.
+
+La Tabla~\ref{tab:comparativo-versiones} presenta el comparativo de evaluación humana entre las versiones del sistema, incluyendo la tasa de alucinaciones y la proporción de respuestas en la banda alta ($\geq 8$) y baja ($\leq 4$).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|c|c|c|c|c|}
+\hline
+\textbf{Versión} & \textbf{LLM} & \textbf{N} & \textbf{Prom.} & \textbf{Mediana} & \textbf{Cal. $\geq 8$} & \textbf{Alucinaciones} \\
+\hline
+Versión 1 & qwen3:8b               & 168 & 5.52 & 6 & 31.0\,\% & 0 (0.0\,\%) \\
+Versión 2 & qwen3:8b               & 104 & 5.17 & 5 & 12.5\,\% & 2 (1.9\,\%) \\
+Versión 4 & Qwen3.5-27B-FP8       & 604 & \textbf{8.73} & 10 & \textbf{83.1\,\%} & 9 (1.5\,\%) \\
+\hline
+\textbf{Total acumulado} & --- & \textbf{876} & \textbf{7.69} & 9 & 64.7\,\% & \textbf{11 (1.3\,\%)} \\
+\hline
+\end{tabular}
+\caption{Comparativo de evaluación humana entre versiones del sistema (todos sobre bge-m3 + medium). Datos extraídos de la base de datos de producción ($N = 876$ valoraciones acumuladas).}
+\label{tab:comparativo-versiones}
+\end{table}
+
+\subsection{Estadísticas globales acumuladas de evaluación humana}\label{sec:eval_global}
+
+La Tabla~\ref{tab:eval-global} consolida las 876 valoraciones humanas registradas a lo largo de todas las versiones del sistema, obtenidas directamente de la base de datos de producción.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Indicador} & \textbf{Valor} \\
+\hline
+Total de valoraciones                    & 876 \\
+Calificación promedio general            & \textbf{7.69 / 10} \\
+Mediana                                  & 9.0 / 10 \\
+Desviación estándar                      & 2.89 \\
+Respuestas con calificación $= 10$       & 401 (45.8\,\%) \\
+Respuestas con calificación $\geq 8$     & \textbf{567 (64.7\,\%)} \\
+Respuestas con calificación $\leq 4$     & 149 (17.0\,\%) \\
+Alucinaciones detectadas (total)         & \textbf{11 (1.3\,\%)} \\
+\hline
+\end{tabular}
+\caption{Estadísticas globales de evaluación humana acumuladas sobre las tres versiones evaluadas ($N = 876$ valoraciones).}
+\label{tab:eval-global}
+\end{table}
+
+La Tabla~\ref{tab:distribucion-global} presenta la distribución completa de calificaciones sobre el total de valoraciones acumuladas.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|r|r|}
+\hline
+\textbf{Calificación} & \textbf{N} & \textbf{\%} \\
+\hline
+10 & 401 & 45.8\,\% \\
+9  & 107 & 12.2\,\% \\
+8  &  59 &  6.7\,\% \\
+\hline
+\textit{Subtotal $\geq 8$} & \textit{567} & \textit{64.7\,\%} \\
+\hline
+7  &  47 &  5.4\,\% \\
+6  &  31 &  3.5\,\% \\
+5  &  82 &  9.4\,\% \\
+\hline
+4  &  36 &  4.1\,\% \\
+3  &  34 &  3.9\,\% \\
+2  &  41 &  4.7\,\% \\
+1  &  38 &  4.3\,\% \\
+\hline
+\textit{Subtotal $\leq 4$} & \textit{149} & \textit{17.0\,\%} \\
+\hline
+\textbf{Total} & \textbf{876} & \textbf{100\,\%} \\
+\hline
+\end{tabular}
+\caption{Distribución completa de calificaciones acumuladas en evaluación humana — todas las versiones ($N = 876$).}
+\label{tab:distribucion-global}
+\end{table}
+
+El promedio general de \textbf{7.69/10} refleja la trayectoria del sistema: las versiones 1 y 2 (qwen3:8b) arrastraron el promedio hacia abajo con calificaciones de 5.52 y 5.17 respectivamente, mientras que la versión 4 (Qwen3.5-27B-FP8) elevó el promedio al concentrar el 68.9\,\% de todas las valoraciones con una media de 8.73. La banda de calificaciones bajas ($\leq 4$) representa el 17.0\,\% del total acumulado (149 valoraciones), concentradas principalmente en las versiones 1 y 2, que aportaron el 33.3\,\% y 34.6\,\% de respuestas bajas respectivamente frente al 9.4\,\% de la versión 4. Las alucinaciones se mantuvieron en niveles bajos en las tres versiones evaluadas, con una tasa global del 1.3\,\% (11 de 876), lo que sugiere que el \textit{pipeline} RAG proporciona un anclaje efectivo al contexto recuperado independientemente de la escala del modelo generativo.
+
+% --------------------------------------------------
+\section{Análisis de tiempos de respuesta}\label{sec:tiempos}
+
+Los tiempos de respuesta se obtuvieron a partir de los registros de la tabla \texttt{eval\_runs} en la base de datos, que almacena el tiempo total de cada ejecución (\texttt{total\_time\_ms}) medido desde el momento en que la consulta llega a la API WebChat hasta que la respuesta es retornada al cliente. Este tiempo incluye la vectorización de la consulta, la recuperación semántica, la generación con el LLM y la estructuración de la respuesta.
+
+La Tabla~\ref{tab:tiempos} presenta la distribución estadística de los tiempos de respuesta para las 108 consultas de evaluación de la versión 4 (Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium), medidos de extremo a extremo desde la llegada de la consulta a la API hasta el retorno de la respuesta al cliente.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Estadístico} & \textbf{Tiempo (ms)} \\
+\hline
+Mínimo               & 5{,}766 \\
+Percentil 25 (P25)   & 7{,}681 \\
+Mediana (P50)        & 8{,}390 \\
+\textbf{Promedio}    & \textbf{8{,}615} \\
+Desviación estándar  & 1{,}493 \\
+Percentil 75 (P75)   & 9{,}508 \\
+Percentil 90 (P90)   & 10{,}491 \\
+Percentil 95 (P95)   & 11{,}330 \\
+Máximo               & 13{,}334 \\
+\hline
+N consultas & 108 \\
+\hline
+\end{tabular}
+\caption{Distribución de tiempos de respuesta totales — versión 4 (Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium, $N = 108$ consultas).}
+\label{tab:tiempos}
+\end{table}
+
+El tiempo promedio de respuesta fue de \textbf{8.6 segundos} (DE = 1.5 s), con el 75\,\% de las consultas respondidas en menos de 9.5 segundos y el 90\,\% en menos de 10.5 segundos. El percentil 95 se ubicó en 11.3 segundos, con un máximo de 13.3 segundos, lo que evidencia una distribución relativamente estrecha con variabilidad moderada ($\text{CV} = 17.3\,\%$) atribuible a fluctuaciones en la carga del servidor de inferencia.
+
+Para el contexto de uso del sistema — una interfaz conversacional institucional donde el usuario espera una respuesta elaborada a una consulta compleja —, estos tiempos resultan aceptables. La interfaz muestra un indicador de actividad mientras el modelo genera la respuesta, lo que mejora la experiencia de usuario durante la espera. Se prevé profundizar el análisis de tiempos mediante los archivos de log del servidor de producción en trabajos futuros.
+
+% --------------------------------------------------
+\section{Conclusiones finales}\label{sec:conclusiones_finales}
+
+A partir de los resultados obtenidos, se pueden responder las preguntas de investigación planteadas al inicio de este trabajo:
+
+\begin{enumerate}
+
+\item \textit{¿Cómo diseñar e implementar un proceso de ingesta y estructuración de fuentes heterogéneas del Semáforo de la Pobreza que permita su uso en un sistema RAG?}
+
+Se diseñó e implementó un proceso de ingesta que aplica estrategias diferenciadas según el formato de cada fuente: conversión de PDF a texto plano y Markdown mediante Docling, incorporación directa de archivos Markdown y transformación de registros CSV a texto estructurado mediante pandas. El corpus resultante (18 documentos, 432.657 palabras) fue segmentado en \textit{chunks} de tres tamaños y vectorizado con cinco modelos de \textit{embeddings}, almacenándose en una base vectorial PostgreSQL/pgvector.
+
+\item \textit{¿Cómo diseñar e implementar un pipeline basado en RAG que permita recuperar información relevante y generar respuestas contextualizadas?}
+
+Se implementó un \textit{pipeline} RAG compuesto por cuatro etapas: vectorización de la consulta, recuperación por similitud coseno mediante índice IVFFlat, selección de los $k=8$ fragmentos más relevantes y generación de respuesta mediante un LLM condicionado al contexto recuperado. El sistema opera en un entorno local con vLLM y es accesible mediante una API REST.
+
+\item \textit{¿Cómo influyen las variaciones en el modelo de embeddings, el tamaño de los chunks y el solapamiento en el desempeño del sistema?}
+
+El modelo de \textit{embeddings} fue el factor con mayor influencia en el desempeño. \texttt{bge-m3} superó consistentemente a los demás modelos en las cuatro métricas RAGAS evaluadas. El tamaño \textit{medium} (1024 caracteres) mostró el mejor equilibrio entre cobertura y precisión de contexto. Los modelos \texttt{nomic-embed-text} y \texttt{snowflake-arctic-embed} presentaron los menores valores en recuperación.
+
+\item \textit{¿Qué configuración del sistema presenta mejor desempeño?}
+
+La evaluación automática identificó \textbf{qwen3:8b + bge-m3 + chunks medium} como la configuración con mejor desempeño en métricas RAGAS: Faith=0.9035, AR=0.7970, CP=0.8308, CR=0.5057. No obstante, la evaluación humana reveló que el incremento en la escala del modelo generativo tiene un impacto mayor en la calidad percibida: \textbf{Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium} obtuvo una calificación promedio de 8.73/10 sobre 604 valoraciones — frente a 5.52/10 de qwen3:8b — con el 83.1\,\% de las respuestas calificadas como de alta calidad y el 66.1\,\% con la máxima calificación de 10.
+
+\item \textit{¿Qué arquitectura permite implementar el agente conversacional en un entorno de ejecución local accesible mediante una interfaz web?}
+
+Se implementó una arquitectura compuesta por: dos contenedores vLLM (inferencia LLM con Qwen3.5-27B-GPTQ-Int4 en puerto 8800, embeddings bge-m3 en puerto 8801), una API WebChat (FastAPI), una interfaz administrativa (Streamlit) y una interfaz conversacional integrada en el sitio institucional de la Fundación Paraguaya (Angular 16). El agente fue desplegado en producción en el sitio \textit{Rosa} de la Fundación Paraguaya.
+
+\end{enumerate}
+
+% --------------------------------------------------
+\section{Contribuciones del trabajo}\label{sec:contribuciones}
+
+\begin{enumerate}
+
+\item Aplicación del enfoque RAG a una base de conocimientos institucional del ámbito de la pobreza, compuesta por fuentes heterogéneas reales del \textit{Semáforo de la Pobreza}, demostrando la viabilidad del enfoque en un dominio social con necesidades concretas de organización del conocimiento.
+
+\item Diseño e implementación de un \textit{pipeline} RAG de código abierto en entorno local con vLLM, que integra la estructuración de la base de conocimientos, la recuperación semántica y la generación de respuestas sobre un corpus institucional heterogéneo.
+
+\item Esquema de evaluación comparativa sobre 4.606 ejecuciones automatizadas que examina el efecto del modelo de \textit{embeddings}, el tamaño de \textit{chunk} y el modelo LLM en el desempeño del sistema, generando evidencia empírica accionable sobre decisiones de diseño en sistemas RAG.
+
+\item Evaluación mixta que combina métricas automáticas RAGAS con \textbf{876 valoraciones humanas} de expertos del dominio distribuidas en tres versiones del sistema, revelando que la escala del modelo generativo tiene mayor impacto en la calidad percibida que las variables de configuración de recuperación examinadas, y que la tasa de alucinaciones se mantuvo por debajo del 2\,\% en todas las versiones evaluadas.
+
+\item Despliegue del agente conversacional en un entorno institucional real (sitio \textit{Rosa} de la Fundación Paraguaya), validando la viabilidad operativa del sistema y generando datos reales de uso.
+
+\end{enumerate}
+
+% --------------------------------------------------
+\section{Trabajo futuro}\label{sec:trabajo_futuro}
+
+A partir de los resultados y limitaciones identificadas, se proponen las siguientes líneas de trabajo futuro:
+
+\begin{itemize}
+
+\item \textbf{Evaluación RAGAS del modelo de producción:} ejecutar el cálculo automático de las cuatro métricas RAGAS para la configuración Qwen3.5-27B-GPTQ-Int4 + bge-m3 + medium, permitiendo comparar directamente el desempeño del modelo de producción con los resultados históricos de la fase experimental.
+
+\item \textbf{Análisis detallado de logs de producción:} procesar los archivos de log del servidor de inferencia para obtener métricas de tiempos desagregadas por etapa del \textit{pipeline} (vectorización, recuperación, generación), identificar cuellos de botella y caracterizar la variabilidad observada en los tiempos de respuesta.
+
+\item \textbf{Variación del parámetro $k$:} evaluar el efecto del número de \textit{chunks} recuperados ($k$) en el desempeño del sistema, dado que este factor no fue variado en el experimento actual.
+
+\item \textbf{Ampliación del corpus:} incorporar los documentos adicionales identificados en el relevamiento inicial que no fueron incluidos en la fase actual, especialmente el reporte estadístico en formato HTML y otros materiales en proceso de obtención.
+
+\item \textbf{Estrategias avanzadas de recuperación:} explorar técnicas como la reescritura de consultas (\textit{query rewriting}), la recuperación híbrida (semántica + léxica) y el re-ranking de resultados para mejorar el \textit{Context Recall}, que se identificó como el principal cuello de botella del sistema.
+
+\item \textbf{Evaluación humana sistemática continua:} extender la evaluación humana a un mayor número de preguntas y evaluadores, analizando las alucinaciones detectadas para identificar patrones de error y áreas de mejora en el corpus o en el \textit{prompt} del sistema.
+
+\end{itemize}
+
+% --------------------------------------------------
+\section{Demo interactiva: Toma Tu Semáforo con Rosa}\label{sec:demo_semaforo}
+
+Como síntesis práctica de todo el trabajo desarrollado, se implementó una demo interactiva denominada \textbf{Toma Tu Semáforo}, accesible en el sitio institucional de la Fundación Paraguaya (\texttt{fp.arami.com.py}). Esta funcionalidad reúne en un único flujo los tres pilares del sistema: la base de conocimientos estructurada, el \textit{pipeline} RAG y el agente conversacional Rosa, aplicados directamente al instrumento de medición de pobreza del Semáforo.
+
+\subsection{Descripción del flujo}\label{sec:demo_flujo}
+
+La demo presenta al usuario los \textbf{10 indicadores del Semáforo de la Pobreza} organizados de forma secuencial. Para cada indicador, el usuario visualiza:
+
+\begin{itemize}
+  \item Una imagen ilustrativa del indicador.
+  \item La descripción de las tres situaciones posibles: \textbf{verde} (condición óptima), \textbf{amarillo} (condición vulnerable) y \textbf{rojo} (condición de pobreza).
+  \item Preguntas sugeridas que Rosa puede responder en tiempo real para ayudar al usuario a comprender el indicador antes de seleccionar su situación.
+\end{itemize}
+
+A medida que el usuario avanza por los indicadores y selecciona su color correspondiente, el panel derecho de la interfaz mantiene activa la conversación con Rosa. El agente puede responder consultas contextualizadas sobre el indicador en pantalla — por ejemplo, explicar en qué consiste la línea de pobreza o qué recursos existen para mejorar una situación de vivienda —, utilizando el \textit{pipeline} RAG sobre el corpus del Banco de Soluciones.
+
+\subsection{Diagnóstico final asistido por Rosa}\label{sec:demo_diagnostico}
+
+Una vez completada la selección de los 10 indicadores, el sistema genera automáticamente un \textbf{resumen visual} y solicita a Rosa un diagnóstico integral. La pantalla de cierre presenta:
+
+\begin{itemize}
+  \item Una grilla con los 10 indicadores en formato circular, cada uno con la imagen seleccionada y un borde coloreado según la situación elegida (verde, amarillo o rojo), permitiendo una lectura visual inmediata del perfil del hogar.
+  \item El \textbf{diagnóstico de Rosa}: el agente recibe el resumen completo de las selecciones — con el título de cada indicador y el color asignado — y genera una respuesta personalizada que identifica las áreas críticas, reconoce las fortalezas y sugiere posibles acciones de mejora basadas en las soluciones del banco de conocimientos.
+  \item La opción de \textbf{descargar el diagnóstico en PDF}, generado directamente desde la interfaz web.
+\end{itemize}
+
+\subsection{Convergencia del trabajo en la demo}\label{sec:demo_convergencia}
+
+La Figura~\ref{fig:demo_semaforo} muestra la pantalla de diagnóstico final de la demo.
+
+\begin{figure}[H]
+  \centering
+  % Reemplazar con la ruta real de la imagen
+  \includegraphics[width=0.95\textwidth]{imagenes/demo_semaforo_diagnostico}
+  \caption{Pantalla de diagnóstico final de la demo \textit{Toma Tu Semáforo}: grilla de 10 indicadores con colores seleccionados y diagnóstico generado por Rosa.}
+  \label{fig:demo_semaforo}
+\end{figure}
+
+Esta demo representa la convergencia de todos los componentes desarrollados a lo largo del trabajo:
+
+\begin{enumerate}
+  \item \textbf{Corpus estructurado:} los 18 documentos del Banco de Soluciones ingestados y vectorizados son la fuente de conocimiento que Rosa consulta al responder preguntas sobre cada indicador y al generar el diagnóstico final.
+  \item \textbf{Pipeline RAG:} la vectorización de la consulta del usuario, la recuperación semántica mediante pgvector y la generación condicionada al contexto operan de forma transparente en cada interacción con Rosa durante el flujo.
+  \item \textbf{Modelo de producción:} el agente utiliza \textbf{Qwen3.5-27B-FP8} vía vLLM, la configuración que obtuvo la mayor calificación promedio en la evaluación humana (8.73/10), garantizando respuestas de alta calidad al usuario final.
+  \item \textbf{Interfaz web institucional:} la demo está integrada en el sitio Angular de la Fundación Paraguaya, accesible desde cualquier dispositivo, y opera sobre la misma API WebChat utilizada en los experimentos de evaluación.
+\end{enumerate}
+
+La demo valida que el sistema RAG desarrollado puede trasladarse del entorno experimental a una aplicación concreta y con valor para el usuario final: una herramienta que guía a una familia en la autoevaluación de su situación de pobreza y le ofrece, en tiempo real, el respaldo de un agente conversacional entrenado sobre el conocimiento institucional de la Fundación Paraguaya.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "tesis"
+%%% End:
