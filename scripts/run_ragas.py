@@ -290,16 +290,28 @@ def reconstruct_contexts(conn, question: str, embed_url: str = "", ollama_url: s
     vector = None
 
     if ollama_url:
-        try:
-            resp = _req.post(
-                f"{ollama_url}/api/embed",
-                json={"model": JUDGE_EMBED, "input": question},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            vector = resp.json()["embeddings"][0]
-        except Exception as e:
-            logging.warning(f"[reconstruct] Ollama embedding failed: {e}")
+        # Try new /api/embed endpoint first (Ollama ≥0.5), then legacy /api/embeddings
+        vector = None
+        for endpoint, payload in [
+            (f"{ollama_url}/api/embed",       {"model": JUDGE_EMBED, "input": question}),
+            (f"{ollama_url}/api/embeddings",  {"model": JUDGE_EMBED, "prompt": question}),
+        ]:
+            try:
+                resp = _req.post(endpoint, json=payload, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                # /api/embed → {"embeddings": [[...]]}
+                # /api/embeddings → {"embedding": [...]}
+                if "embeddings" in data:
+                    vector = data["embeddings"][0]
+                elif "embedding" in data:
+                    vector = data["embedding"]
+                if vector is not None:
+                    break
+            except Exception as e:
+                logging.debug(f"[reconstruct] {endpoint} failed: {e}")
+        if vector is None:
+            logging.warning(f"[reconstruct] Ollama embedding failed on all endpoints")
             return []
     elif embed_url:
         try:
