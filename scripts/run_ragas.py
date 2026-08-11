@@ -288,16 +288,12 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     Embeddings: OpenAIEmbeddings → embed_url/v1  (bge-m3 via vLLM)
                 Falls back to HuggingFaceEmbeddings locally if embed_url empty.
     """
-    from ragas.metrics.collections import (
-        Faithfulness,
-        AnswerRelevancy,
-        LLMContextRecall,
-        LLMContextPrecisionWithReference,
-    )
+    # Use ragas.metrics imports (compatible across ragas versions)
+    from ragas.metrics import Faithfulness, AnswerRelevancy, LLMContextRecall, LLMContextPrecisionWithReference  # noqa: F401
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.embeddings import LangchainEmbeddingsWrapper
     from ragas.run_config import RunConfig
-    from ragas.llms import llm_factory
-    from ragas.embeddings import OpenAIEmbeddings as RagasOpenAIEmbeddings
-    from openai import OpenAI
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
     # Detect model name from vLLM /v1/models
     import requests as _req
@@ -308,9 +304,15 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
         model_name = "unknown"
     logging.info(f"[vllm] judge model detected: {model_name}")
 
-    # LLM judge via llm_factory (new RAGAS API)
-    openai_client = OpenAI(base_url=f"{vllm_url}/v1", api_key="EMPTY")
-    judge_llm = llm_factory(model_name, client=openai_client, max_tokens=4096)
+    judge_llm = LangchainLLMWrapper(
+        ChatOpenAI(
+            model=model_name,
+            base_url=f"{vllm_url}/v1",
+            api_key="EMPTY",
+            temperature=0,
+            max_tokens=8192,
+        )
+    )
 
     if embed_url:
         try:
@@ -319,12 +321,13 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
         except Exception:
             embed_model_name = BGE_M3_HF
         logging.info(f"[vllm] embed model: {embed_model_name} at {embed_url}")
-        embed_client = OpenAI(base_url=f"{embed_url}/v1", api_key="EMPTY")
-        judge_emb = RagasOpenAIEmbeddings(model=embed_model_name, client=embed_client)
+        judge_emb = LangchainEmbeddingsWrapper(
+            OpenAIEmbeddings(model=embed_model_name, base_url=f"{embed_url}/v1", api_key="EMPTY")
+        )
     else:
-        logging.info(f"[vllm] no EMBED_BASE_URL — using HuggingFaceEmbeddings ({BGE_M3_HF}) locally")
-        from ragas.embeddings import HuggingFaceEmbeddings as RagasHFEmbeddings
-        judge_emb = RagasHFEmbeddings(model_name=BGE_M3_HF)
+        logging.info(f"[vllm] no EMBED_BASE_URL — using sentence-transformers ({BGE_M3_HF}) locally")
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+        judge_emb = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=BGE_M3_HF))
 
     metrics = [
         Faithfulness(),
