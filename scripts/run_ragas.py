@@ -398,7 +398,7 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
         LLMContextRecall(),
         LLMContextPrecisionWithReference(),
     ]
-    run_config = RunConfig(max_workers=2, timeout=300, max_retries=3, max_wait=60)
+    run_config = RunConfig(max_workers=1, timeout=600, max_retries=2, max_wait=30)
     return judge_llm, judge_emb, metrics, run_config, model_name
 
 
