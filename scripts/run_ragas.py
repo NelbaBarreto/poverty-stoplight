@@ -279,30 +279,45 @@ def build_openai_ragas_objects():
     return judge_llm, judge_emb, metrics, run_config
 
 
-def reconstruct_contexts(conn, question: str, embed_url: str, k: int = 8) -> list[str]:
+def reconstruct_contexts(conn, question: str, embed_url: str = "", ollama_url: str = "", k: int = 8) -> list[str]:
     """
     Re-do the pgvector search for a question and return the top-k chunk texts.
     Used when retrieved_contexts was stored without chunk_text (version 4 format).
+    Supports Ollama embedding API (ollama_url) or vLLM OpenAI-compatible (embed_url).
     """
     import requests as _req
-    import json as _json
 
-    # Get embedding from vLLM embedding server
-    try:
-        resp = _req.post(
-            f"{embed_url}/v1/embeddings",
-            headers={"Authorization": "Bearer EMPTY"},
-            json={"model": BGE_M3_HF, "input": question},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        # Try to detect model name and use it
-        vector = resp.json()["data"][0]["embedding"]
-    except Exception as e:
-        logging.warning(f"[reconstruct] embedding failed: {e}")
+    vector = None
+
+    if ollama_url:
+        try:
+            resp = _req.post(
+                f"{ollama_url}/api/embed",
+                json={"model": JUDGE_EMBED, "input": question},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            vector = resp.json()["embeddings"][0]
+        except Exception as e:
+            logging.warning(f"[reconstruct] Ollama embedding failed: {e}")
+            return []
+    elif embed_url:
+        try:
+            resp = _req.post(
+                f"{embed_url}/v1/embeddings",
+                headers={"Authorization": "Bearer EMPTY"},
+                json={"model": BGE_M3_HF, "input": question},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            vector = resp.json()["data"][0]["embedding"]
+        except Exception as e:
+            logging.warning(f"[reconstruct] vLLM embedding failed: {e}")
+            return []
+    else:
+        logging.warning("[reconstruct] no embed_url or ollama_url — cannot reconstruct contexts")
         return []
 
-    # Search pgvector
     try:
         vec_str = "[" + ",".join(str(x) for x in vector) + "]"
         with conn.cursor() as cur:
@@ -322,7 +337,7 @@ def reconstruct_contexts(conn, question: str, embed_url: str, k: int = 8) -> lis
         return []
 
 
-def extract_contexts(row: dict, conn, embed_url: str) -> list[str]:
+def extract_contexts(row: dict, conn, embed_url: str = "", ollama_url: str = "") -> list[str]:
     """
     Extract chunk texts from retrieved_contexts.
     Falls back to re-doing the vector search if chunk_text is missing.
@@ -333,13 +348,11 @@ def extract_contexts(row: dict, conn, embed_url: str) -> list[str]:
         contexts_raw = _json.loads(contexts_raw)
     contexts_raw = contexts_raw or []
 
-    # Check if chunk_text is present (old format)
     if contexts_raw and "chunk_text" in contexts_raw[0]:
         return [c["chunk_text"] for c in contexts_raw if c.get("chunk_text")]
 
-    # New format: only titulo/link — re-do vector search
     logging.debug(f"[reconstruct] chunk_text missing for eval_run_id={row.get('eval_run_id')} — re-searching")
-    return reconstruct_contexts(conn, row["question"], embed_url)
+    return reconstruct_contexts(conn, row["question"], embed_url=embed_url, ollama_url=ollama_url)
 
 
 def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
@@ -466,16 +479,20 @@ def score_vllm_single(row: dict, judge_llm, judge_emb, metrics, run_config,
         }
 
 
-def score_faithfulness_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> list[dict]:
+def score_faithfulness_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config,
+                             conn=None, ollama_url: str = "") -> list[dict]:
     """Score faithfulness + context_precision for a batch using OpenAI judge."""
     from ragas import EvaluationDataset, SingleTurnSample, evaluate
 
     samples = []
     for row in rows:
-        contexts_raw = row["retrieved_contexts"]
-        if isinstance(contexts_raw, str):
-            contexts_raw = json.loads(contexts_raw)
-        contexts = [c["chunk_text"] for c in (contexts_raw or [])]
+        if conn:
+            contexts = extract_contexts(row, conn, ollama_url=ollama_url)
+        else:
+            contexts_raw = row["retrieved_contexts"]
+            if isinstance(contexts_raw, str):
+                contexts_raw = json.loads(contexts_raw)
+            contexts = [c["chunk_text"] for c in (contexts_raw or []) if c.get("chunk_text")]
 
         samples.append(SingleTurnSample(
             user_input=row["question"] or "",
@@ -508,10 +525,12 @@ def score_faithfulness_batch(rows: list[dict], judge_llm, judge_emb, metrics, ru
     return output
 
 
-def score_faithfulness_single(row: dict, judge_llm, judge_emb, metrics, run_config) -> dict:
+def score_faithfulness_single(row: dict, judge_llm, judge_emb, metrics, run_config,
+                              conn=None, ollama_url: str = "") -> dict:
     """Score a single row for faithfulness, returning error payload on failure."""
     try:
-        return score_faithfulness_batch([row], judge_llm, judge_emb, metrics, run_config)[0]
+        return score_faithfulness_batch([row], judge_llm, judge_emb, metrics, run_config,
+                                        conn=conn, ollama_url=ollama_url)[0]
     except Exception as exc:
         return {
             "eval_run_id":       row["eval_run_id"],
@@ -533,9 +552,10 @@ def _safe_float(val) -> float | None:
         return None
 
 
-def score_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> list[dict]:
+def score_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config,
+                conn=None, ollama_url: str = "") -> list[dict]:
     """
-    Score a batch of eval_run rows with RAGAS.
+    Score a batch of eval_run rows with RAGAS (Ollama judge).
 
     Returns a list of dicts with keys:
         eval_run_id, faithfulness, answer_relevancy,
@@ -545,10 +565,13 @@ def score_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> 
 
     samples = []
     for row in rows:
-        contexts_raw = row["retrieved_contexts"]
-        if isinstance(contexts_raw, str):
-            contexts_raw = json.loads(contexts_raw)
-        contexts = [c["chunk_text"] for c in (contexts_raw or [])]
+        if conn:
+            contexts = extract_contexts(row, conn, ollama_url=ollama_url)
+        else:
+            contexts_raw = row["retrieved_contexts"]
+            if isinstance(contexts_raw, str):
+                contexts_raw = json.loads(contexts_raw)
+            contexts = [c["chunk_text"] for c in (contexts_raw or []) if c.get("chunk_text")]
 
         samples.append(SingleTurnSample(
             user_input=row["question"] or "",
@@ -583,10 +606,12 @@ def score_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> 
     return output
 
 
-def score_single(row: dict, judge_llm, judge_emb, metrics, run_config) -> dict:
+def score_single(row: dict, judge_llm, judge_emb, metrics, run_config,
+                 conn=None, ollama_url: str = "") -> dict:
     """Score a single row, returning error payload on failure."""
     try:
-        results = score_batch([row], judge_llm, judge_emb, metrics, run_config)
+        results = score_batch([row], judge_llm, judge_emb, metrics, run_config,
+                              conn=conn, ollama_url=ollama_url)
         return results[0]
     except Exception as exc:
         return {
@@ -682,6 +707,13 @@ def parse_args():
         default=None,
         help="Override EMBED_BASE_URL for this run (e.g. http://10.1.50.50:8801).",
     )
+    parser.add_argument(
+        "--ollama-url",
+        metavar="URL",
+        default=None,
+        help="Override OLLAMA_BASE_URL for this run (e.g. http://server:11434). "
+             "Used for judge LLM and context reconstruction in default + --openai modes.",
+    )
     return parser.parse_args()
 
 
@@ -697,9 +729,9 @@ def main():
     )
     load_dotenv()
     args = parse_args()
-    base_url  = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
-    vllm_url  = args.vllm_url  or os.getenv("VLLM_BASE_URL",  VLLM_BASE_URL)
-    embed_url = args.embed_url or os.getenv("EMBED_BASE_URL", EMBED_BASE_URL)
+    base_url  = args.ollama_url or os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
+    vllm_url  = args.vllm_url   or os.getenv("VLLM_BASE_URL",  VLLM_BASE_URL)
+    embed_url = args.embed_url  or os.getenv("EMBED_BASE_URL", EMBED_BASE_URL)
 
     logging.info("Connecting to database...")
     conn = get_db_connection()
@@ -797,7 +829,7 @@ def main():
                 logging.info("Nothing to score. Exiting.")
                 return
 
-            logging.info("Loading OpenAI judge: gpt-4o-mini + text-embedding-3-small")
+            logging.info(f"Loading OpenAI judge: gpt-4o-mini + text-embedding-3-small (context reconstruction via Ollama: {base_url})")
             judge_llm, judge_emb, metrics, run_config = build_openai_ragas_objects()
 
             batch_size = args.batch_size
@@ -808,13 +840,15 @@ def main():
             with tqdm(total=len(pending), desc="Faithfulness scoring", unit="run") as pbar:
                 for batch in batches:
                     try:
-                        scored_batch = score_faithfulness_batch(batch, judge_llm, judge_emb, metrics, run_config)
+                        scored_batch = score_faithfulness_batch(batch, judge_llm, judge_emb, metrics, run_config,
+                                                                conn=conn, ollama_url=base_url)
                     except Exception as batch_exc:
                         logging.warning(
                             f"Batch of {len(batch)} failed ({batch_exc}); retrying individually."
                         )
                         scored_batch = [
-                            score_faithfulness_single(row, judge_llm, judge_emb, metrics, run_config)
+                            score_faithfulness_single(row, judge_llm, judge_emb, metrics, run_config,
+                                                      conn=conn, ollama_url=base_url)
                             for row in batch
                         ]
 
@@ -869,7 +903,7 @@ def main():
                 logging.info("Nothing to score. Exiting.")
                 return
 
-            logging.info(f"Loading RAGAS judge: LLM={JUDGE_LLM}, embed={JUDGE_EMBED}")
+            logging.info(f"Loading RAGAS judge: LLM={JUDGE_LLM}, embed={JUDGE_EMBED} at {base_url}")
             judge_llm, judge_emb, metrics, run_config = build_ragas_objects(base_url)
 
             batch_size = args.batch_size
@@ -881,13 +915,15 @@ def main():
             with tqdm(total=len(pending), desc="RAGAS scoring", unit="run") as pbar:
                 for batch in batches:
                     try:
-                        scored_batch = score_batch(batch, judge_llm, judge_emb, metrics, run_config)
+                        scored_batch = score_batch(batch, judge_llm, judge_emb, metrics, run_config,
+                                                   conn=conn, ollama_url=base_url)
                     except Exception as batch_exc:
                         logging.warning(
                             f"Batch of {len(batch)} failed ({batch_exc}); retrying individually."
                         )
                         scored_batch = [
-                            score_single(row, judge_llm, judge_emb, metrics, run_config) for row in batch
+                            score_single(row, judge_llm, judge_emb, metrics, run_config,
+                                         conn=conn, ollama_url=base_url) for row in batch
                         ]
 
                     for payload in scored_batch:
