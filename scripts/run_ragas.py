@@ -9,11 +9,20 @@ OpenAI mode (--openai): scores Faithfulness + Context Precision for rows
 that already have eval_scores but still have NULL faithfulness, using
 gpt-4o-mini as judge LLM and text-embedding-3-small as judge embeddings.
 
+vLLM mode (--vllm): scores ALL 4 metrics in one pass using the local
+vLLM server (Qwen3.5-27B-FP8) as judge — no OpenAI API key required.
+The vLLM server exposes an OpenAI-compatible API so RAGAS uses ChatOpenAI
+pointed at the local endpoint. Requires VLLM_BASE_URL and EMBED_BASE_URL
+in .env (or env vars). Embedding server is expected at EMBED_BASE_URL
+(port 8801); falls back to sentence-transformers locally if not set.
+
 Usage:
     python scripts/run_ragas.py --dry-run
     python scripts/run_ragas.py --llm llama3.2:3b --embed bge-m3 --chunk small --batch-size 10
     python scripts/run_ragas.py --batch-size 50
     python scripts/run_ragas.py --openai --questions 30 --batch-size 20
+    python scripts/run_ragas.py --vllm --version-id 5 --batch-size 10
+    python scripts/run_ragas.py --vllm --dry-run
 """
 
 import os
@@ -31,10 +40,15 @@ from tqdm import tqdm
 # Configuration
 # ---------------------------------------------------------------------------
 
-JUDGE_LLM       = "gpt-oss:20b"
-JUDGE_EMBED     = "bge-m3"
-DEFAULT_BATCH   = 50
-OLLAMA_BASE_URL = "http://localhost:11434"
+JUDGE_LLM        = "gpt-oss:20b"
+JUDGE_EMBED      = "bge-m3"
+DEFAULT_BATCH    = 50
+OLLAMA_BASE_URL  = "http://localhost:11434"
+VLLM_BASE_URL    = "http://localhost:8800"
+EMBED_BASE_URL   = ""   # vLLM embedding server, e.g. http://localhost:8801
+
+# HuggingFace name for bge-m3 (used in sentence-transformers fallback)
+BGE_M3_HF = "BAAI/bge-m3"
 
 # ---------------------------------------------------------------------------
 # DB helpers  (same pattern as run_eval.py)
@@ -265,6 +279,139 @@ def build_openai_ragas_objects():
     return judge_llm, judge_emb, metrics, run_config
 
 
+def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
+    """
+    Instantiate RAGAS judge using local vLLM server (OpenAI-compatible).
+    Scores ALL 4 metrics in one pass — no OpenAI API key needed.
+
+    LLM judge : ChatOpenAI → vllm_url/v1  (Qwen3.5-27B-FP8)
+    Embeddings: ChatOpenAI embeddings → embed_url/v1  (bge-m3 via vLLM)
+                Falls back to sentence-transformers locally if embed_url empty.
+    """
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+    from ragas.metrics import (
+        Faithfulness,
+        AnswerRelevancy,
+        LLMContextRecall,
+        LLMContextPrecisionWithReference,
+    )
+    from ragas.run_config import RunConfig
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+    # Detect model name from vLLM /v1/models
+    import requests as _req
+    try:
+        r = _req.get(f"{vllm_url}/v1/models", headers={"Authorization": "Bearer EMPTY"}, timeout=10)
+        model_name = r.json()["data"][0]["id"]
+    except Exception:
+        model_name = "unknown"
+    logging.info(f"[vllm] judge model detected: {model_name}")
+
+    judge_llm = LangchainLLMWrapper(
+        ChatOpenAI(
+            model=model_name,
+            base_url=f"{vllm_url}/v1",
+            api_key="EMPTY",
+            temperature=0,
+            max_tokens=1024,
+        )
+    )
+
+    if embed_url:
+        # Use vLLM embedding server (bge-m3 via OpenAI embeddings API)
+        try:
+            r = _req.get(f"{embed_url}/v1/models", headers={"Authorization": "Bearer EMPTY"}, timeout=10)
+            embed_model_name = r.json()["data"][0]["id"]
+        except Exception:
+            embed_model_name = BGE_M3_HF
+        logging.info(f"[vllm] embed model: {embed_model_name} at {embed_url}")
+        judge_emb = LangchainEmbeddingsWrapper(
+            OpenAIEmbeddings(
+                model=embed_model_name,
+                base_url=f"{embed_url}/v1",
+                api_key="EMPTY",
+            )
+        )
+    else:
+        # Fallback: sentence-transformers locally
+        logging.info(f"[vllm] no EMBED_BASE_URL — using sentence-transformers ({BGE_M3_HF}) locally")
+        from sentence_transformers import SentenceTransformer
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+        judge_emb = LangchainEmbeddingsWrapper(
+            HuggingFaceEmbeddings(model_name=BGE_M3_HF)
+        )
+
+    metrics = [
+        Faithfulness(),
+        AnswerRelevancy(),
+        LLMContextRecall(),
+        LLMContextPrecisionWithReference(),
+    ]
+    # max_workers=2: vLLM handles concurrent requests, but keep conservative
+    # to avoid overwhelming the GPU during a long eval run.
+    run_config = RunConfig(max_workers=2, timeout=300, max_retries=3, max_wait=60)
+    return judge_llm, judge_emb, metrics, run_config, model_name
+
+
+def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> list[dict]:
+    """Score all 4 RAGAS metrics using vLLM judge."""
+    from ragas import EvaluationDataset, SingleTurnSample, evaluate
+
+    samples = []
+    for row in rows:
+        contexts_raw = row["retrieved_contexts"]
+        if isinstance(contexts_raw, str):
+            contexts_raw = json.loads(contexts_raw)
+        contexts = [c["chunk_text"] for c in (contexts_raw or [])]
+        samples.append(SingleTurnSample(
+            user_input=row["question"] or "",
+            response=row["generated_answer"] or "",
+            retrieved_contexts=contexts,
+            reference=row["ground_truth"] or "",
+        ))
+
+    result = evaluate(
+        EvaluationDataset(samples=samples),
+        metrics=metrics,
+        llm=judge_llm,
+        embeddings=judge_emb,
+        run_config=run_config,
+        raise_exceptions=False,
+        show_progress=False,
+    )
+    df = result.to_pandas()
+
+    output = []
+    for i, row in enumerate(rows):
+        r = df.iloc[i]
+        output.append({
+            "eval_run_id":       row["eval_run_id"],
+            "faithfulness":      _safe_float(r.get("faithfulness")),
+            "answer_relevancy":  _safe_float(r.get("answer_relevancy")),
+            "context_recall":    _safe_float(r.get("context_recall")),
+            "context_precision": _safe_float(r.get("llm_context_precision_with_reference")),
+            "status":            "success",
+            "error_message":     None,
+        })
+    return output
+
+
+def score_vllm_single(row: dict, judge_llm, judge_emb, metrics, run_config) -> dict:
+    try:
+        return score_vllm_batch([row], judge_llm, judge_emb, metrics, run_config)[0]
+    except Exception as exc:
+        return {
+            "eval_run_id":       row["eval_run_id"],
+            "faithfulness":      None,
+            "answer_relevancy":  None,
+            "context_recall":    None,
+            "context_precision": None,
+            "status":            "error",
+            "error_message":     str(exc)[:500],
+        }
+
+
 def score_faithfulness_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> list[dict]:
     """Score faithfulness + context_precision for a batch using OpenAI judge."""
     from ragas import EvaluationDataset, SingleTurnSample, evaluate
@@ -462,6 +609,25 @@ def parse_args():
         help="Use OpenAI (gpt-4o-mini) to score Faithfulness + Context Precision "
              "for rows that already have Answer Relevancy / Context Recall scored.",
     )
+    parser.add_argument(
+        "--vllm",
+        action="store_true",
+        help="Use local vLLM server (Qwen3.5-27B) as judge to score ALL 4 metrics "
+             "in one pass. Uses VLLM_BASE_URL and EMBED_BASE_URL from .env. "
+             "Scores rows with no eval_scores entry yet (same filter as default mode).",
+    )
+    parser.add_argument(
+        "--vllm-url",
+        metavar="URL",
+        default=None,
+        help="Override VLLM_BASE_URL for this run (e.g. http://10.1.50.50:8800).",
+    )
+    parser.add_argument(
+        "--embed-url",
+        metavar="URL",
+        default=None,
+        help="Override EMBED_BASE_URL for this run (e.g. http://10.1.50.50:8801).",
+    )
     return parser.parse_args()
 
 
@@ -477,13 +643,84 @@ def main():
     )
     load_dotenv()
     args = parse_args()
-    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
+    base_url  = os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
+    vllm_url  = args.vllm_url  or os.getenv("VLLM_BASE_URL",  VLLM_BASE_URL)
+    embed_url = args.embed_url or os.getenv("EMBED_BASE_URL", EMBED_BASE_URL)
 
     logging.info("Connecting to database...")
     conn = get_db_connection()
 
     try:
-        if args.openai:
+        if args.vllm:
+            # ── vLLM mode: score ALL 4 metrics with local Qwen3.5-27B ────────
+            pending = fetch_pending(
+                conn,
+                llm_filter=args.llm_filter,
+                embed_filter=args.embed_filter,
+                chunk_filter=args.chunk_filter,
+                questions_limit=args.questions,
+                version_id=args.version_id,
+            )
+
+            logging.info(f"{len(pending):,} rows pending scoring (vLLM mode — all 4 metrics).")
+
+            if args.dry_run:
+                logging.info("--dry-run: no scoring or DB writes. Exiting.")
+                return
+
+            if not pending:
+                logging.info("Nothing to score. Exiting.")
+                return
+
+            logging.info(f"Loading vLLM judge: {vllm_url}  embed: {embed_url or 'sentence-transformers'}")
+            judge_llm, judge_emb, metrics, run_config, model_name = build_vllm_ragas_objects(vllm_url, embed_url)
+
+            batch_size = args.batch_size
+            batches = [pending[i : i + batch_size] for i in range(0, len(pending), batch_size)]
+            errors = 0
+            scored = 0
+
+            with tqdm(total=len(pending), desc="RAGAS vLLM scoring", unit="run") as pbar:
+                for batch in batches:
+                    try:
+                        scored_batch = score_vllm_batch(batch, judge_llm, judge_emb, metrics, run_config)
+                    except Exception as batch_exc:
+                        logging.warning(
+                            f"Batch of {len(batch)} failed ({batch_exc}); retrying individually."
+                        )
+                        scored_batch = [
+                            score_vllm_single(row, judge_llm, judge_emb, metrics, run_config)
+                            for row in batch
+                        ]
+
+                    for payload in scored_batch:
+                        try:
+                            upsert_score(conn, payload["eval_run_id"], {
+                                **payload,
+                                "judge_llm_override": model_name,
+                            })
+                            if payload["status"] == "success":
+                                scored += 1
+                            else:
+                                errors += 1
+                                logging.warning(
+                                    f"  eval_run_id={payload['eval_run_id']} error: "
+                                    f"{payload.get('error_message', '')}"
+                                )
+                        except Exception as db_exc:
+                            errors += 1
+                            logging.error(
+                                f"  DB write failed for eval_run_id={payload['eval_run_id']}: {db_exc}"
+                            )
+                            conn.rollback()
+
+                    pbar.update(len(batch))
+
+            logging.info("=" * 60)
+            logging.info("vLLM RAGAS scoring complete.")
+            logging.info(f"  Scored this run: {scored:,}   Errors: {errors:,}")
+
+        elif args.openai:
             # ── OpenAI mode: score Faithfulness + Context Precision ──────────
             pending = fetch_pending_faithfulness(
                 conn,
