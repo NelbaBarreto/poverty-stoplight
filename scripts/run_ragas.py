@@ -279,6 +279,69 @@ def build_openai_ragas_objects():
     return judge_llm, judge_emb, metrics, run_config
 
 
+def reconstruct_contexts(conn, question: str, embed_url: str, k: int = 8) -> list[str]:
+    """
+    Re-do the pgvector search for a question and return the top-k chunk texts.
+    Used when retrieved_contexts was stored without chunk_text (version 4 format).
+    """
+    import requests as _req
+    import json as _json
+
+    # Get embedding from vLLM embedding server
+    try:
+        resp = _req.post(
+            f"{embed_url}/v1/embeddings",
+            headers={"Authorization": "Bearer EMPTY"},
+            json={"model": BGE_M3_HF, "input": question},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        # Try to detect model name and use it
+        vector = resp.json()["data"][0]["embedding"]
+    except Exception as e:
+        logging.warning(f"[reconstruct] embedding failed: {e}")
+        return []
+
+    # Search pgvector
+    try:
+        vec_str = "[" + ",".join(str(x) for x in vector) + "]"
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.chunk_text
+                FROM embeddings_bge_m3 e
+                JOIN chunks c ON e.chunk_id = c.id
+                JOIN chunk_configs cc ON c.chunk_config_id = cc.id
+                WHERE cc.name = 'medium'
+                ORDER BY e.embedding <=> %s::vector
+                LIMIT %s
+            """, (vec_str, k))
+            rows = cur.fetchall()
+        return [r[0] for r in rows if r[0]]
+    except Exception as e:
+        logging.warning(f"[reconstruct] pgvector search failed: {e}")
+        return []
+
+
+def extract_contexts(row: dict, conn, embed_url: str) -> list[str]:
+    """
+    Extract chunk texts from retrieved_contexts.
+    Falls back to re-doing the vector search if chunk_text is missing.
+    """
+    import json as _json
+    contexts_raw = row.get("retrieved_contexts")
+    if isinstance(contexts_raw, str):
+        contexts_raw = _json.loads(contexts_raw)
+    contexts_raw = contexts_raw or []
+
+    # Check if chunk_text is present (old format)
+    if contexts_raw and "chunk_text" in contexts_raw[0]:
+        return [c["chunk_text"] for c in contexts_raw if c.get("chunk_text")]
+
+    # New format: only titulo/link — re-do vector search
+    logging.debug(f"[reconstruct] chunk_text missing for eval_run_id={row.get('eval_run_id')} — re-searching")
+    return reconstruct_contexts(conn, row["question"], embed_url)
+
+
 def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     """
     Instantiate RAGAS judge using local vLLM server (OpenAI-compatible).
@@ -339,16 +402,20 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     return judge_llm, judge_emb, metrics, run_config, model_name
 
 
-def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config) -> list[dict]:
+def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config,
+                     conn=None, embed_url: str = "") -> list[dict]:
     """Score all 4 RAGAS metrics using vLLM judge."""
     from ragas import EvaluationDataset, SingleTurnSample, evaluate
 
     samples = []
     for row in rows:
-        contexts_raw = row["retrieved_contexts"]
-        if isinstance(contexts_raw, str):
-            contexts_raw = json.loads(contexts_raw)
-        contexts = [c["chunk_text"] for c in (contexts_raw or [])]
+        if conn and embed_url:
+            contexts = extract_contexts(row, conn, embed_url)
+        else:
+            contexts_raw = row.get("retrieved_contexts") or []
+            if isinstance(contexts_raw, str):
+                contexts_raw = json.loads(contexts_raw)
+            contexts = [c["chunk_text"] for c in contexts_raw if c.get("chunk_text")]
         samples.append(SingleTurnSample(
             user_input=row["question"] or "",
             response=row["generated_answer"] or "",
@@ -382,9 +449,11 @@ def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config
     return output
 
 
-def score_vllm_single(row: dict, judge_llm, judge_emb, metrics, run_config) -> dict:
+def score_vllm_single(row: dict, judge_llm, judge_emb, metrics, run_config,
+                      conn=None, embed_url: str = "") -> dict:
     try:
-        return score_vllm_batch([row], judge_llm, judge_emb, metrics, run_config)[0]
+        return score_vllm_batch([row], judge_llm, judge_emb, metrics, run_config,
+                                conn=conn, embed_url=embed_url)[0]
     except Exception as exc:
         return {
             "eval_run_id":       row["eval_run_id"],
@@ -668,13 +737,15 @@ def main():
             with tqdm(total=len(pending), desc="RAGAS vLLM scoring", unit="run") as pbar:
                 for batch in batches:
                     try:
-                        scored_batch = score_vllm_batch(batch, judge_llm, judge_emb, metrics, run_config)
+                        scored_batch = score_vllm_batch(batch, judge_llm, judge_emb, metrics, run_config,
+                                                        conn=conn, embed_url=embed_url)
                     except Exception as batch_exc:
                         logging.warning(
                             f"Batch of {len(batch)} failed ({batch_exc}); retrying individually."
                         )
                         scored_batch = [
-                            score_vllm_single(row, judge_llm, judge_emb, metrics, run_config)
+                            score_vllm_single(row, judge_llm, judge_emb, metrics, run_config,
+                                              conn=conn, embed_url=embed_url)
                             for row in batch
                         ]
 
