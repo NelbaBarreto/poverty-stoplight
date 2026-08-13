@@ -275,7 +275,7 @@ def build_openai_ragas_objects():
         Faithfulness(),
         LLMContextPrecisionWithReference(),
     ]
-    run_config = RunConfig(max_workers=4, timeout=120, max_retries=3, max_wait=30)
+    run_config = RunConfig(max_workers=1, timeout=120, max_retries=5, max_wait=60)
     return judge_llm, judge_emb, metrics, run_config
 
 
