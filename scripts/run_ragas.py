@@ -367,6 +367,21 @@ def extract_contexts(row: dict, conn, embed_url: str = "", ollama_url: str = "")
     return reconstruct_contexts(conn, row["question"], embed_url=embed_url, ollama_url=ollama_url)
 
 
+def _pick_model(preferred: str, available: list[str]) -> str:
+    """
+    Pick `preferred` from a /v1/models listing, tolerating Ollama's implicit
+    ':latest' tag (e.g. preferred="bge-m3" matches "bge-m3:latest"). Falls
+    back to the first available model only if no match is found — safe for
+    single-model vLLM servers, required for multi-model Ollama hosts.
+    """
+    if preferred in available:
+        return preferred
+    base_names = {m.split(":")[0]: m for m in available}
+    if preferred.split(":")[0] in base_names:
+        return base_names[preferred.split(":")[0]]
+    return available[0]
+
+
 def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     """
     Instantiate RAGAS judge using local vLLM server (OpenAI-compatible).
@@ -383,11 +398,14 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     from ragas.run_config import RunConfig
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-    # Detect model name from vLLM /v1/models
+    # Detect model name from vLLM /v1/models. Prefer JUDGE_LLM if the server hosts
+    # multiple models (e.g. a shared Ollama instance) — falls back to the first
+    # entry only for single-model (real vLLM) servers.
     import requests as _req
     try:
         r = _req.get(f"{vllm_url}/v1/models", headers={"Authorization": "Bearer EMPTY"}, timeout=10)
-        model_name = r.json()["data"][0]["id"]
+        available = [m["id"] for m in r.json()["data"]]
+        model_name = _pick_model(JUDGE_LLM, available)
     except Exception:
         model_name = "unknown"
     logging.info(f"[vllm] judge model detected: {model_name}")
@@ -405,12 +423,14 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
     if embed_url:
         try:
             r = _req.get(f"{embed_url}/v1/models", headers={"Authorization": "Bearer EMPTY"}, timeout=10)
-            embed_model_name = r.json()["data"][0]["id"]
+            available_embed = [m["id"] for m in r.json()["data"]]
+            embed_model_name = _pick_model(JUDGE_EMBED, available_embed)
         except Exception:
             embed_model_name = BGE_M3_HF
         logging.info(f"[vllm] embed model: {embed_model_name} at {embed_url}")
         judge_emb = LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(model=embed_model_name, base_url=f"{embed_url}/v1", api_key="EMPTY")
+            OpenAIEmbeddings(model=embed_model_name, base_url=f"{embed_url}/v1", api_key="EMPTY",
+                             check_embedding_ctx_length=False)
         )
     else:
         logging.info(f"[vllm] no EMBED_BASE_URL — using sentence-transformers ({BGE_M3_HF}) locally")
@@ -795,10 +815,24 @@ def main():
 
                     for payload in scored_batch:
                         try:
-                            upsert_score(conn, payload["eval_run_id"], {
-                                **payload,
-                                "judge_llm_override": model_name,
-                            })
+                            try:
+                                upsert_score(conn, payload["eval_run_id"], {
+                                    **payload,
+                                    "judge_llm_override": model_name,
+                                })
+                            except (psycopg2.OperationalError, psycopg2.InterfaceError) as conn_exc:
+                                logging.warning(
+                                    f"  DB connection dropped ({conn_exc}); reconnecting and retrying once."
+                                )
+                                try:
+                                    conn.close()
+                                except Exception:
+                                    pass
+                                conn = get_db_connection()
+                                upsert_score(conn, payload["eval_run_id"], {
+                                    **payload,
+                                    "judge_llm_override": model_name,
+                                })
                             if payload["status"] == "success":
                                 scored += 1
                             else:
@@ -812,7 +846,10 @@ def main():
                             logging.error(
                                 f"  DB write failed for eval_run_id={payload['eval_run_id']}: {db_exc}"
                             )
-                            conn.rollback()
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                conn = get_db_connection()
 
                     pbar.update(len(batch))
 
