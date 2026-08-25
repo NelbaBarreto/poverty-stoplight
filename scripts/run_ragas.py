@@ -428,14 +428,14 @@ def build_vllm_ragas_objects(vllm_url: str, embed_url: str):
 
 
 def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config,
-                     conn=None, embed_url: str = "") -> list[dict]:
+                     conn=None, embed_url: str = "", ollama_url: str = "") -> list[dict]:
     """Score all 4 RAGAS metrics using vLLM judge."""
     from ragas import EvaluationDataset, SingleTurnSample, evaluate
 
     samples = []
     for row in rows:
-        if conn and embed_url:
-            contexts = extract_contexts(row, conn, embed_url)
+        if conn and (embed_url or ollama_url):
+            contexts = extract_contexts(row, conn, embed_url=embed_url, ollama_url=ollama_url)
         else:
             contexts_raw = row.get("retrieved_contexts") or []
             if isinstance(contexts_raw, str):
@@ -475,10 +475,10 @@ def score_vllm_batch(rows: list[dict], judge_llm, judge_emb, metrics, run_config
 
 
 def score_vllm_single(row: dict, judge_llm, judge_emb, metrics, run_config,
-                      conn=None, embed_url: str = "") -> dict:
+                      conn=None, embed_url: str = "", ollama_url: str = "") -> dict:
     try:
         return score_vllm_batch([row], judge_llm, judge_emb, metrics, run_config,
-                                conn=conn, embed_url=embed_url)[0]
+                                conn=conn, embed_url=embed_url, ollama_url=ollama_url)[0]
     except Exception as exc:
         return {
             "eval_run_id":       row["eval_run_id"],
@@ -782,14 +782,14 @@ def main():
                 for batch in batches:
                     try:
                         scored_batch = score_vllm_batch(batch, judge_llm, judge_emb, metrics, run_config,
-                                                        conn=conn, embed_url=embed_url)
+                                                        conn=conn, embed_url=embed_url, ollama_url=base_url)
                     except Exception as batch_exc:
                         logging.warning(
                             f"Batch of {len(batch)} failed ({batch_exc}); retrying individually."
                         )
                         scored_batch = [
                             score_vllm_single(row, judge_llm, judge_emb, metrics, run_config,
-                                              conn=conn, embed_url=embed_url)
+                                              conn=conn, embed_url=embed_url, ollama_url=base_url)
                             for row in batch
                         ]
 
